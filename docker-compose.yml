@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: jobhub
+      POSTGRES_USER: jobhub
+      POSTGRES_PASSWORD: jobhub
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobhub -d jobhub"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build: ./api
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: db
+      DB_USER: jobhub
+      DB_PASSWORD: jobhub
+      AI_API_KEY: ${AI_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

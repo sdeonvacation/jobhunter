@@ -1,0 +1,146 @@
+package dev.jobhub.config;
+
+import dev.jobhub.scheduler.CrawlScheduler;
+import dev.jobhub.scheduler.DigestScheduler;
+import dev.jobhub.scheduler.DiscoveryScheduler;
+import dev.jobhub.scheduler.GdprPurgeScheduler;
+import dev.jobhub.scheduler.ScoringScheduler;
+import org.quartz.CronScheduleBuilder;
+import org.quartz.JobBuilder;
+import org.quartz.JobDetail;
+import org.quartz.Trigger;
+import org.quartz.TriggerBuilder;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class QuartzConfig {
+
+    // --- Crawl ---
+
+    @Bean
+    public JobDetail crawlJobDetail() {
+        return JobBuilder.newJob(CrawlScheduler.class)
+                .withIdentity("crawlJob", "crawl")
+                .storeDurably()
+                .requestRecovery(true)
+                .build();
+    }
+
+    @Bean
+    public Trigger crawlTrigger(JobDetail crawlJobDetail) {
+        return TriggerBuilder.newTrigger()
+                .forJob(crawlJobDetail)
+                .withIdentity("crawlTrigger", "crawl")
+                .withSchedule(
+                        CronScheduleBuilder.cronSchedule("0 0 */4 * * ?")
+                                .withMisfireHandlingInstructionFireAndProceed()
+                )
+                .build();
+    }
+
+    // --- Discovery ---
+
+    @Bean
+    public JobDetail discoveryJobDetail() {
+        return JobBuilder.newJob(DiscoveryScheduler.class)
+                .withIdentity("discoveryJob", "discovery")
+                .storeDurably()
+                .requestRecovery(true)
+                .build();
+    }
+
+    @Bean
+    public Trigger discoveryTrigger(
+            JobDetail discoveryJobDetail,
+            @Value("${discovery.schedule:0 0 6 * * ?}") String cronExpression
+    ) {
+        return TriggerBuilder.newTrigger()
+                .forJob(discoveryJobDetail)
+                .withIdentity("discoveryTrigger", "discovery")
+                .withSchedule(
+                        CronScheduleBuilder.cronSchedule(cronExpression)
+                                .withMisfireHandlingInstructionFireAndProceed()
+                )
+                .build();
+    }
+
+    // --- Scoring ---
+
+    @Bean
+    public JobDetail scoringJobDetail() {
+        return JobBuilder.newJob(ScoringScheduler.class)
+                .withIdentity("scoringJob", "scoring")
+                .storeDurably()
+                .requestRecovery(true)
+                .build();
+    }
+
+    @Bean
+    public Trigger scoringTrigger(
+            JobDetail scoringJobDetail,
+            @Value("${scoring.schedule:0 0 7 * * ?}") String cronExpression
+    ) {
+        return TriggerBuilder.newTrigger()
+                .forJob(scoringJobDetail)
+                .withIdentity("scoringTrigger", "scoring")
+                .withSchedule(
+                        CronScheduleBuilder.cronSchedule(cronExpression)
+                                .withMisfireHandlingInstructionFireAndProceed()
+                )
+                .build();
+    }
+
+    // --- Daily Digest ---
+
+    @Bean
+    public JobDetail digestJobDetail() {
+        return JobBuilder.newJob(DigestScheduler.class)
+                .withIdentity("digestJob", "digest")
+                .storeDurably()
+                .requestRecovery(true)
+                .build();
+    }
+
+    @Bean
+    public Trigger digestTrigger(
+            JobDetail digestJobDetail,
+            @Value("${digest.schedule:0 30 7 * * ?}") String cronExpression
+    ) {
+        return TriggerBuilder.newTrigger()
+                .forJob(digestJobDetail)
+                .withIdentity("digestTrigger", "digest")
+                .withSchedule(
+                        CronScheduleBuilder.cronSchedule(cronExpression)
+                                .withMisfireHandlingInstructionFireAndProceed()
+                )
+                .build();
+    }
+
+    // --- GDPR Purge ---
+
+    @Bean
+    public JobDetail gdprPurgeJobDetail() {
+        return JobBuilder.newJob(GdprPurgeScheduler.class)
+                .withIdentity("gdprPurgeJob", "gdpr")
+                .storeDurably()
+                .requestRecovery(true)
+                .build();
+    }
+
+    @Bean
+    public Trigger gdprPurgeTrigger(
+            JobDetail gdprPurgeJobDetail,
+            @Value("${gdpr.purge-schedule:0 0 2 * * ?}") String cronExpression
+    ) {
+        return TriggerBuilder.newTrigger()
+                .forJob(gdprPurgeJobDetail)
+                .withIdentity("gdprPurgeTrigger", "gdpr")
+                .withSchedule(
+                        CronScheduleBuilder.cronSchedule(cronExpression)
+                                .withMisfireHandlingInstructionFireAndProceed()
+                )
+                .build();
+    }
+}

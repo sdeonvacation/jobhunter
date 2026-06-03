@@ -1,0 +1,70 @@
+name: Sam
+title: Senior Backend Engineer
+years-of-experience: 8
+
+skills:
+  - name: Java
+    proficiency: expert
+    category: language
+  - name: Spring Boot
+    proficiency: expert
+    category: framework
+  - name: Kotlin
+    proficiency: advanced
+    category: language
+  - name: PostgreSQL
+    proficiency: expert
+    category: database
+  - name: Kafka
+    proficiency: advanced
+    category: messaging
+  - name: Kubernetes
+    proficiency: advanced
+    category: infrastructure
+  - name: AWS
+    proficiency: advanced
+    category: cloud
+  - name: Docker
+    proficiency: expert
+    category: infrastructure
+  - name: TypeScript
+    proficiency: intermediate
+    category: language
+  - name: Microservices
+    proficiency: expert
+    category: architecture
+  - name: REST APIs
+    proficiency: expert
+    category: architecture
+  - name: CI/CD
+    proficiency: advanced
+    category: devops
+  - name: SQL
+    proficiency: expert
+    category: database
+  - name: Git
+    proficiency: expert
+    category: tooling
+  - name: Hibernate/JPA
+    proficiency: expert
+    category: framework
+  - name: Gradle
+    proficiency: advanced
+    category: tooling
+  - name: Redis
+    proficiency: advanced
+    category: database
+  - name: Elasticsearch
+    proficiency: intermediate
+    category: database
+  - name: Terraform
+    proficiency: intermediate
+    category: infrastructure
+
+preferences:
+  locations: ["Germany", "Netherlands", "remote"]
+  employment-type: FULL_TIME
+  min-salary-eur: 85000
+  seniority: ["senior", "staff", "lead"]
+  languages: ["English", "German"]
+  excluded-industries: ["gambling", "defense", "surveillance"]

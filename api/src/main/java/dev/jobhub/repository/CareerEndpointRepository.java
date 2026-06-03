@@ -1,0 +1,32 @@
+package dev.jobhub.repository;
+
+import dev.jobhub.model.CareerEndpoint;
+import dev.jobhub.model.enums.AtsType;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+@Repository
+public interface CareerEndpointRepository extends JpaRepository<CareerEndpoint, UUID> {
+
+    List<CareerEndpoint> findByCompanyId(UUID companyId);
+
+    List<CareerEndpoint> findByIsActiveTrueAndAtsType(AtsType atsType);
+
+    @Query("SELECT e FROM CareerEndpoint e WHERE e.isActive = true " +
+            "AND (e.lastCrawledAt IS NULL OR e.lastCrawledAt < :cutoff) " +
+            "ORDER BY e.lastCrawledAt ASC NULLS FIRST")
+    List<CareerEndpoint> findEndpointsDueForCrawl(@Param("cutoff") LocalDateTime cutoff, org.springframework.data.domain.Pageable pageable);
+
+    default List<CareerEndpoint> findDueForCrawl(LocalDateTime cutoff, int limit) {
+        return findEndpointsDueForCrawl(cutoff, org.springframework.data.domain.PageRequest.of(0, limit));
+    }
+
+    @Query("SELECT e FROM CareerEndpoint e WHERE e.isActive = true AND e.lastCrawlStatus = :status")
+    List<CareerEndpoint> findByIsActiveTrueAndLastCrawlStatus(@Param("status") dev.jobhub.model.enums.CrawlStatus status);
+}

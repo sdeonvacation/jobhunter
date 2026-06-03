@@ -1,0 +1,20 @@
+spring:
+  datasource:
+    url: jdbc:tc:postgresql:16-alpine:///jobhub
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  quartz:
+    job-store-type: memory
+    jdbc:
+      initialize-schema: never
+  liquibase:
+    change-log: classpath:db/changelog/master.xml
+
+crawl:
+  timeout-seconds: 5
+
+logging:
+  level:
+    dev.jobhub: DEBUG

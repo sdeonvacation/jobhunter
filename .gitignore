@@ -1,0 +1,43 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.project
+.classpath
+.settings/
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+*.env.local
+
+# Application
+logs/
+*.log
+
+# Docker
+docker-compose.override.yml
+
+# MCP server build
+mcp-server/dist/
+mcp-server/node_modules/
+
+# Dashboard build
+dashboard/dist/
+dashboard/node_modules/

@@ -1,0 +1,73 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/jobhub
+    username: ${DB_USER:jobhub}
+    password: ${DB_PASSWORD:jobhub}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  quartz:
+    job-store-type: memory
+  liquibase:
+    change-log: classpath:db/changelog/master.xml
+
+ai:
+  provider: ${AI_PROVIDER:anthropic}
+  api-key: ${AI_API_KEY:}
+  extraction-model: ${AI_EXTRACTION_MODEL:claude-haiku-4-5}
+  tailoring-model: ${AI_TAILORING_MODEL:claude-sonnet-4-5}
+
+crawl:
+  default-frequency-hours: 4
+  high-priority-frequency-hours: 2
+  batch-size: 50
+  timeout-seconds: 30
+
+discovery:
+  schedule: "0 0 6 * * ?"
+  providers:
+    jobspy:
+      enabled: true
+      keywords: ["backend engineer", "Java developer", "Spring Boot", "Kotlin"]
+      locations: ["Germany", "Netherlands", "remote"]
+    stepstone:
+      enabled: true
+      postal-codes: ["10115", "80331", "20095", "60311", "50667"]
+    linkedin-alerts:
+      enabled: false
+
+resolution:
+  google-search:
+    api-key: ${GOOGLE_SEARCH_API_KEY:}
+    cx: ${GOOGLE_SEARCH_CX:}
+  strategies-order: [PATTERN_MATCH, GOOGLE_SEARCH, REDIRECT_FOLLOW]
+  timeout-seconds: 15
+
+scoring:
+  schedule: "0 0 7 * * ?"
+  opportunity-weights:
+    match-score: 0.30
+    interview-history: 0.20
+    salary: 0.20
+    company-quality: 0.15
+    seniority: 0.10
+    location-fit: 0.05
+
+digest:
+  schedule: "0 30 7 * * ?"
+
+gdpr:
+  recruiter-ttl-days: 90
+  purge-schedule: "0 0 2 * * ?"
+
+server:
+  port: 8080
+
+logging:
+  level:
+    dev.jobhub: DEBUG
+    org.springframework.web.reactive: INFO
