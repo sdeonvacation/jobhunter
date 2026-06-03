@@ -2,11 +2,25 @@
 .gradle/
 build/
 !gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Java
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+hs_err_pid*
+replay_pid*
+.factorypath
 
 # Node
 node_modules/
 dist/
 .vite/
+*.tsbuildinfo
+.eslintcache
+coverage/
+*.lcov
+.nyc_output/
 
 # IDE
 .idea/
@@ -18,26 +32,35 @@ dist/
 .classpath
 .settings/
 out/
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# Env
+# Env / Secrets
 .env
-*.env.local
+.env.*
+!.env.example
 
 # Application
 logs/
 *.log
+*.log.*
 
 # Docker
 docker-compose.override.yml
 
-# MCP server build
-mcp-server/dist/
-mcp-server/node_modules/
+# Test output
+test-results/
+target/
+surefire-reports/
+failsafe-reports/
 
-# Dashboard build
-dashboard/dist/
-dashboard/node_modules/
+# Package manager locks (keep)
+# package-lock.json
+# gradle.lockfile
