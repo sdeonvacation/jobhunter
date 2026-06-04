@@ -34,7 +34,7 @@ public class QuartzConfig {
                 .forJob(crawlJobDetail)
                 .withIdentity("crawlTrigger", "crawl")
                 .withSchedule(
-                        CronScheduleBuilder.cronSchedule("0 0 */4 * * ?")
+                        CronScheduleBuilder.cronSchedule("0 0 */12 * * ?")
                                 .withMisfireHandlingInstructionFireAndProceed()
                 )
                 .build();

@@ -22,10 +22,10 @@ ai:
   tailoring-model: ${AI_TAILORING_MODEL:claude-sonnet-4-5}
 
 crawl:
-  default-frequency-hours: 4
-  high-priority-frequency-hours: 2
+  default-frequency-hours: 12
+  high-priority-frequency-hours: 6
   batch-size: 50
-  timeout-seconds: 10
+  timeout-seconds: 30
 
 discovery:
   schedule: "0 0 6 * * ?"
