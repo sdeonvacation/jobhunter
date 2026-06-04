@@ -40,6 +40,15 @@ public class QuartzConfig {
                 .build();
     }
 
+    @Bean
+    public Trigger crawlStartupTrigger(JobDetail crawlJobDetail) {
+        return TriggerBuilder.newTrigger()
+                .forJob(crawlJobDetail)
+                .withIdentity("crawlStartupTrigger", "crawl")
+                .startAt(new java.util.Date(System.currentTimeMillis() + 10_000))
+                .build();
+    }
+
     // --- Discovery ---
 
     @Bean
