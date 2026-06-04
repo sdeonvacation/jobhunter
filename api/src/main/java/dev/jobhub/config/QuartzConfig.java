@@ -101,6 +101,15 @@ public class QuartzConfig {
                 .build();
     }
 
+    @Bean
+    public Trigger scoringStartupTrigger(JobDetail scoringJobDetail) {
+        return TriggerBuilder.newTrigger()
+                .forJob(scoringJobDetail)
+                .withIdentity("scoringStartupTrigger", "scoring")
+                .startAt(new java.util.Date(System.currentTimeMillis() + 30_000))
+                .build();
+    }
+
     // --- Daily Digest ---
 
     @Bean

@@ -20,6 +20,7 @@ public class AiConfig {
 
     private String provider = "anthropic";
     private String apiKey = "";
+    private String baseUrl = "";
     private String extractionModel = "claude-haiku-4-5";
     private String tailoringModel = "claude-sonnet-4-5";
 
@@ -38,8 +39,8 @@ public class AiConfig {
                 yield new OpenAiProvider(aiWebClient, apiKey, extractionModel, tailoringModel);
             }
             default -> {
-                log.info("Using Anthropic provider with extraction={}, tailoring={}", extractionModel, tailoringModel);
-                yield new AnthropicProvider(aiWebClient, apiKey, extractionModel, tailoringModel);
+                log.info("Using Anthropic provider with baseUrl={}, extraction={}, tailoring={}", baseUrl, extractionModel, tailoringModel);
+                yield new AnthropicProvider(aiWebClient, apiKey, baseUrl, extractionModel, tailoringModel);
             }
         };
     }
