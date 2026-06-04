@@ -46,6 +46,8 @@ Desktop.ini
 .env
 .env.*
 !.env.example
+application-local.yaml
+**/application-local.yaml
 
 # Application
 logs/

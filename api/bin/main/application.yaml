@@ -17,8 +17,8 @@ spring:
 
 ai:
   provider: ${AI_PROVIDER:anthropic}
-  api-key: ${AI_API_KEY:REDACTED_LOCAL_KEY}
-  base-url: ${AI_BASE_URL:http://localhost:6655/anthropic/v1/messages}
+  api-key: ${AI_API_KEY:}
+  base-url: ${AI_BASE_URL:}
   extraction-model: ${AI_EXTRACTION_MODEL:claude-haiku-4-5}
   tailoring-model: ${AI_TAILORING_MODEL:claude-sonnet-4-5}
 
