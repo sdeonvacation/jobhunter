@@ -12,7 +12,6 @@ public class RoleRelevanceFilterImpl implements RoleRelevanceFilter {
                     "engineer",
                     "developer",
                     "programmer",
-                    "architect",
                     "\\bsre\\b",
                     "devops",
                     "dev\\s*ops",
@@ -26,21 +25,14 @@ public class RoleRelevanceFilterImpl implements RoleRelevanceFilter {
                     "platform",
                     "infrastructure",
                     "\\bcloud\\b",
-                    "data\\s+engineer",
                     "\\bml\\b",
                     "machine\\s+learning",
                     "\\bsde\\b",
                     "tech\\s+lead",
-                    "technical",
-                    "engineering",
                     "\\bcto\\b",
-                    "vp\\s+engineering",
                     "\\bqa\\b",
                     "\\bsdet\\b",
-                    "security",
                     "site\\s+reliability",
-                    "solutions\\s+architect",
-                    "system\\s+architect",
                     "\\bdevsecops\\b",
                     "\\bsys\\s*admin\\b",
                     "\\bkubernetes\\b",
@@ -49,10 +41,25 @@ public class RoleRelevanceFilterImpl implements RoleRelevanceFilter {
             Pattern.CASE_INSENSITIVE
     );
 
+    // Titles containing these words are excluded even if they match engineering pattern
+    private static final Pattern EXCLUDED_ROLES_PATTERN = Pattern.compile(
+            String.join("|",
+                    "\\bmanager\\b",
+                    "\\barchitect\\b",
+                    "\\banalyst\\b"
+            ),
+            Pattern.CASE_INSENSITIVE
+    );
+
     @Override
     public FilterResult filter(String jobTitle) {
         if (jobTitle == null || jobTitle.isBlank()) {
             return FilterResult.keep();
+        }
+
+        // Exclusions take priority
+        if (EXCLUDED_ROLES_PATTERN.matcher(jobTitle).find()) {
+            return FilterResult.skip("non-engineering role");
         }
 
         if (ENGINEERING_PATTERN.matcher(jobTitle).find()) {

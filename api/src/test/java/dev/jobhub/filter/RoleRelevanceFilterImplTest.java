@@ -23,12 +23,9 @@ class RoleRelevanceFilterImplTest {
             "Staff Platform Engineer",
             "DevOps Engineer",
             "Data Engineer",
-            "Engineering Manager",
-            "Solutions Architect",
             "Software Developer",
             "SRE",
             "Frontend Developer",
-            "Technical Program Manager",
             "Machine Learning Engineer",
             "Cloud Infrastructure Engineer",
             "Full-Stack Developer",
@@ -40,10 +37,8 @@ class RoleRelevanceFilterImplTest {
             "QA Engineer",
             "SDET",
             "Site Reliability Engineer",
-            "System Architect",
             "Tech Lead",
             "SDE II",
-            "VP Engineering",
             "CTO",
             "Sales Engineer",
             "DevSecOps Engineer",
@@ -79,7 +74,12 @@ class RoleRelevanceFilterImplTest {
             "Executive Assistant",
             "Payroll Specialist",
             "Supply Chain Manager",
-            "Compliance Officer"
+            "Compliance Officer",
+            "Engineering Manager",
+            "Solutions Architect",
+            "Technical Program Manager",
+            "System Architect",
+            "Data Analyst"
     })
     void nonEngineeringTitles_skip(String title) {
         FilterResult result = filter.filter(title);

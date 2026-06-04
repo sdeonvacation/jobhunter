@@ -71,7 +71,6 @@ class LocationFilterImplTest {
     @ValueSource(strings = {
             "Remote",
             "remote",
-            "Hybrid",
             "Flexible",
             "Anywhere",
             "Remote - Europe",
@@ -106,9 +105,9 @@ class LocationFilterImplTest {
             "5 locations",
             "12 Locations"
     })
-    void multiLocation_keep(String location) {
+    void multiLocation_skip(String location) {
         var result = filter.filter(location);
-        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+        assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
     }
 
     // --- KEEP: null/blank ---

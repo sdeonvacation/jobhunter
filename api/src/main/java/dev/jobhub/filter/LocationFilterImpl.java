@@ -110,6 +110,11 @@ public class LocationFilterImpl implements LocationFilter {
             return FilterResult.keep();
         }
 
+        // Ambiguous-only locations (no actual city/country)
+        if (location.matches("(?i)^(hybrid|in-office|distributed|hybrid;\\s*in-office|on-?site)$")) {
+            return FilterResult.skip("location: ambiguous");
+        }
+
         // Positive matches first (target locations)
         if (GERMANY_PATTERN.matcher(location).find()) {
             return FilterResult.keep();
@@ -121,20 +126,12 @@ public class LocationFilterImpl implements LocationFilter {
             return FilterResult.skip("location: ambiguous multi-location");
         }
 
-        // Netherlands is explicitly excluded (before remote check)
+        // Netherlands is explicitly excluded
         if (NETHERLANDS_PATTERN.matcher(location).find()) {
             return FilterResult.skip("location: Netherlands");
         }
 
-        // Remote handling: check restricted remote BEFORE generic remote
-        if (RESTRICTED_REMOTE_PATTERN.matcher(location).find()) {
-            return FilterResult.skip("location: restricted remote");
-        }
-        if (GENERIC_REMOTE_PATTERN.matcher(location).find()) {
-            return FilterResult.keep();
-        }
-
-        // Negative matches (non-target locations)
+        // Negative matches BEFORE generic remote (so "San Francisco or Remote" → SKIP)
         if (US_PATTERN.matcher(location).find()) {
             return FilterResult.skip("location: US");
         }
@@ -146,6 +143,14 @@ public class LocationFilterImpl implements LocationFilter {
         }
         if (UK_PATTERN.matcher(location).find()) {
             return FilterResult.skip("location: UK");
+        }
+
+        // Remote handling (only after non-target checks)
+        if (RESTRICTED_REMOTE_PATTERN.matcher(location).find()) {
+            return FilterResult.skip("location: restricted remote");
+        }
+        if (GENERIC_REMOTE_PATTERN.matcher(location).find()) {
+            return FilterResult.keep();
         }
 
         // Default: permissive (benefit of the doubt)
