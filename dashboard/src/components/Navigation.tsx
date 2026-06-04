@@ -12,17 +12,6 @@ const links = [
     ),
   },
   {
-    to: '/pipeline',
-    label: 'Pipeline',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="3" width="4" height="14" rx="1" />
-        <rect x="8" y="6" width="4" height="11" rx="1" />
-        <rect x="14" y="9" width="4" height="8" rx="1" />
-      </svg>
-    ),
-  },
-  {
     to: '/companies',
     label: 'Companies',
     icon: (
@@ -31,31 +20,6 @@ const links = [
         <path d="M7 4V2h6v2" />
         <path d="M3 9h14" />
         <path d="M8 9v3h4V9" />
-      </svg>
-    ),
-  },
-  {
-    to: '/discovery',
-    label: 'Discovery',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="10" cy="10" r="8" />
-        <circle cx="10" cy="10" r="4" />
-        <circle cx="10" cy="10" r="1" fill="currentColor" />
-        <path d="M10 2v2M10 16v2M2 10h2M16 10h2" />
-      </svg>
-    ),
-  },
-  {
-    to: '/digest',
-    label: 'Digest',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="14" height="14" rx="2" />
-        <path d="M3 7h14" />
-        <path d="M10 7v10" />
-        <path d="M6 10h2M6 13h2" />
-        <path d="M12 10h2M12 13h2" />
       </svg>
     ),
   },
@@ -92,7 +56,7 @@ export default function Navigation() {
       </ul>
 
       <div className="p-4 border-t border-surface-600">
-        <p className="text-xs text-text-muted">Command Center</p>
+        <p className="text-xs text-text-muted">547 jobs tracked</p>
       </div>
     </nav>
   );
