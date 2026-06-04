@@ -36,12 +36,27 @@ ENGINEERING_PATTERN = re.compile(
 EXCLUDED_ROLES = re.compile(r"(\bmanager\b|\barchitect\b|\banalyst\b)", re.IGNORECASE)
 
 GERMANY_PATTERN = re.compile(
-    r"(germany|deutschland|berlin|munich|münchen|hamburg|frankfurt|cologne|köln|stuttgart|"
-    r"düsseldorf|dortmund|dresden|leipzig|nuremberg|nürnberg|hannover|bremen|bonn|mannheim|"
-    r"karlsruhe|heidelberg|potsdam|walldorf)",
+    r"(\bgermany\b|\bdeutschland\b|\bberlin\b|\bmunich\b|\bmünchen\b|\bhamburg\b|\bfrankfurt\b|"
+    r"\bcologne\b|\bköln\b|\bstuttgart\b|\bdüsseldorf\b|\bdortmund\b|\bdresden\b|\bleipzig\b|"
+    r"\bnuremberg\b|\bnürnberg\b|\bhannover\b|\bbremen\b|\bbonn\b|\bmannheim\b|\bkarlsruhe\b|"
+    r"\bheidelberg\b|\bpotsdam\b|\bwalldorf\b|\bfreiburg\b|\bessen\b|\bduisburg\b|"
+    r"\bwiesbaden\b|\bmainz\b|\baachen\b|\bregensburg\b|\baugsburg\b|\brostock\b|\bjena\b|\bbielefeld\b)",
     re.IGNORECASE,
 )
-REMOTE_PATTERN = re.compile(r"\b(remote|anywhere)\b", re.IGNORECASE)
+REMOTE_PATTERN = re.compile(
+    r"^remote(\s*-\s*(eu|europe|emea|global|worldwide|dach|germany))?$", re.IGNORECASE
+)
+
+
+def is_target_location(location: str) -> bool:
+    if not location:
+        return False
+    if GERMANY_PATTERN.search(location):
+        return True
+    if REMOTE_PATTERN.match(location.strip()):
+        return True
+    return False
+
 
 # German-language title indicators
 GERMAN_TITLE_PATTERN = re.compile(
@@ -56,7 +71,6 @@ def is_german_language(title: str, description: str) -> bool:
     """Detect German-language postings by title or description start."""
     if GERMAN_TITLE_PATTERN.search(title or ""):
         return True
-    # Check first 200 chars of description for German
     desc_start = (description or "")[:200].lower()
     german_indicators = [
         "wir ",
@@ -80,16 +94,6 @@ def is_relevant_title(title: str) -> bool:
     if EXCLUDED_ROLES.search(title):
         return False
     return bool(ENGINEERING_PATTERN.search(title))
-
-
-def is_target_location(location: str) -> bool:
-    if not location:
-        return True  # benefit of doubt
-    if GERMANY_PATTERN.search(location):
-        return True
-    if REMOTE_PATTERN.search(location):
-        return True
-    return False
 
 
 def get_or_create_company(cur, company_name: str) -> str:
