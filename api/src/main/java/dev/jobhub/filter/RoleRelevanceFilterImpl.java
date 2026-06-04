@@ -1,66 +1,63 @@
 package dev.jobhub.filter;
 
+import dev.jobhub.service.PersonalProfile;
+import dev.jobhub.service.PersonalProfileLoader;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Component
 public class RoleRelevanceFilterImpl implements RoleRelevanceFilter {
 
-    private static final Pattern ENGINEERING_PATTERN = Pattern.compile(
-            String.join("|",
-                    "engineer",
-                    "developer",
-                    "programmer",
-                    "\\bsre\\b",
-                    "devops",
-                    "dev\\s*ops",
-                    "software",
-                    "backend",
-                    "back[\\s-]end",
-                    "fullstack",
-                    "full[\\s-]stack",
-                    "platform",
-                    "infrastructure",
-                    "\\bcloud\\b",
-                    "\\bml\\b",
-                    "machine\\s+learning",
-                    "\\bsde\\b",
-                    "\\bcto\\b",
-                    "\\bsdet\\b",
-                    "site\\s+reliability",
-                    "\\bdevsecops\\b",
-                    "\\bsys\\s*admin\\b",
-                    "\\bkubernetes\\b",
-                    "\\bk8s\\b"
-            ),
-            Pattern.CASE_INSENSITIVE
+    private final Pattern engineeringPattern;
+    private final Pattern excludedRolesPattern;
+
+    // Default include patterns (used when config section is absent)
+    private static final List<String> DEFAULT_INCLUDE_PATTERNS = List.of(
+            "engineer", "developer", "programmer", "\\bsre\\b", "devops",
+            "dev\\s*ops", "software", "backend", "back[\\s-]end", "fullstack",
+            "full[\\s-]stack", "platform", "infrastructure", "\\bcloud\\b",
+            "\\bml\\b", "machine\\s+learning", "\\bsde\\b", "\\bcto\\b",
+            "\\bsdet\\b", "site\\s+reliability", "\\bdevsecops\\b",
+            "\\bsys\\s*admin\\b", "\\bkubernetes\\b", "\\bk8s\\b"
     );
 
-    // Titles containing these words are excluded even if they match engineering pattern
-    private static final Pattern EXCLUDED_ROLES_PATTERN = Pattern.compile(
-            String.join("|",
-                    "\\bmanager\\b",
-                    "\\barchitect\\b",
-                    "\\banalyst\\b",
-                    "\\bdirector\\b",
-                    "\\bprincipal\\b",
-                    "\\bcounsel\\b",
-                    "\\blegal\\b",
-                    "\\brecruiter\\b",
-                    "\\bdesigner\\b",
-                    "\\bmarketing\\b",
-                    "\\bsales\\b",
-                    "\\bfinance\\b",
-                    "\\baccountant\\b",
-                    "\\bhr\\b",
-                    "\\bfrontend\\b",
-                    "\\bfront[\\s-]end\\b",
-                    "\\blead\\b",
-                    "\\bqa\\b"
-            ),
-            Pattern.CASE_INSENSITIVE
+    // Default exclude keywords (used when config section is absent)
+    private static final List<String> DEFAULT_EXCLUDE_KEYWORDS = List.of(
+            "manager", "architect", "analyst", "director", "principal",
+            "counsel", "legal", "recruiter", "designer", "marketing",
+            "sales", "finance", "accountant", "hr", "frontend",
+            "front[\\s-]end", "lead", "qa", "devops", "mlops"
     );
+
+    public RoleRelevanceFilterImpl(PersonalProfileLoader profileLoader) {
+        PersonalProfile profile = profileLoader.getProfile();
+        List<String> includePatterns = DEFAULT_INCLUDE_PATTERNS;
+        List<String> excludeKeywords = DEFAULT_EXCLUDE_KEYWORDS;
+
+        if (profile.filters() != null && profile.filters().role() != null) {
+            PersonalProfile.RoleFilterConfig roleConfig = profile.filters().role();
+            if (!roleConfig.includePatterns().isEmpty()) {
+                includePatterns = roleConfig.includePatterns();
+            }
+            if (!roleConfig.excludeKeywords().isEmpty()) {
+                excludeKeywords = roleConfig.excludeKeywords();
+            }
+        }
+
+        this.engineeringPattern = Pattern.compile(
+                String.join("|", includePatterns),
+                Pattern.CASE_INSENSITIVE
+        );
+
+        // Wrap exclude keywords with word boundaries
+        String excludeRegex = excludeKeywords.stream()
+                .map(kw -> kw.startsWith("\\b") ? kw : "\\b" + kw + "\\b")
+                .collect(Collectors.joining("|"));
+        this.excludedRolesPattern = Pattern.compile(excludeRegex, Pattern.CASE_INSENSITIVE);
+    }
 
     @Override
     public FilterResult filter(String jobTitle) {
@@ -69,11 +66,11 @@ public class RoleRelevanceFilterImpl implements RoleRelevanceFilter {
         }
 
         // Exclusions take priority
-        if (EXCLUDED_ROLES_PATTERN.matcher(jobTitle).find()) {
+        if (excludedRolesPattern.matcher(jobTitle).find()) {
             return FilterResult.skip("non-engineering role");
         }
 
-        if (ENGINEERING_PATTERN.matcher(jobTitle).find()) {
+        if (engineeringPattern.matcher(jobTitle).find()) {
             return FilterResult.keep();
         }
 

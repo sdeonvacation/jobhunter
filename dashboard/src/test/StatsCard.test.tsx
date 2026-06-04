@@ -1,15 +1,30 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import StatsCard from '../components/StatsCard';
 
+// Mock requestAnimationFrame for count-up animation
+beforeEach(() => {
+  let time = 0;
+  vi.spyOn(performance, 'now').mockImplementation(() => {
+    time += 500; // Jump past animation duration
+    return time;
+  });
+});
+
 describe('StatsCard', () => {
-  it('renders title and value', () => {
+  it('renders title', () => {
     render(<StatsCard title="Total Jobs" value={42} />);
     expect(screen.getByText('Total Jobs')).toBeInTheDocument();
-    expect(screen.getByText('42')).toBeInTheDocument();
   });
 
-  it('renders string value', () => {
+  it('animates numeric value to target', async () => {
+    render(<StatsCard title="Total Jobs" value={42} />);
+    await waitFor(() => {
+      expect(screen.getByText('42')).toBeInTheDocument();
+    });
+  });
+
+  it('renders string value directly (no animation)', () => {
     render(<StatsCard title="Status" value="Active" />);
     expect(screen.getByText('Active')).toBeInTheDocument();
   });
@@ -19,14 +34,18 @@ describe('StatsCard', () => {
     expect(screen.getByText('Last 7 days')).toBeInTheDocument();
   });
 
-  it('shows up arrow for trend=up', () => {
+  it('shows up arrow for trend=up', async () => {
     render(<StatsCard title="Growth" value={10} trend="up" />);
-    expect(screen.getByText('↑')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('↑')).toBeInTheDocument();
+    });
   });
 
-  it('shows down arrow for trend=down', () => {
+  it('shows down arrow for trend=down', async () => {
     render(<StatsCard title="Decline" value={5} trend="down" />);
-    expect(screen.getByText('↓')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('↓')).toBeInTheDocument();
+    });
   });
 
   it('shows no arrow for neutral trend', () => {
@@ -54,15 +73,31 @@ describe('StatsCard', () => {
     expect(gradient).toBeInTheDocument();
   });
 
-  it('applies success color for up trend', () => {
+  it('applies success color for up trend', async () => {
     render(<StatsCard title="Up" value={5} trend="up" />);
-    const arrow = screen.getByText('↑');
-    expect(arrow.className).toContain('text-success');
+    await waitFor(() => {
+      const arrow = screen.getByText('↑');
+      expect(arrow.className).toContain('text-success');
+    });
   });
 
-  it('applies danger color for down trend', () => {
+  it('applies danger color for down trend', async () => {
     render(<StatsCard title="Down" value={2} trend="down" />);
-    const arrow = screen.getByText('↓');
-    expect(arrow.className).toContain('text-danger');
+    await waitFor(() => {
+      const arrow = screen.getByText('↓');
+      expect(arrow.className).toContain('text-danger');
+    });
+  });
+
+  it('applies variant gradient color', () => {
+    const { container } = render(<StatsCard title="Errors" value={3} variant="danger" />);
+    const gradient = container.querySelector('[class*="from-danger"]');
+    expect(gradient).toBeInTheDocument();
+  });
+
+  it('has shimmer animation element', () => {
+    const { container } = render(<StatsCard title="X" value={1} />);
+    const shimmer = container.querySelector('[class*="animate-shimmer"]');
+    expect(shimmer).toBeInTheDocument();
   });
 });

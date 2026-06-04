@@ -164,7 +164,8 @@ class MatchScorerTest {
                         List.of("senior", "staff", "lead"),
                         List.of("English", "German"),
                         List.of("gambling", "defense")
-                )
+                ),
+                null, null
         );
     }
 

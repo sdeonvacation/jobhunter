@@ -21,19 +21,26 @@ import java.time.Duration;
 @Slf4j
 public class OpenAiProvider implements AiProvider {
 
-    private static final String BASE_URL = "https://api.openai.com/v1/chat/completions";
+    private static final String DEFAULT_BASE_URL = "https://api.openai.com/v1/chat/completions";
     private static final Duration TIMEOUT = Duration.ofSeconds(60);
 
     private final WebClient webClient;
     private final String apiKey;
+    private final String baseUrl;
     private final String extractionModel;
     private final String tailoringModel;
     private final ObjectMapper objectMapper;
 
     public OpenAiProvider(WebClient webClient, String apiKey,
                           String extractionModel, String tailoringModel) {
+        this(webClient, apiKey, DEFAULT_BASE_URL, extractionModel, tailoringModel);
+    }
+
+    public OpenAiProvider(WebClient webClient, String apiKey, String baseUrl,
+                          String extractionModel, String tailoringModel) {
         this.webClient = webClient;
         this.apiKey = apiKey;
+        this.baseUrl = (baseUrl != null && !baseUrl.isBlank()) ? baseUrl : DEFAULT_BASE_URL;
         this.extractionModel = extractionModel;
         this.tailoringModel = tailoringModel;
         this.objectMapper = new ObjectMapper();
@@ -100,7 +107,7 @@ public class OpenAiProvider implements AiProvider {
 
     private String executeRequest(ObjectNode requestBody) {
         return webClient.post()
-                .uri(BASE_URL)
+                .uri(baseUrl)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .bodyValue(requestBody.toString())

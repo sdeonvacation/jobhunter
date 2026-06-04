@@ -1,12 +1,18 @@
 package dev.jobhub.filter;
 
 import dev.jobhub.model.enums.FilterDecision;
+import dev.jobhub.service.PersonalProfile;
+import dev.jobhub.service.PersonalProfileLoader;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class RoleRelevanceFilterImplTest {
 
@@ -14,7 +20,12 @@ class RoleRelevanceFilterImplTest {
 
     @BeforeAll
     static void setUp() {
-        filter = new RoleRelevanceFilterImpl();
+        PersonalProfileLoader loader = mock(PersonalProfileLoader.class);
+        when(loader.getProfile()).thenReturn(new PersonalProfile(
+                "", "", 0, List.of(),
+                new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
+                null, null));
+        filter = new RoleRelevanceFilterImpl(loader);
     }
 
     @ParameterizedTest

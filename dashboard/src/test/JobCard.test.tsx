@@ -61,7 +61,7 @@ describe('JobCard', () => {
     expect(screen.getByText('82')).toBeInTheDocument();
   });
 
-  it('renders recommendation badge', () => {
+  it('renders recommendation badge with colored dot', () => {
     render(<JobCard job={mockJob} />);
     expect(screen.getByText('APPLY')).toBeInTheDocument();
   });
@@ -75,5 +75,42 @@ describe('JobCard', () => {
   it('does not render salary when missing', () => {
     const { container } = render(<JobCard job={minimalJob} />);
     expect(container.textContent).not.toContain('EUR');
+  });
+
+  it('renders top skills as chips', () => {
+    render(<JobCard job={mockJob} />);
+    expect(screen.getByText('Java')).toBeInTheDocument();
+    expect(screen.getByText('Spring')).toBeInTheDocument();
+  });
+
+  it('does not render skills section when topSkills is empty', () => {
+    const { container } = render(<JobCard job={minimalJob} />);
+    const skillChips = container.querySelectorAll('[class*="bg-accent/10"]');
+    expect(skillChips.length).toBe(0);
+  });
+
+  it('applies stagger animation delay based on index', () => {
+    const { container } = render(<JobCard job={mockJob} index={3} />);
+    const link = container.querySelector('a');
+    expect(link?.style.animationDelay).toBe('150ms');
+  });
+
+  it('applies hover classes for lift effect', () => {
+    const { container } = render(<JobCard job={mockJob} />);
+    const link = container.querySelector('a');
+    expect(link?.className).toContain('hover:-translate-y-px');
+    expect(link?.className).toContain('hover:shadow-glow');
+  });
+
+  it('limits displayed skills to 5', () => {
+    const manySkillsJob: Job = {
+      ...mockJob,
+      topSkills: ['Java', 'Spring', 'Kotlin', 'Docker', 'K8s', 'AWS', 'Terraform'],
+    };
+    render(<JobCard job={manySkillsJob} />);
+    expect(screen.getByText('Java')).toBeInTheDocument();
+    expect(screen.getByText('K8s')).toBeInTheDocument();
+    expect(screen.queryByText('AWS')).not.toBeInTheDocument();
+    expect(screen.queryByText('Terraform')).not.toBeInTheDocument();
   });
 });

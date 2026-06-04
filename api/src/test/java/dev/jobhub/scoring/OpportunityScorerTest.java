@@ -202,7 +202,8 @@ class OpportunityScorerTest {
                         List.of("senior", "staff", "lead"),
                         List.of("English", "German"),
                         List.of()
-                )
+                ),
+                null, null
         );
     }
 }

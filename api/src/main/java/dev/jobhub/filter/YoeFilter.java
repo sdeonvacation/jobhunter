@@ -1,5 +1,7 @@
 package dev.jobhub.filter;
 
+import dev.jobhub.service.PersonalProfile;
+import dev.jobhub.service.PersonalProfileLoader;
 import org.springframework.stereotype.Component;
 
 import java.util.regex.Matcher;
@@ -7,18 +9,29 @@ import java.util.regex.Pattern;
 
 /**
  * Extracts years of experience from job descriptions and filters based on threshold.
- * Skips jobs requiring more than MAX_YOE years.
+ * Skips jobs requiring more than configured max years.
  */
 @Component
 public class YoeFilter {
 
-    private static final int MAX_YOE = 5;
+    private static final int DEFAULT_MAX_YOE = 5;
+
+    private final int maxYoe;
 
     // Matches patterns like "5+ years of experience", "3 years experience", "7 yrs of professional experience"
     private static final Pattern YOE_PATTERN = Pattern.compile(
             "(\\d+)\\+?\\s*(?:years?|yrs?)\\s*(?:of\\s+)?(?:professional\\s+|relevant\\s+|hands-on\\s+|industry\\s+|work\\s+|software\\s+|engineering\\s+)?(?:experience|exp)",
             Pattern.CASE_INSENSITIVE
     );
+
+    public YoeFilter(PersonalProfileLoader profileLoader) {
+        PersonalProfile profile = profileLoader.getProfile();
+        if (profile.filters() != null && profile.filters().yoe() != null) {
+            this.maxYoe = profile.filters().yoe().maxYears();
+        } else {
+            this.maxYoe = DEFAULT_MAX_YOE;
+        }
+    }
 
     /**
      * Extract the required years of experience from description text.
@@ -44,11 +57,11 @@ public class YoeFilter {
     }
 
     /**
-     * Filter based on extracted YOE. Returns SKIP if yoe > MAX_YOE.
+     * Filter based on extracted YOE. Returns SKIP if yoe > maxYoe.
      */
     public FilterResult filter(Integer yoe) {
         if (yoe == null) return FilterResult.keep();
-        if (yoe > MAX_YOE) {
+        if (yoe > maxYoe) {
             return FilterResult.skip("requires " + yoe + "+ years experience");
         }
         return FilterResult.keep();

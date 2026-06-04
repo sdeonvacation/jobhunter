@@ -35,8 +35,8 @@ public class AiConfig {
     public AiProvider aiProvider(WebClient aiWebClient) {
         return switch (provider.toLowerCase()) {
             case "openai" -> {
-                log.info("Using OpenAI provider with extraction={}, tailoring={}", extractionModel, tailoringModel);
-                yield new OpenAiProvider(aiWebClient, apiKey, extractionModel, tailoringModel);
+                log.info("Using OpenAI provider with baseUrl={}, extraction={}, tailoring={}", baseUrl, extractionModel, tailoringModel);
+                yield new OpenAiProvider(aiWebClient, apiKey, baseUrl, extractionModel, tailoringModel);
             }
             default -> {
                 log.info("Using Anthropic provider with baseUrl={}, extraction={}, tailoring={}", baseUrl, extractionModel, tailoringModel);

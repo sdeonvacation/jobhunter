@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -19,9 +20,8 @@ import java.util.regex.Pattern;
 @Component
 public class MatchScorer {
 
-    // Skill weights: heavy = core backend, low = frontend/secondary
-    private static final Map<String, Double> SKILL_WEIGHTS = Map.ofEntries(
-            // Heavy weight (core stack - Java/Spring is primary signal)
+    // Default skill weights (used when scoring config is absent)
+    private static final Map<String, Double> DEFAULT_SKILL_WEIGHTS = Map.ofEntries(
             Map.entry("java", 5.0),
             Map.entry("spring boot", 4.5),
             Map.entry("kotlin", 2.5),
@@ -32,7 +32,6 @@ public class MatchScorer {
             Map.entry("postgresql", 2.0),
             Map.entry("microservices", 2.0),
             Map.entry("terraform", 2.0),
-            // Medium weight
             Map.entry("redis", 1.5),
             Map.entry("elasticsearch", 1.5),
             Map.entry("ci/cd", 1.5),
@@ -44,7 +43,6 @@ public class MatchScorer {
             Map.entry("junit", 1.5),
             Map.entry("solid", 1.5),
             Map.entry("distributed systems", 2.0),
-            // Low weight (frontend/secondary)
             Map.entry("typescript", 0.3),
             Map.entry("node.js", 0.3),
             Map.entry("javascript", 0.3),
@@ -52,10 +50,76 @@ public class MatchScorer {
             Map.entry("react", 0.3)
     );
 
+    private static final double DEFAULT_BENCHMARK_WEIGHT = 22.0;
+    private static final int DEFAULT_APPLY_SCORE = 40;
+    private static final int DEFAULT_APPLY_MIN_MATCHES = 4;
+    private static final int DEFAULT_MAYBE_SCORE = 25;
+    private static final int DEFAULT_MAYBE_MIN_MATCHES = 2;
+    private static final double DEFAULT_BONUS_WEIGHT = 2.0;
+    private static final List<String> DEFAULT_BONUS_SIGNALS = List.of("ai", "machine learning", "llm");
+
     private final PersonalProfileLoader profileLoader;
+    private final Map<String, Double> skillWeights;
+    private final Map<String, List<Pattern>> compiledVariants;
+    private final double benchmarkWeight;
+    private final int applyScore;
+    private final int applyMinMatches;
+    private final int maybeScore;
+    private final int maybeMinMatches;
+    private final List<String> bonusSignals;
+    private final double bonusWeight;
 
     public MatchScorer(PersonalProfileLoader profileLoader) {
         this.profileLoader = profileLoader;
+        PersonalProfile profile = profileLoader.getProfile();
+        PersonalProfile.ScoringConfig scoring = profile.scoring();
+
+        if (scoring != null) {
+            this.skillWeights = scoring.skillWeights().isEmpty()
+                    ? DEFAULT_SKILL_WEIGHTS : scoring.skillWeights();
+            this.benchmarkWeight = scoring.benchmarkWeight();
+            this.bonusSignals = scoring.bonusSignals().isEmpty()
+                    ? DEFAULT_BONUS_SIGNALS : scoring.bonusSignals();
+            this.bonusWeight = scoring.bonusWeight();
+
+            if (scoring.thresholds() != null) {
+                this.applyScore = scoring.thresholds().applyScore();
+                this.applyMinMatches = scoring.thresholds().applyMinMatches();
+                this.maybeScore = scoring.thresholds().maybeScore();
+                this.maybeMinMatches = scoring.thresholds().maybeMinMatches();
+            } else {
+                this.applyScore = DEFAULT_APPLY_SCORE;
+                this.applyMinMatches = DEFAULT_APPLY_MIN_MATCHES;
+                this.maybeScore = DEFAULT_MAYBE_SCORE;
+                this.maybeMinMatches = DEFAULT_MAYBE_MIN_MATCHES;
+            }
+
+            this.compiledVariants = compileVariants(scoring.skillVariants());
+        } else {
+            this.skillWeights = DEFAULT_SKILL_WEIGHTS;
+            this.benchmarkWeight = DEFAULT_BENCHMARK_WEIGHT;
+            this.applyScore = DEFAULT_APPLY_SCORE;
+            this.applyMinMatches = DEFAULT_APPLY_MIN_MATCHES;
+            this.maybeScore = DEFAULT_MAYBE_SCORE;
+            this.maybeMinMatches = DEFAULT_MAYBE_MIN_MATCHES;
+            this.bonusSignals = DEFAULT_BONUS_SIGNALS;
+            this.bonusWeight = DEFAULT_BONUS_WEIGHT;
+            this.compiledVariants = Map.of();
+        }
+    }
+
+    private Map<String, List<Pattern>> compileVariants(Map<String, List<String>> variantsConfig) {
+        if (variantsConfig == null || variantsConfig.isEmpty()) return Map.of();
+
+        Map<String, List<Pattern>> compiled = new HashMap<>();
+        for (Map.Entry<String, List<String>> entry : variantsConfig.entrySet()) {
+            List<Pattern> patterns = new ArrayList<>();
+            for (String regex : entry.getValue()) {
+                patterns.add(Pattern.compile(regex, Pattern.CASE_INSENSITIVE));
+            }
+            compiled.put(entry.getKey(), patterns);
+        }
+        return compiled;
     }
 
     /**
@@ -77,7 +141,7 @@ public class MatchScorer {
         double earnedScore = 0.0;
 
         for (PersonalProfile.ProfileSkill skill : skills) {
-            double weight = SKILL_WEIGHTS.getOrDefault(skill.name().toLowerCase(), 1.0);
+            double weight = skillWeights.getOrDefault(skill.name().toLowerCase(), 1.0);
             totalWeight += weight;
 
             if (matchesSkill(textLower, skill.name())) {
@@ -88,19 +152,17 @@ public class MatchScorer {
             }
         }
 
-        // Also check for bonus signals not in profile
-        if (textLower.contains("ai") || textLower.contains("machine learning") || textLower.contains("llm")) {
-            earnedScore += 2.0;
-            totalWeight += 2.0;
+        // Check for bonus signals
+        boolean bonusMatched = bonusSignals.stream().anyMatch(textLower::contains);
+        if (bonusMatched) {
+            earnedScore += bonusWeight;
+            totalWeight += bonusWeight;
             matchedSkills.add("AI/ML");
         } else {
-            totalWeight += 2.0;
+            totalWeight += bonusWeight;
         }
 
-        // Score using a benchmark: a realistic "great match" job earns ~22 weight.
-        // This avoids penalizing jobs for not mentioning every skill in the profile.
-        double BENCHMARK_WEIGHT = 22.0;
-        int overallScore = (int) Math.round((earnedScore / BENCHMARK_WEIGHT) * 100);
+        int overallScore = (int) Math.round((earnedScore / benchmarkWeight) * 100);
         overallScore = Math.max(0, Math.min(100, overallScore));
 
         Recommendation recommendation = computeRecommendation(overallScore, matchedSkills.size());
@@ -109,52 +171,32 @@ public class MatchScorer {
     }
 
     /**
-     * Check if a skill is mentioned in the text. Handles variants.
+     * Check if a skill is mentioned in the text using configured variants.
      */
     private boolean matchesSkill(String text, String skillName) {
         String lower = skillName.toLowerCase();
 
-        // Direct match
+        // Direct match (skill name appears in text)
         if (text.contains(lower)) {
             return true;
         }
 
-        // Handle common variants
-        return switch (lower) {
-            case "java" -> Pattern.compile("\\bjava\\b").matcher(text).find();
-            case "spring boot" -> text.contains("spring") || text.contains("springboot");
-            case "kotlin" -> text.contains("kotlin");
-            case "postgresql" -> text.contains("postgres") || text.contains("postgresql");
-            case "kafka" -> text.contains("kafka");
-            case "kubernetes" -> text.contains("kubernetes") || text.contains("k8s");
-            case "aws" -> Pattern.compile("\\baws\\b").matcher(text).find() || text.contains("amazon web");
-            case "docker" -> text.contains("docker") || text.contains("container");
-            case "typescript" -> text.contains("typescript") || text.contains("type script");
-            case "microservices" -> text.contains("microservice") || text.contains("micro-service");
-            case "rest apis" -> text.contains("rest") || text.contains("restful") || text.contains("api");
-            case "ci/cd" -> text.contains("ci/cd") || text.contains("ci cd") || text.contains("continuous integration") || text.contains("continuous delivery");
-            case "sql" -> Pattern.compile("\\bsql\\b").matcher(text).find();
-            case "git" -> Pattern.compile("\\bgit\\b").matcher(text).find() || text.contains("github") || text.contains("gitlab");
-            case "hibernate/jpa" -> text.contains("hibernate") || text.contains("jpa");
-            case "gradle" -> text.contains("gradle") || text.contains("maven");
-            case "redis" -> text.contains("redis");
-            case "junit" -> text.contains("junit") || text.contains("testing framework") || text.contains("unit test");
-            case "solid" -> text.contains("solid") || text.contains("design principle") || text.contains("clean code");
-            case "distributed systems" -> text.contains("distributed") || text.contains("scalab") || text.contains("high availability");
-            case "elasticsearch" -> text.contains("elasticsearch") || text.contains("elastic") || text.contains("opensearch");
-            case "terraform" -> text.contains("terraform") || text.contains("infrastructure as code");
-            case "node.js" -> text.contains("node.js") || text.contains("nodejs") || Pattern.compile("\\bnode\\b").matcher(text).find();
-            case "javascript" -> text.contains("javascript") || Pattern.compile("\\bjs\\b").matcher(text).find();
-            case "go" -> Pattern.compile("\\bgolang\\b|\\bgo\\b").matcher(text).find();
-            case "react" -> Pattern.compile("\\breact\\b").matcher(text).find();
-            case "ai/ml" -> text.contains("ai") || text.contains("machine learning") || text.contains("llm");
-            default -> false;
-        };
+        // Check configured variants
+        List<Pattern> variants = compiledVariants.get(lower);
+        if (variants != null) {
+            for (Pattern pattern : variants) {
+                if (pattern.matcher(text).find()) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private Recommendation computeRecommendation(int score, int matchCount) {
-        if (score >= 40 && matchCount >= 4) return Recommendation.APPLY;
-        if (score >= 25 && matchCount >= 2) return Recommendation.MAYBE;
+        if (score >= applyScore && matchCount >= applyMinMatches) return Recommendation.APPLY;
+        if (score >= maybeScore && matchCount >= maybeMinMatches) return Recommendation.MAYBE;
         return Recommendation.SKIP;
     }
 

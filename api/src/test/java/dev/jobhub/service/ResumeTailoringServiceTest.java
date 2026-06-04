@@ -77,7 +77,8 @@ class ResumeTailoringServiceTest {
                 new PersonalProfile.Preferences(
                         List.of("Berlin"), "FULL_TIME", 80000,
                         List.of("senior"), List.of("en"), List.of()
-                )
+                ),
+                null, null
         );
 
         // AI returns skills including one the profile doesn't have
@@ -120,7 +121,8 @@ class ResumeTailoringServiceTest {
 
         PersonalProfile profile = new PersonalProfile(
                 "John", "Dev", 5, List.of(),
-                new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of())
+                new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
+                null, null
         );
 
         when(aiProvider.isAvailable()).thenReturn(true);
@@ -144,7 +146,8 @@ class ResumeTailoringServiceTest {
         PersonalProfile profile = new PersonalProfile(
                 "Jane", "Dev", 3,
                 List.of(new PersonalProfile.ProfileSkill("Python", "advanced", "LANGUAGE")),
-                new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of())
+                new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
+                null, null
         );
 
         ResumeTailoringService.TailoringResponse aiResponse = new ResumeTailoringService.TailoringResponse(

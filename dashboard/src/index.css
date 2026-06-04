@@ -3,6 +3,10 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     background-color: #0a0a0f;
     color: #e8e8f0;
@@ -12,9 +16,19 @@
     margin: 0;
   }
 
+  ::selection {
+    background-color: rgba(99, 102, 241, 0.3);
+    color: #e8e8f0;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgba(99, 102, 241, 0.5);
+    outline-offset: 2px;
+  }
+
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
 
   ::-webkit-scrollbar-track {
@@ -24,6 +38,7 @@
   ::-webkit-scrollbar-thumb {
     background-color: #252540;
     border-radius: 9999px;
+    transition: background-color 150ms;
   }
 
   ::-webkit-scrollbar-thumb:hover {
@@ -39,15 +54,16 @@
   }
 
   .btn-primary {
-    @apply rounded-md px-4 py-2 text-sm font-medium transition-colors text-white;
+    @apply rounded-md px-4 py-2 text-sm font-medium transition-all text-white;
     background-color: #6366f1;
   }
   .btn-primary:hover {
     background-color: #818cf8;
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
   }
 
   .btn-secondary {
-    @apply rounded-md px-4 py-2 text-sm font-medium transition-colors;
+    @apply rounded-md px-4 py-2 text-sm font-medium transition-all;
     background-color: #1a1a2e;
     color: #9898b0;
     border: 1px solid #252540;
@@ -55,5 +71,28 @@
   .btn-secondary:hover {
     background-color: #252540;
     color: #e8e8f0;
+    border-color: #3d3d5c;
   }
+
+  /* Skeleton loading pulse */
+  .skeleton {
+    @apply rounded-lg;
+    background: linear-gradient(90deg, #1a1a2e 25%, #252540 50%, #1a1a2e 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s linear infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+}
+
+@layer utilities {
+  .stagger-1 { animation-delay: 50ms; }
+  .stagger-2 { animation-delay: 100ms; }
+  .stagger-3 { animation-delay: 150ms; }
+  .stagger-4 { animation-delay: 200ms; }
+  .stagger-5 { animation-delay: 250ms; }
+  .stagger-6 { animation-delay: 300ms; }
 }

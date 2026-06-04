@@ -86,3 +86,163 @@ preferences:
   seniority: ["senior", "junior", "mid"]
   languages: ["English", "German"]
   excluded-industries: ["gambling", "defense", "surveillance"]
+
+filters:
+  role:
+    include-patterns:
+      - "engineer"
+      - "developer"
+      - "programmer"
+      - "\\bsre\\b"
+      - "devops"
+      - "dev\\s*ops"
+      - "software"
+      - "backend"
+      - "back[\\s-]end"
+      - "fullstack"
+      - "full[\\s-]stack"
+      - "platform"
+      - "infrastructure"
+      - "\\bcloud\\b"
+      - "\\bml\\b"
+      - "machine\\s+learning"
+      - "\\bsde\\b"
+      - "site\\s+reliability"
+    exclude-keywords:
+      - "manager"
+      - "architect"
+      - "analyst"
+      - "director"
+      - "principal"
+      - "counsel"
+      - "legal"
+      - "recruiter"
+      - "designer"
+      - "marketing"
+      - "sales"
+      - "finance"
+      - "accountant"
+      - "hr"
+      - "frontend"
+      - "front[\\s-]end"
+      - "lead"
+      - "qa"
+      - "devops"
+      - "mlops"
+  location:
+    germany-cities:
+      - "germany"
+      - "deutschland"
+      - "berlin"
+      - "munich"
+      - "m[uü]nchen"
+      - "hamburg"
+      - "frankfurt"
+      - "cologne"
+      - "k[oö]ln"
+      - "stuttgart"
+      - "d[uü]sseldorf"
+      - "dortmund"
+      - "dresden"
+      - "leipzig"
+      - "nuremberg"
+      - "n[uü]rnberg"
+      - "hannover"
+      - "bremen"
+      - "bonn"
+      - "mannheim"
+      - "karlsruhe"
+      - "heidelberg"
+      - "potsdam"
+      - "walldorf"
+      - "freiburg"
+      - "essen"
+      - "duisburg"
+      - "wiesbaden"
+      - "mainz"
+      - "aachen"
+      - "regensburg"
+      - "augsburg"
+      - "rostock"
+      - "jena"
+      - "erkner"
+      - "bielefeld"
+    remote-patterns:
+      - "^(remote|remote\\s*-\\s*(eu|europe|emea|global|worldwide|dach|ger(many)?))$"
+  yoe:
+    max-years: 5
+
+scoring:
+  benchmark-weight: 22.0
+  thresholds:
+    apply-score: 40
+    apply-min-matches: 4
+    maybe-score: 25
+    maybe-min-matches: 2
+  bonus-signals:
+    - "ai"
+    - "machine learning"
+    - "llm"
+    - "agent"
+    - "agentic"
+  bonus-weight: 2.0
+  skill-weights:
+    java: 5.0
+    spring boot: 4.5
+    kubernetes: 3.0
+    docker: 2.5
+    aws: 2.5
+    azure: 2.5
+    kafka: 3.0
+    postgresql: 2.0
+    microservices: 2.0
+    claude: 2.0
+    redis: 1.5
+    elasticsearch: 1.5
+    ci/cd: 1.5
+    sql: 1.5
+    rest: 2.0
+    hibernate/jpa: 1.5
+    python: 1.0
+    gradle: 1.0
+    kotlin: 1.0
+    terraform: 1.0
+    architecture: 1.0
+    orchestration: 1.0
+    git: 0.5
+    junit: 1.5
+    solid: 1.5
+    distributed systems: 2.0
+    typescript: 0.5
+    node.js: 0.3
+    javascript: 0.3
+    go: 0.3
+    react: 0.3
+  skill-variants:
+    java: ["\\bjava\\b"]
+    spring boot: ["spring", "springboot"]
+    kotlin: ["kotlin"]
+    postgresql: ["postgres", "postgresql"]
+    kafka: ["kafka"]
+    kubernetes: ["kubernetes", "k8s"]
+    aws: ["\\baws\\b", "amazon web"]
+    docker: ["docker", "container"]
+    typescript: ["typescript", "type script"]
+    microservices: ["microservice", "micro-service"]
+    rest apis: ["rest", "restful", "api"]
+    ci/cd: ["ci/cd", "ci cd", "continuous integration", "continuous delivery"]
+    sql: ["\\bsql\\b"]
+    git: ["\\bgit\\b", "github", "gitlab"]
+    hibernate/jpa: ["hibernate", "jpa"]
+    maven: ["gradle", "maven"]
+    redis: ["redis"]
+    junit: ["junit", "testing framework", "unit test"]
+    solid: ["solid", "design principle", "clean code"]
+    distributed systems: ["distributed", "scalab", "high availability"]
+    elasticsearch: ["elasticsearch", "elastic", "opensearch", "kibana"]
+    terraform: ["terraform", "infrastructure as code"]
+    node.js: ["node.js", "nodejs", "\\bnode\\b"]
+    javascript: ["javascript", "\\bjs\\b"]
+    go: ["\\bgolang\\b", "\\bgo\\b"]
+    react: ["\\breact\\b"]
+    ai/ml: ["ai", "machine learning", "llm"]

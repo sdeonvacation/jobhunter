@@ -33,7 +33,7 @@ export default function Health() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="text-text-muted text-center py-12">Loading...</div>;
+  if (loading) return <div className="text-text-muted text-center py-12 animate-pulse-soft">Loading...</div>;
   if (!report) return <div className="text-danger text-center py-12">Failed to load health report</div>;
 
   return (
@@ -41,14 +41,14 @@ export default function Health() {
       <h1 className="text-2xl font-bold text-text-primary mb-6">Endpoint Health</h1>
 
       <div className="grid grid-cols-4 gap-4 mb-8">
-        <StatCard label="Total Active" value={report.totalEndpoints} color="text-text-primary" />
-        <StatCard label="Errored" value={report.errored} color="text-danger" />
-        <StatCard label="Empty" value={report.empty} color="text-warning" />
-        <StatCard label="Never Crawled" value={report.neverCrawled} color="text-text-muted" />
+        <StatCard label="Total Active" value={report.totalEndpoints} color="text-text-primary" borderColor="border-t-success" />
+        <StatCard label="Errored" value={report.errored} color="text-danger" borderColor="border-t-danger" pulse={report.errored > 0} />
+        <StatCard label="Empty" value={report.empty} color="text-warning" borderColor="border-t-warning" />
+        <StatCard label="Never Crawled" value={report.neverCrawled} color="text-text-muted" borderColor="border-t-surface-500" />
       </div>
 
       {report.errors.length > 0 && (
-        <section className="mb-8">
+        <section className="mb-8 animate-fade-in">
           <h2 className="text-lg font-semibold text-danger mb-3">Errors ({report.errors.length})</h2>
           <div className="space-y-2">
             {report.errors.map((ep) => (
@@ -59,7 +59,7 @@ export default function Health() {
       )}
 
       {report.empties.length > 0 && (
-        <section>
+        <section className="animate-fade-in">
           <h2 className="text-lg font-semibold text-warning mb-3">Empty ({report.empties.length})</h2>
           <div className="space-y-2">
             {report.empties.map((ep) => (
@@ -70,7 +70,7 @@ export default function Health() {
       )}
 
       {report.errors.length === 0 && report.empties.length === 0 && (
-        <div className="text-center py-12">
+        <div className="text-center py-12 animate-fade-in">
           <p className="text-success text-lg mb-2">All endpoints healthy</p>
           <p className="text-text-muted text-sm">No errors or empty responses detected.</p>
         </div>
@@ -79,18 +79,18 @@ export default function Health() {
   );
 }
 
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+function StatCard({ label, value, color, borderColor, pulse }: { label: string; value: number; color: string; borderColor: string; pulse?: boolean }) {
   return (
-    <div className="bg-surface-800 border border-surface-600 rounded-lg p-4">
+    <div className={`bg-surface-800 border border-surface-600 border-t-2 ${borderColor} rounded-lg p-4 animate-fade-in ${pulse ? 'animate-pulse-glow' : ''}`}>
       <p className="text-xs text-text-muted uppercase tracking-wider">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
+      <p className={`text-2xl font-bold mt-1 font-mono ${color}`}>{value}</p>
     </div>
   );
 }
 
 function EndpointRow({ endpoint }: { endpoint: EndpointHealth }) {
   return (
-    <div className="bg-surface-800 border border-surface-600 rounded-lg p-4">
+    <div className="bg-surface-800 border border-surface-600 rounded-lg p-4 transition-all duration-150 hover:border-surface-500">
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -122,7 +122,7 @@ function EndpointRow({ endpoint }: { endpoint: EndpointHealth }) {
           </div>
         </div>
         {endpoint.consecutiveErrors > 0 && (
-          <span className="text-xs bg-danger/20 text-danger px-2 py-1 rounded-full font-mono shrink-0 ml-3">
+          <span className="text-xs bg-danger/20 text-danger px-2 py-1 rounded-full font-mono shrink-0 ml-3 animate-pulse-soft">
             {endpoint.consecutiveErrors}x failed
           </span>
         )}

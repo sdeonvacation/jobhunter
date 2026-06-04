@@ -38,6 +38,9 @@ dependencies {
     // Language detection
     implementation("com.github.pemistahl:lingua:1.2.2")
 
+    // HTML parsing
+    implementation("org.jsoup:jsoup:1.18.1")
+
     // Lombok
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")

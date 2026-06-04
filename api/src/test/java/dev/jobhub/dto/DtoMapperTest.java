@@ -180,7 +180,8 @@ class DtoMapperTest {
                 new PersonalProfile.Preferences(
                         List.of("Berlin", "Munich"), "FULL_TIME", 80000,
                         List.of("senior"), List.of("en", "de"), List.of("finance")
-                )
+                ),
+                null, null
         );
 
         ProfileDto dto = DtoMapper.toProfile(profile);

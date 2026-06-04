@@ -1,8 +1,12 @@
 package dev.jobhub.filter;
 
+import dev.jobhub.service.PersonalProfile;
+import dev.jobhub.service.PersonalProfileLoader;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Whitelist-based location filter. Only KEEP if location explicitly matches
@@ -11,32 +15,52 @@ import java.util.regex.Pattern;
 @Component
 public class LocationFilterImpl implements LocationFilter {
 
-    // Whitelist: Germany country + major cities
-    private static final Pattern GERMANY_PATTERN = Pattern.compile(
-            String.join("|",
-                    "\\bgermany\\b", "\\bdeutschland\\b",
-                    "\\bberlin\\b", "\\bmunich\\b", "\\bm[uü]nchen\\b",
-                    "\\bhamburg\\b", "\\bfrankfurt\\b",
-                    "\\bcologne\\b", "\\bk[oö]ln\\b",
-                    "\\bstuttgart\\b", "\\bd[uü]sseldorf\\b",
-                    "\\bdortmund\\b", "\\bdresden\\b", "\\bleipzig\\b",
-                    "\\bnuremberg\\b", "\\bn[uü]rnberg\\b",
-                    "\\bhannover\\b", "\\bbremen\\b", "\\bbonn\\b",
-                    "\\bmannheim\\b", "\\bkarlsruhe\\b",
-                    "\\bheidelberg\\b", "\\bpotsdam\\b", "\\bwalldorf\\b",
-                    "\\bfreiburg\\b", "\\bessen\\b", "\\bduisburg\\b",
-                    "\\bwiesbaden\\b", "\\bmainz\\b", "\\baachen\\b",
-                    "\\bregensburg\\b", "\\baugsburg\\b", "\\brostock\\b",
-                    "\\bjena\\b", "\\berkner\\b", "\\bbielefeld\\b"
-            ),
-            Pattern.CASE_INSENSITIVE
+    private final Pattern germanyPattern;
+    private final Pattern genericRemotePattern;
+
+    // Default Germany city patterns (used when config section is absent)
+    private static final List<String> DEFAULT_GERMANY_CITIES = List.of(
+            "germany", "deutschland", "berlin", "munich", "m[uü]nchen",
+            "hamburg", "frankfurt", "cologne", "k[oö]ln", "stuttgart",
+            "d[uü]sseldorf", "dortmund", "dresden", "leipzig",
+            "nuremberg", "n[uü]rnberg", "hannover", "bremen", "bonn",
+            "mannheim", "karlsruhe", "heidelberg", "potsdam", "walldorf",
+            "freiburg", "essen", "duisburg", "wiesbaden", "mainz", "aachen",
+            "regensburg", "augsburg", "rostock", "jena", "erkner", "bielefeld"
     );
 
-    // Generic remote (no country qualifier)
-    private static final Pattern GENERIC_REMOTE_PATTERN = Pattern.compile(
-            "^(remote|remote\\s*-\\s*(eu|europe|emea|global|worldwide|dach|ger(many)?))$",
-            Pattern.CASE_INSENSITIVE
+    // Default remote patterns (used when config section is absent)
+    private static final List<String> DEFAULT_REMOTE_PATTERNS = List.of(
+            "^(remote|remote\\s*-\\s*(eu|europe|emea|global|worldwide|dach|ger(many)?))$"
     );
+
+    public LocationFilterImpl(PersonalProfileLoader profileLoader) {
+        PersonalProfile profile = profileLoader.getProfile();
+        List<String> cities = DEFAULT_GERMANY_CITIES;
+        List<String> remotePatterns = DEFAULT_REMOTE_PATTERNS;
+
+        if (profile.filters() != null && profile.filters().location() != null) {
+            PersonalProfile.LocationFilterConfig locationConfig = profile.filters().location();
+            if (!locationConfig.germanyCities().isEmpty()) {
+                cities = locationConfig.germanyCities();
+            }
+            if (!locationConfig.remotePatterns().isEmpty()) {
+                remotePatterns = locationConfig.remotePatterns();
+            }
+        }
+
+        // Wrap city names with word boundaries
+        String cityRegex = cities.stream()
+                .map(city -> city.startsWith("\\b") ? city : "\\b" + city + "\\b")
+                .collect(Collectors.joining("|"));
+        this.germanyPattern = Pattern.compile(cityRegex, Pattern.CASE_INSENSITIVE);
+
+        // Remote patterns are used as-is (full regex)
+        this.genericRemotePattern = Pattern.compile(
+                String.join("|", remotePatterns),
+                Pattern.CASE_INSENSITIVE
+        );
+    }
 
     @Override
     public FilterResult filter(String location) {
@@ -45,12 +69,12 @@ public class LocationFilterImpl implements LocationFilter {
         }
 
         // Whitelist: Germany match anywhere in string
-        if (GERMANY_PATTERN.matcher(location).find()) {
+        if (germanyPattern.matcher(location).find()) {
             return FilterResult.keep();
         }
 
         // Whitelist: purely "Remote" or "Remote - EU/Europe/EMEA/DACH"
-        if (GENERIC_REMOTE_PATTERN.matcher(location.trim()).find()) {
+        if (genericRemotePattern.matcher(location.trim()).find()) {
             return FilterResult.keep();
         }
 

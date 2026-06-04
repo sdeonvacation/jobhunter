@@ -175,7 +175,8 @@ class CompanyPriorityScorerTest {
                         List.of("senior", "staff"),
                         List.of("English", "German"),
                         List.of()
-                )
+                ),
+                null, null
         );
     }
 }

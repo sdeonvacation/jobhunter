@@ -1,4 +1,6 @@
 import { NavLink } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { fetchApi } from '../api/client';
 
 const links = [
   {
@@ -54,14 +56,28 @@ const links = [
   },
 ];
 
+interface HealthSummary {
+  totalEndpoints: number;
+}
+
 export default function Navigation() {
+  const [totalEndpoints, setTotalEndpoints] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetchApi<HealthSummary>('/api/admin/health')
+      .then((data) => setTotalEndpoints(data.totalEndpoints))
+      .catch(() => {});
+  }, []);
+
   return (
     <nav className="w-60 bg-surface-800 border-r border-surface-600 flex flex-col min-h-screen">
       <div className="p-5">
-        <h1 className="text-lg font-bold text-text-primary tracking-tight">
-          JobHub
+        <h1 className="text-xl font-bold text-text-primary tracking-tight">
+          <span className="bg-gradient-to-r from-accent to-accent-light bg-clip-text text-transparent">
+            JobHub
+          </span>
         </h1>
-        <div className="mt-1.5 h-0.5 w-10 bg-gradient-to-r from-accent to-accent-light rounded-full" />
+        <div className="mt-1.5 h-0.5 w-10 bg-gradient-to-r from-accent to-accent-light rounded-full opacity-80" />
       </div>
 
       <ul className="flex-1 px-3 py-2 space-y-0.5">
@@ -70,14 +86,16 @@ export default function Navigation() {
             <NavLink
               to={link.to}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 text-sm rounded-md transition-all ${
+                `group flex items-center gap-3 px-3 py-2.5 text-sm rounded-md transition-all duration-150 ease-out-expo ${
                   isActive
-                    ? 'bg-accent/10 text-accent border-l-2 border-accent pl-[10px]'
-                    : 'text-text-secondary hover:text-text-primary hover:bg-surface-700 border-l-2 border-transparent pl-[10px]'
+                    ? 'bg-accent/10 text-accent border-l-2 border-accent pl-[10px] shadow-glow'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-surface-700/50 border-l-2 border-transparent pl-[10px]'
                 }`
               }
             >
-              <span className="shrink-0">{link.icon}</span>
+              <span className="shrink-0 transition-transform duration-150 group-hover:scale-110">
+                {link.icon}
+              </span>
               <span className="font-medium">{link.label}</span>
             </NavLink>
           </li>
@@ -85,7 +103,9 @@ export default function Navigation() {
       </ul>
 
       <div className="p-4 border-t border-surface-600">
-        <p className="text-xs text-text-muted">547 jobs tracked</p>
+        <p className="text-xs text-text-muted">
+          {totalEndpoints !== null ? `${totalEndpoints} endpoints tracked` : '...'}
+        </p>
       </div>
     </nav>
   );

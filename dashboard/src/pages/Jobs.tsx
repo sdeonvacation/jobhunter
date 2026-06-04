@@ -68,17 +68,27 @@ export default function Jobs() {
       <h1 className="text-2xl font-bold text-text-primary mb-6">Job Search</h1>
 
       <div className="flex gap-3 mb-6 flex-wrap">
-        <input
-          type="text"
-          placeholder="Search jobs..."
-          value={params.query}
-          onChange={(e) => setParams((p) => ({ ...p, query: e.target.value, page: 0 }))}
-          className="flex-1 min-w-[200px] bg-surface-800 border border-surface-600 text-text-primary placeholder:text-text-muted rounded-md px-4 py-2.5 focus:border-accent focus:ring-1 focus:ring-accent/30 outline-none text-sm"
-        />
+        {/* Search input with icon and focus glow */}
+        <div className="relative flex-1 min-w-[200px]">
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
+            width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <circle cx="7" cy="7" r="5" />
+            <path d="M11 11l3 3" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search jobs..."
+            value={params.query}
+            onChange={(e) => setParams((p) => ({ ...p, query: e.target.value, page: 0 }))}
+            className="w-full bg-surface-800 border border-surface-600 text-text-primary placeholder:text-text-muted rounded-lg pl-9 pr-4 py-2.5 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:shadow-glow outline-none text-sm transition-all duration-200"
+          />
+        </div>
         <select
           value={company}
           onChange={(e) => { setCompany(e.target.value); setParams((p) => ({ ...p, page: 0 })); }}
-          className="bg-surface-800 border border-surface-600 text-text-primary rounded-md px-4 py-2.5 focus:border-accent focus:ring-1 focus:ring-accent/30 outline-none text-sm"
+          className="bg-surface-800 border border-surface-600 text-text-primary rounded-lg px-4 py-2.5 focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none text-sm transition-all duration-200"
         >
           <option value="">All Companies</option>
           {companies.map((c) => (
@@ -88,7 +98,7 @@ export default function Jobs() {
         <select
           value={params.location}
           onChange={(e) => setParams((p) => ({ ...p, location: e.target.value, page: 0 }))}
-          className="bg-surface-800 border border-surface-600 text-text-primary rounded-md px-4 py-2.5 focus:border-accent focus:ring-1 focus:ring-accent/30 outline-none text-sm"
+          className="bg-surface-800 border border-surface-600 text-text-primary rounded-lg px-4 py-2.5 focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none text-sm transition-all duration-200"
         >
           {LOCATIONS.map((loc) => (
             <option key={loc.value} value={loc.value}>
@@ -99,7 +109,7 @@ export default function Jobs() {
         <select
           value={sort}
           onChange={(e) => { setSort(e.target.value); setParams((p) => ({ ...p, page: 0 })); }}
-          className="bg-surface-800 border border-surface-600 text-text-primary rounded-md px-4 py-2.5 focus:border-accent focus:ring-1 focus:ring-accent/30 outline-none text-sm"
+          className="bg-surface-800 border border-surface-600 text-text-primary rounded-lg px-4 py-2.5 focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none text-sm transition-all duration-200"
         >
           <option value="matchScore">Sort: Best Match</option>
           <option value="date">Sort: Newest</option>
@@ -107,22 +117,22 @@ export default function Jobs() {
       </div>
 
       {error && (
-        <div className="bg-danger/10 border border-danger/20 text-danger rounded-lg p-4 text-sm mb-4">
+        <div className="bg-danger/10 border border-danger/20 text-danger rounded-lg p-4 text-sm mb-4 animate-fade-in">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="text-text-muted text-center py-12">Loading...</div>
+        <div className="text-text-muted text-center py-12 animate-pulse-soft">Loading...</div>
       ) : jobs.length === 0 ? (
-        <div className="text-center py-12">
+        <div className="text-center py-12 animate-fade-in">
           <p className="text-text-muted text-lg mb-2">No jobs found</p>
           <p className="text-text-muted text-sm">Try adjusting your search filters.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {jobs.map((job) => (
-            <JobCard key={job.id} job={job} onMarkApplied={handleMarkApplied} />
+          {jobs.map((job, i) => (
+            <JobCard key={job.id} job={job} index={i} onMarkApplied={handleMarkApplied} />
           ))}
         </div>
       )}

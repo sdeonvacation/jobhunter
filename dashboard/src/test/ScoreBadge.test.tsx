@@ -70,4 +70,47 @@ describe('ScoreBadge', () => {
     const badge = container.firstChild as HTMLElement;
     expect(badge.className).toContain('text-danger');
   });
+
+  it('renders SVG progress ring', () => {
+    const { container } = render(<ScoreBadge score={75} />);
+    const svg = container.querySelector('svg');
+    expect(svg).toBeInTheDocument();
+    const circles = container.querySelectorAll('circle');
+    expect(circles.length).toBe(2); // background + progress
+  });
+
+  it('progress ring uses correct stroke color for success', () => {
+    const { container } = render(<ScoreBadge score={80} />);
+    const circles = container.querySelectorAll('circle');
+    const progressCircle = circles[1];
+    expect(progressCircle.getAttribute('stroke')).toBe('#10b981');
+  });
+
+  it('progress ring uses correct stroke color for warning', () => {
+    const { container } = render(<ScoreBadge score={50} />);
+    const circles = container.querySelectorAll('circle');
+    const progressCircle = circles[1];
+    expect(progressCircle.getAttribute('stroke')).toBe('#f59e0b');
+  });
+
+  it('progress ring uses correct stroke color for danger', () => {
+    const { container } = render(<ScoreBadge score={20} />);
+    const circles = container.querySelectorAll('circle');
+    const progressCircle = circles[1];
+    expect(progressCircle.getAttribute('stroke')).toBe('#ef4444');
+  });
+
+  it('sm size renders smaller SVG ring', () => {
+    const { container } = render(<ScoreBadge score={50} size="sm" />);
+    const svg = container.querySelector('svg');
+    // radius 6, so svgSize = (6+2)*2 = 16
+    expect(svg?.getAttribute('width')).toBe('16');
+  });
+
+  it('md size renders larger SVG ring', () => {
+    const { container } = render(<ScoreBadge score={50} size="md" />);
+    const svg = container.querySelector('svg');
+    // radius 8, so svgSize = (8+2)*2 = 20
+    expect(svg?.getAttribute('width')).toBe('20');
+  });
 });
