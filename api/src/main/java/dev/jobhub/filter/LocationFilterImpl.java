@@ -114,14 +114,16 @@ public class LocationFilterImpl implements LocationFilter {
         if (GERMANY_PATTERN.matcher(location).find()) {
             return FilterResult.keep();
         }
-        if (NETHERLANDS_PATTERN.matcher(location).find()) {
-            return FilterResult.keep();
-        }
         if (EMEA_EUROPE_PATTERN.matcher(location).find()) {
             return FilterResult.keep();
         }
         if (MULTI_LOCATION_PATTERN.matcher(location).find()) {
             return FilterResult.keep();
+        }
+
+        // Netherlands is explicitly excluded (before remote check)
+        if (NETHERLANDS_PATTERN.matcher(location).find()) {
+            return FilterResult.skip("location: Netherlands");
         }
 
         // Remote handling: check restricted remote BEFORE generic remote

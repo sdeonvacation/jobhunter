@@ -46,7 +46,7 @@ class LocationFilterImplTest {
         assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
     }
 
-    // --- KEEP: Netherlands ---
+    // --- SKIP: Netherlands ---
 
     @ParameterizedTest
     @ValueSource(strings = {
@@ -60,9 +60,9 @@ class LocationFilterImplTest {
             "Delft",
             "Nederland"
     })
-    void netherlandsLocations_keep(String location) {
+    void netherlandsLocations_skip(String location) {
         var result = filter.filter(location);
-        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+        assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
     }
 
     // --- KEEP: Generic remote / flexible ---
@@ -252,9 +252,9 @@ class LocationFilterImplTest {
     }
 
     @Test
-    void amsterdamHybrid_keep() {
+    void amsterdamHybrid_skip() {
         var result = filter.filter("Amsterdam, Hybrid");
-        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+        assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
     }
 
     @Test
@@ -267,7 +267,7 @@ class LocationFilterImplTest {
     @Test
     void caseInsensitivity() {
         assertThat(filter.filter("BERLIN").decision()).isEqualTo(FilterDecision.KEEP);
-        assertThat(filter.filter("AMSTERDAM").decision()).isEqualTo(FilterDecision.KEEP);
+        assertThat(filter.filter("AMSTERDAM").decision()).isEqualTo(FilterDecision.SKIP);
         assertThat(filter.filter("REMOTE").decision()).isEqualTo(FilterDecision.KEEP);
         assertThat(filter.filter("san francisco").decision()).isEqualTo(FilterDecision.SKIP);
     }
