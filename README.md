@@ -1,4 +1,6 @@
-# JobHub
+# JobHunter
+
+![JobHunter Dashboard](docs/screenshot.png)
 
 **Autonomous job discovery platform that finds, filters, and scores engineering roles across Germany — so you spend time applying, not searching.**
 
@@ -64,6 +66,7 @@ Greenhouse, Lever, Ashby, Workday, SmartRecruiters, Workable, Personio, Recruite
 
 ## What Makes It Different
 
+- **Not LinkedIn** — LinkedIn shows you what its algorithm wants you to see, buries relevant roles in spam, and locks insights behind Premium. JobHunter pulls directly from company career pages, scores transparently against YOUR skills, and surfaces everything — no paywall, no "promoted" listings, no recruiter noise.
 - **Not another job board** — It pulls directly from company career pages, not aggregators. You see jobs the moment they're posted.
 - **Fully configurable** — Every filter, weight, and threshold is tunable. Add a new city, change skill weights, adjust what "senior" means to you.
 - **No account required** — Runs locally. Your profile, preferences, and application history stay on your machine.

@@ -74,7 +74,7 @@ export default function Navigation() {
       <div className="p-5">
         <h1 className="text-xl font-bold text-text-primary tracking-tight">
           <span className="bg-gradient-to-r from-accent to-accent-light bg-clip-text text-transparent">
-            JobHub
+            JobHunter
           </span>
         </h1>
         <div className="mt-1.5 h-0.5 w-10 bg-gradient-to-r from-accent to-accent-light rounded-full opacity-80" />

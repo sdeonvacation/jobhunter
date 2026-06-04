@@ -23,7 +23,7 @@ describe('Navigation', () => {
 
   it('renders app title', () => {
     renderWithRouter();
-    expect(screen.getByText('JobHub')).toBeInTheDocument();
+    expect(screen.getByText('JobHunter')).toBeInTheDocument();
   });
 
   it('renders all navigation links', () => {
