@@ -5,6 +5,7 @@ public enum AtsType {
     LEVER,
     LEVER_EU,
     ASHBY,
+    SMARTRECRUITERS,
     WORKDAY,
     WORKDAY_PROTECTED,
     STEPSTONE,

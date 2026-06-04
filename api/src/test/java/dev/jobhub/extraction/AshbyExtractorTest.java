@@ -80,8 +80,8 @@ class AshbyExtractorTest {
                       "title": "Senior Engineer",
                       "location": "San Francisco, CA",
                       "descriptionPlain": "Build distributed systems at scale.",
-                      "jobUrl": "https://jobs.ashbyhq.com/coolco/job-001",
-                      "publishedAt": "2024-01-15T10:30:00Z",
+                      "applyUrl": "https://jobs.ashbyhq.com/coolco/job-001",
+                      "publishedDate": "2024-01-15",
                       "compensation": {
                         "currency": "USD",
                         "compensationTierSummary": "$150,000 - $200,000"
@@ -126,8 +126,8 @@ class AshbyExtractorTest {
                       "title": "Product Manager",
                       "location": "Remote",
                       "descriptionPlain": "Lead product strategy.",
-                      "jobUrl": "https://jobs.ashbyhq.com/co/job-002",
-                      "publishedAt": "2024-02-01T08:00:00Z",
+                      "applyUrl": "https://jobs.ashbyhq.com/co/job-002",
+                      "publishedDate": "2024-02-01",
                       "compensation": null
                     }
                   ]
@@ -164,16 +164,16 @@ class AshbyExtractorTest {
                       "title": "Job A",
                       "location": "Berlin",
                       "descriptionPlain": "Desc A",
-                      "jobUrl": "https://jobs.ashbyhq.com/co/a1",
-                      "publishedAt": "2024-01-01T00:00:00Z"
+                      "applyUrl": "https://jobs.ashbyhq.com/co/a1",
+                      "publishedDate": "2024-01-01"
                     },
                     {
                       "id": "b2",
                       "title": "Job B",
                       "location": "London",
                       "descriptionPlain": "Desc B",
-                      "jobUrl": "https://jobs.ashbyhq.com/co/b2",
-                      "publishedAt": "2024-01-02T00:00:00Z",
+                      "applyUrl": "https://jobs.ashbyhq.com/co/b2",
+                      "publishedDate": "2024-01-02",
                       "compensation": {
                         "currency": "GBP",
                         "compensationTierSummary": "£80,000 - £120,000"
@@ -256,8 +256,8 @@ class AshbyExtractorTest {
                       "title": "Designer",
                       "location": "NYC",
                       "descriptionPlain": "Design things.",
-                      "jobUrl": "https://jobs.ashbyhq.com/co/job-x",
-                      "publishedAt": "2024-03-01T00:00:00Z",
+                      "applyUrl": "https://jobs.ashbyhq.com/co/job-x",
+                      "publishedDate": "2024-03-01",
                       "compensation": {
                         "currency": "USD",
                         "compensationTierSummary": "Competitive"
@@ -298,5 +298,94 @@ class AshbyExtractorTest {
 
         verify(getRequestedFor(urlPathMatching("/posting-api/job-board/.*"))
                 .withQueryParam("includeCompensation", equalTo("true")));
+    }
+
+    @Test
+    void extract_htmlFallback_stripsTagsWhenPlainEmpty() {
+        String json = """
+                {
+                  "jobs": [
+                    {
+                      "id": "html-job",
+                      "title": "Engineer",
+                      "location": "Remote",
+                      "descriptionPlain": "",
+                      "descriptionHtml": "<p>We are looking for a <strong>great</strong> engineer.</p>",
+                      "applyUrl": "https://jobs.ashbyhq.com/co/html-job",
+                      "publishedDate": "2024-05-01"
+                    }
+                  ]
+                }
+                """;
+        stubFor(get(urlPathMatching("/posting-api/job-board/.*"))
+                .willReturn(okJson(json)));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.ASHBY)
+                .atsSlug("htmlco")
+                .build();
+
+        var result = extractor.extract(endpoint);
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs().get(0).description()).isEqualTo("We are looking for a great engineer.");
+    }
+
+    @Test
+    void extract_titleTruncation_truncatesLongTitle() {
+        String longTitle = "A".repeat(600);
+        String json = """
+                {
+                  "jobs": [
+                    {
+                      "id": "trunc-job",
+                      "title": "%s",
+                      "location": "Anywhere",
+                      "descriptionPlain": "Short desc.",
+                      "applyUrl": "https://jobs.ashbyhq.com/co/trunc-job",
+                      "publishedDate": "2024-04-01"
+                    }
+                  ]
+                }
+                """.formatted(longTitle);
+        stubFor(get(urlPathMatching("/posting-api/job-board/.*"))
+                .willReturn(okJson(json)));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.ASHBY)
+                .atsSlug("truncco")
+                .build();
+
+        var result = extractor.extract(endpoint);
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs().get(0).title()).hasSize(500);
+    }
+
+    @Test
+    void extract_zonedDateTimeFallback_parsesCorrectly() {
+        String json = """
+                {
+                  "jobs": [
+                    {
+                      "id": "zdt-job",
+                      "title": "Dev",
+                      "location": "Berlin",
+                      "descriptionPlain": "Code.",
+                      "applyUrl": "https://jobs.ashbyhq.com/co/zdt-job",
+                      "publishedDate": "2024-06-15T12:00:00Z"
+                    }
+                  ]
+                }
+                """;
+        stubFor(get(urlPathMatching("/posting-api/job-board/.*"))
+                .willReturn(okJson(json)));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.ASHBY)
+                .atsSlug("zdtco")
+                .build();
+
+        var result = extractor.extract(endpoint);
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs().get(0).postedDate()).isEqualTo(LocalDate.of(2024, 6, 15));
     }
 }

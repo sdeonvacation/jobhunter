@@ -15,12 +15,24 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static java.util.Map.entry;
+
 @Slf4j
 @Component
 public class AshbyExtractor implements JobExtractor {
 
     private static final String DEFAULT_BASE_URL = "https://api.ashbyhq.com";
     private static final String PATH_TEMPLATE = "/posting-api/job-board/%s?includeCompensation=true";
+    private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]*>");
+    private static final Map<String, String> HTML_ENTITIES = Map.ofEntries(
+            entry("&amp;", "&"),
+            entry("&lt;", "<"),
+            entry("&gt;", ">"),
+            entry("&nbsp;", " "),
+            entry("&quot;", "\""),
+            entry("&#39;", "'"),
+            entry("&apos;", "'")
+    );
     private static final Pattern COMPENSATION_RANGE_PATTERN = Pattern.compile(
             "[^\\d]*(\\d[\\d,.]*)\\s*[-–]\\s*[^\\d]*(\\d[\\d,.]*)"
     );
@@ -57,7 +69,7 @@ public class AshbyExtractor implements JobExtractor {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block(Duration.ofSeconds(45));
 
             if (responseBody == null || responseBody.isBlank()) {
                 return ExtractionResult.empty(elapsed(start));
@@ -107,13 +119,17 @@ public class AshbyExtractor implements JobExtractor {
     private RawJobData mapJob(JsonNode node) {
         try {
             String externalId = node.path("id").asText(null);
-            String title = node.path("title").asText(null);
-            String location = node.path("location").asText(null);
-            String description = node.path("descriptionPlain").asText("");
-            String applyUrl = node.path("jobUrl").asText(null);
-            String rawJson = node.toString();
+            String title = truncate(node.path("title").asText(null), 500);
+            String location = truncate(node.path("location").asText(null), 500);
 
-            LocalDate postedDate = parseDate(node.path("publishedAt").asText(null));
+            String description = node.path("descriptionPlain").asText("");
+            if (description.isBlank()) {
+                description = stripHtml(node.path("descriptionHtml").asText(""));
+            }
+
+            String applyUrl = node.path("applyUrl").asText(null);
+            String rawJson = node.toString();
+            LocalDate postedDate = parseDate(node.path("publishedDate").asText(null));
 
             BigDecimal salaryMin = null;
             BigDecimal salaryMax = null;
@@ -161,10 +177,32 @@ public class AshbyExtractor implements JobExtractor {
             return null;
         }
         try {
-            return ZonedDateTime.parse(dateStr).toLocalDate();
+            return LocalDate.parse(dateStr);
         } catch (Exception e) {
-            return null;
+            try {
+                return ZonedDateTime.parse(dateStr).toLocalDate();
+            } catch (Exception e2) {
+                return null;
+            }
         }
+    }
+
+    private String stripHtml(String html) {
+        if (html == null || html.isBlank()) {
+            return "";
+        }
+        String text = HTML_TAG_PATTERN.matcher(html).replaceAll("");
+        for (Map.Entry<String, String> entry : HTML_ENTITIES.entrySet()) {
+            text = text.replace(entry.getKey(), entry.getValue());
+        }
+        return text.replaceAll("\\s+", " ").trim();
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
     }
 
     private Duration elapsed(Instant start) {
