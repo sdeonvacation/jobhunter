@@ -21,7 +21,7 @@ import java.util.UUID;
 @Repository
 public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
-    @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.languageFilter = :filter " +
+    @Query("SELECT j FROM JobPosting j LEFT JOIN FETCH j.company WHERE j.isActive = true AND j.languageFilter = :filter " +
            "AND j.id NOT IN (SELECT ms.job.id FROM MatchScore ms)")
     Page<JobPosting> findUnscoredActiveJobs(@Param("filter") FilterDecision filter, Pageable pageable);
 

@@ -1,9 +1,7 @@
 package dev.jobhub.service;
 
 import dev.jobhub.model.JobPosting;
-import dev.jobhub.model.JobSkill;
 import dev.jobhub.model.MatchScore;
-import dev.jobhub.repository.JobSkillRepository;
 import dev.jobhub.repository.MatchScoreRepository;
 import dev.jobhub.scoring.MatchScorer;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Scores jobs against personal profile and persists MatchScore.
+ * Scores jobs against personal profile using keyword matching. No AI needed.
  */
 @Slf4j
 @Service
@@ -24,18 +22,15 @@ public class MatchScoringService {
 
     private final MatchScorer matchScorer;
     private final MatchScoreRepository matchScoreRepository;
-    private final JobSkillRepository jobSkillRepository;
 
     public MatchScoringService(MatchScorer matchScorer,
-                               MatchScoreRepository matchScoreRepository,
-                               JobSkillRepository jobSkillRepository) {
+                               MatchScoreRepository matchScoreRepository) {
         this.matchScorer = matchScorer;
         this.matchScoreRepository = matchScoreRepository;
-        this.jobSkillRepository = jobSkillRepository;
     }
 
     /**
-     * Score a single job. Skips if already scored.
+     * Score a single job by keyword-matching description against profile.
      */
     @Transactional
     public Optional<MatchScore> scoreJob(JobPosting job) {
@@ -44,13 +39,8 @@ public class MatchScoringService {
             return existing;
         }
 
-        List<JobSkill> skills = jobSkillRepository.findByJobId(job.getId());
-        if (skills.isEmpty()) {
-            log.debug("No skills extracted for job {}, skipping scoring", job.getId());
-            return Optional.empty();
-        }
-
-        MatchScorer.MatchResult result = matchScorer.score(skills);
+        MatchScorer.MatchResult result = matchScorer.scoreFromDescription(
+                job.getTitle(), job.getDescription());
 
         MatchScore score = MatchScore.builder()
                 .id(UUID.randomUUID())
@@ -63,13 +53,14 @@ public class MatchScoringService {
                 .build();
 
         MatchScore saved = matchScoreRepository.save(score);
-        log.info("Scored job {} ({}): score={}, recommendation={}",
-                job.getId(), job.getTitle(), result.overallScore(), result.recommendation());
+        log.debug("Scored job {} ({}): score={}, matched={}, recommendation={}",
+                job.getId(), job.getTitle(), result.overallScore(),
+                result.matchedSkills(), result.recommendation());
         return Optional.of(saved);
     }
 
     /**
-     * Batch score multiple jobs.
+     * Score multiple jobs in batch.
      */
     @Transactional
     public int scoreJobs(List<JobPosting> jobs) {

@@ -5,7 +5,6 @@ import dev.jobhub.model.enums.FilterDecision;
 import dev.jobhub.repository.JobPostingRepository;
 import dev.jobhub.service.MatchScoringService;
 import dev.jobhub.service.OpportunityScoringService;
-import dev.jobhub.service.SkillExtractionService;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.DisallowConcurrentExecution;
 import org.quartz.Job;
@@ -20,26 +19,23 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Daily scoring job: extracts skills, computes match + opportunity scores for new jobs.
+ * Scores unscored jobs using keyword matching (no AI). Runs on startup + daily.
  */
 @Slf4j
 @Component
 @DisallowConcurrentExecution
 public class ScoringScheduler implements Job {
 
-    private static final int BATCH_SIZE = 50;
+    private static final int BATCH_SIZE = 200;
 
     private final JobPostingRepository jobPostingRepository;
-    private final SkillExtractionService skillExtractionService;
     private final MatchScoringService matchScoringService;
     private final OpportunityScoringService opportunityScoringService;
 
     public ScoringScheduler(JobPostingRepository jobPostingRepository,
-                            SkillExtractionService skillExtractionService,
                             MatchScoringService matchScoringService,
                             OpportunityScoringService opportunityScoringService) {
         this.jobPostingRepository = jobPostingRepository;
-        this.skillExtractionService = skillExtractionService;
         this.matchScoringService = matchScoringService;
         this.opportunityScoringService = opportunityScoringService;
     }
@@ -50,19 +46,14 @@ public class ScoringScheduler implements Job {
         scoreAllUnscored();
     }
 
-    /**
-     * Score all unscored active jobs in batches. Can be called from scheduler or inline after crawl.
-     */
     public void scoreAllUnscored() {
         Instant start = Instant.now();
-        int totalExtracted = 0;
         int totalMatched = 0;
         int totalOpportunities = 0;
 
         try {
             Page<JobPosting> page;
             do {
-                // Always fetch page 0: scored jobs drop out of the query each iteration
                 page = jobPostingRepository.findUnscoredActiveJobs(
                         FilterDecision.KEEP, PageRequest.of(0, BATCH_SIZE));
                 List<JobPosting> jobs = page.getContent();
@@ -70,14 +61,13 @@ public class ScoringScheduler implements Job {
                     break;
                 }
 
-                totalExtracted += skillExtractionService.extractSkillsBatch(jobs);
                 totalMatched += matchScoringService.scoreJobs(jobs);
                 totalOpportunities += opportunityScoringService.scoreJobs(jobs);
             } while (page.hasNext());
 
             Duration elapsed = Duration.between(start, Instant.now());
-            log.info("Scoring complete in {}s: extracted={}, matched={}, opportunities={}",
-                    elapsed.toSeconds(), totalExtracted, totalMatched, totalOpportunities);
+            log.info("Scoring complete in {}s: matched={}, opportunities={}",
+                    elapsed.toSeconds(), totalMatched, totalOpportunities);
         } catch (Exception e) {
             log.error("Scoring scheduler failed", e);
         }
