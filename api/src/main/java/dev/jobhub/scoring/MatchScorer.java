@@ -57,6 +57,8 @@ public class MatchScorer {
     private static final int DEFAULT_MAYBE_MIN_MATCHES = 2;
     private static final double DEFAULT_BONUS_WEIGHT = 2.0;
     private static final int DEFAULT_PRIMARY_SKILL_CAP = 70;
+    private static final int DEFAULT_COMPETING_LANGUAGE_CAP = 50;
+    private static final List<Pattern> DEFAULT_COMPETING_LANGUAGES = List.of();
 
     private final PersonalProfileLoader profileLoader;
     private final Map<String, Double> skillWeights;
@@ -70,6 +72,8 @@ public class MatchScorer {
     private final double bonusWeight;
     private final List<String> primarySkills;
     private final int primarySkillCap;
+    private final List<Pattern> competingLanguages;
+    private final int competingLanguageCap;
 
     public MatchScorer(PersonalProfileLoader profileLoader) {
         this.profileLoader = profileLoader;
@@ -99,6 +103,9 @@ public class MatchScorer {
             this.primarySkills = scoring.primarySkills() != null ? scoring.primarySkills() : List.of();
             this.primarySkillCap = scoring.primarySkillCap() > 0
                     ? scoring.primarySkillCap() : DEFAULT_PRIMARY_SKILL_CAP;
+            this.competingLanguages = compileCompetingLanguages(scoring.competingLanguages());
+            this.competingLanguageCap = scoring.competingLanguageCap() > 0
+                    ? scoring.competingLanguageCap() : DEFAULT_COMPETING_LANGUAGE_CAP;
         } else {
             this.skillWeights = DEFAULT_SKILL_WEIGHTS;
             this.benchmarkWeight = DEFAULT_BENCHMARK_WEIGHT;
@@ -111,6 +118,8 @@ public class MatchScorer {
             this.compiledVariants = Map.of();
             this.primarySkills = List.of();
             this.primarySkillCap = DEFAULT_PRIMARY_SKILL_CAP;
+            this.competingLanguages = DEFAULT_COMPETING_LANGUAGES;
+            this.competingLanguageCap = DEFAULT_COMPETING_LANGUAGE_CAP;
         }
     }
 
@@ -126,6 +135,15 @@ public class MatchScorer {
             compiled.put(entry.getKey(), patterns);
         }
         return compiled;
+    }
+
+    private List<Pattern> compileCompetingLanguages(List<String> languages) {
+        if (languages == null || languages.isEmpty()) return List.of();
+        List<Pattern> patterns = new ArrayList<>();
+        for (String lang : languages) {
+            patterns.add(Pattern.compile(lang, Pattern.CASE_INSENSITIVE));
+        }
+        return patterns;
     }
 
     /**
@@ -171,7 +189,15 @@ public class MatchScorer {
         int overallScore = (int) Math.round((earnedScore / benchmarkWeight) * 100);
         overallScore = Math.max(0, Math.min(100, overallScore));
 
-        // Primary language penalty: cap score if no core JVM skill matched
+        // Competing language penalty: if title explicitly targets another language, hard cap
+        String titleLower = (title != null ? title : "").toLowerCase();
+        boolean titleHasCompetingLanguage = competingLanguages.stream()
+                .anyMatch(p -> p.matcher(titleLower).find());
+        if (titleHasCompetingLanguage && overallScore > competingLanguageCap) {
+            overallScore = competingLanguageCap;
+        }
+
+        // Primary language penalty: cap score if no core skill matched (softer than title penalty)
         boolean hasPrimarySkill = matchedSkills.stream()
                 .anyMatch(s -> primarySkills.stream()
                         .anyMatch(ps -> ps.equalsIgnoreCase(s)));

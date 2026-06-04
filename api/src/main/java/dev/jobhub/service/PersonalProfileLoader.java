@@ -160,10 +160,13 @@ public class PersonalProfileLoader {
         List<String> primarySkills = (List<String>) scoringMap.getOrDefault("primary-skills", List.of());
         int primarySkillCap = scoringMap.containsKey("primary-skill-cap")
                 ? ((Number) scoringMap.get("primary-skill-cap")).intValue() : 70;
+        List<String> competingLanguages = (List<String>) scoringMap.getOrDefault("competing-languages", List.of());
+        int competingLanguageCap = scoringMap.containsKey("competing-language-cap")
+                ? ((Number) scoringMap.get("competing-language-cap")).intValue() : 50;
 
         return new PersonalProfile.ScoringConfig(
                 benchmarkWeight, thresholds, bonusSignals, bonusWeight, skillWeights, skillVariants,
-                primarySkills, primarySkillCap);
+                primarySkills, primarySkillCap, competingLanguages, competingLanguageCap);
     }
 
     private PersonalProfile emptyProfile() {

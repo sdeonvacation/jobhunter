@@ -181,6 +181,8 @@ scoring:
   benchmark-weight: 22.0
   primary-skills: ["java", "spring boot"]
   primary-skill-cap: 70
+  competing-languages: ["\\bpython\\b", "\\bgolang\\b", "\\bgo\\b developer", "\\bruby\\b", "\\brust\\b", "\\bc\\+\\+\\b", "\\bc#\\b", "\\.net\\b", "\\bphp\\b", "\\bnode\\.?js\\b", "\\bscala\\b", "\\belixir\\b"]
+  competing-language-cap: 50
   thresholds:
     apply-score: 40
     apply-min-matches: 4

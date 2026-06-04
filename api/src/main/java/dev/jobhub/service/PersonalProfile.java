@@ -59,7 +59,9 @@ public record PersonalProfile(
             Map<String, Double> skillWeights,
             Map<String, List<String>> skillVariants,
             List<String> primarySkills,
-            int primarySkillCap
+            int primarySkillCap,
+            List<String> competingLanguages,
+            int competingLanguageCap
     ) {
     }
 
