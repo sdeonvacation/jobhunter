@@ -1,3 +1,4 @@
+# below are for AI usecases
 name: Sam
 title: Software Engineer
 years-of-experience: 4
@@ -87,6 +88,7 @@ preferences:
   languages: ["English", "German"]
   excluded-industries: ["gambling", "defense", "surveillance"]
 
+# below are filters used by the application
 filters:
   role:
     include-patterns:
@@ -177,7 +179,7 @@ filters:
 
 scoring:
   benchmark-weight: 22.0
-  primary-skills: ["java", "spring boot", "kotlin"]
+  primary-skills: ["java", "spring boot"]
   primary-skill-cap: 70
   thresholds:
     apply-score: 40
