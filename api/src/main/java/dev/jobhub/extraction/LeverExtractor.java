@@ -94,8 +94,8 @@ public class LeverExtractor implements JobExtractor {
     private RawJobData mapJob(JsonNode node) {
         try {
             String externalId = node.path("id").asText(null);
-            String title = node.path("text").asText(null);
-            String location = node.path("categories").path("location").asText(null);
+            String title = truncate(node.path("text").asText(null), 500);
+            String location = truncate(node.path("categories").path("location").asText(null), 500);
             String description = node.path("descriptionPlain").asText("");
             String applyUrl = node.path("hostedUrl").asText(null);
             String rawJson = node.toString();
@@ -121,5 +121,12 @@ public class LeverExtractor implements JobExtractor {
 
     private Duration elapsed(Instant start) {
         return Duration.between(start, Instant.now());
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
     }
 }

@@ -56,13 +56,23 @@ public class GreenhouseExtractor implements JobExtractor {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block(Duration.ofSeconds(45));
 
             if (responseBody == null || responseBody.isBlank()) {
                 return ExtractionResult.empty(elapsed(start));
             }
 
             JsonNode root = objectMapper.readTree(responseBody);
+
+            // Some Greenhouse slugs return 200 OK with error JSON body instead of HTTP 404
+            if (root.has("status") && root.path("status").isInt()) {
+                int status = root.path("status").asInt();
+                if (status >= 400) {
+                    log.warn("Greenhouse [{}]: API returned error in body (status: {})", slug, status);
+                    return ExtractionResult.empty(elapsed(start));
+                }
+            }
+
             JsonNode jobsNode = root.path("jobs");
 
             if (!jobsNode.isArray() || jobsNode.isEmpty()) {
@@ -91,8 +101,8 @@ public class GreenhouseExtractor implements JobExtractor {
             log.error("Greenhouse [{}]: HTTP {} - {}", slug, e.getStatusCode(), e.getMessage());
             return ExtractionResult.error("HTTP " + e.getStatusCode(), elapsed(start));
         } catch (Exception e) {
-            log.error("Greenhouse [{}]: extraction failed", slug, e);
-            return ExtractionResult.error(e.getMessage(), elapsed(start));
+            log.error("Greenhouse [{}]: extraction failed - {} : {}", slug, e.getClass().getSimpleName(), e.getMessage(), e);
+            return ExtractionResult.error(e.getClass().getSimpleName() + ": " + e.getMessage(), elapsed(start));
         }
     }
 
@@ -106,8 +116,8 @@ public class GreenhouseExtractor implements JobExtractor {
     private RawJobData mapJob(JsonNode node) {
         try {
             String externalId = String.valueOf(node.path("id").asLong());
-            String title = node.path("title").asText(null);
-            String location = node.path("location").path("name").asText(null);
+            String title = truncate(node.path("title").asText(null), 500);
+            String location = truncate(node.path("location").path("name").asText(null), 500);
             String contentHtml = node.path("content").asText("");
             String description = stripHtml(contentHtml);
             String applyUrl = node.path("absolute_url").asText(null);
@@ -149,5 +159,12 @@ public class GreenhouseExtractor implements JobExtractor {
 
     private Duration elapsed(Instant start) {
         return Duration.between(start, Instant.now());
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
     }
 }

@@ -18,7 +18,7 @@ public interface CareerEndpointRepository extends JpaRepository<CareerEndpoint, 
 
     List<CareerEndpoint> findByIsActiveTrueAndAtsType(AtsType atsType);
 
-    @Query("SELECT e FROM CareerEndpoint e WHERE e.isActive = true " +
+    @Query("SELECT e FROM CareerEndpoint e JOIN FETCH e.company WHERE e.isActive = true " +
             "AND (e.lastCrawledAt IS NULL OR e.lastCrawledAt < :cutoff) " +
             "ORDER BY e.lastCrawledAt ASC NULLS FIRST")
     List<CareerEndpoint> findEndpointsDueForCrawl(@Param("cutoff") LocalDateTime cutoff, org.springframework.data.domain.Pageable pageable);

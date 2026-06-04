@@ -1,6 +1,7 @@
 package dev.jobhub.controller;
 
 import dev.jobhub.controller.AdminController.CrawlResult;
+import dev.jobhub.repository.CareerEndpointRepository;
 import dev.jobhub.service.CrawlService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,12 +19,13 @@ import static org.mockito.Mockito.verify;
 class AdminControllerTest {
 
     @Mock private CrawlService crawlService;
+    @Mock private CareerEndpointRepository careerEndpointRepository;
 
     private AdminController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new AdminController(crawlService);
+        controller = new AdminController(crawlService, careerEndpointRepository);
     }
 
     @Test
