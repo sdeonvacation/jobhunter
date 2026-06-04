@@ -14,17 +14,29 @@ export default function JobCard({ job, expanded, onToggle, onApply }: JobCardPro
 
   return (
     <div
-      className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+      className="bg-surface-800 border border-surface-600 rounded-lg p-5 hover:border-accent/30 transition-all cursor-pointer"
       onClick={onToggle}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <h3 className="text-base font-semibold text-gray-900 truncate">{job.title}</h3>
-          <p className="text-sm text-gray-600">{job.company.name}</p>
-          <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
-            {job.location && <span>{job.location}</span>}
-            {job.isRemote && <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{job.isRemote}</span>}
-            {salary && <span>{salary}</span>}
+          <h3 className="text-base font-semibold text-text-primary truncate">
+            {job.title}
+          </h3>
+          <p className="text-sm text-text-secondary mt-0.5">{job.company.name}</p>
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            {job.location && (
+              <span className="text-xs text-text-muted">{job.location}</span>
+            )}
+            {job.isRemote && (
+              <span className="bg-info/10 text-info text-xs px-2 py-0.5 rounded-full ring-1 ring-info/20">
+                {job.isRemote}
+              </span>
+            )}
+            {salary && (
+              <span className="text-xs text-text-secondary font-mono">
+                {salary}
+              </span>
+            )}
           </div>
         </div>
 
@@ -42,10 +54,13 @@ export default function JobCard({ job, expanded, onToggle, onApply }: JobCardPro
       </div>
 
       {expanded && (
-        <div className="mt-4 pt-4 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="mt-4 pt-4 border-t border-surface-600"
+          onClick={(e) => e.stopPropagation()}
+        >
           {job.description && (
             <div
-              className="text-sm text-gray-700 mb-4 max-h-64 overflow-y-auto prose prose-sm"
+              className="text-sm text-text-secondary mb-4 max-h-64 overflow-y-auto leading-relaxed"
               dangerouslySetInnerHTML={{ __html: job.description }}
             />
           )}
@@ -55,7 +70,7 @@ export default function JobCard({ job, expanded, onToggle, onApply }: JobCardPro
                 href={job.applyUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700"
+                className="btn-primary inline-flex items-center gap-1.5"
               >
                 Apply Externally
               </a>
@@ -63,7 +78,7 @@ export default function JobCard({ job, expanded, onToggle, onApply }: JobCardPro
             {onApply && (
               <button
                 onClick={() => onApply(job.id)}
-                className="text-sm bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700"
+                className="bg-success/10 text-success hover:bg-success/20 ring-1 ring-success/30 rounded-md px-4 py-2 text-sm font-medium transition-colors"
               >
                 Track Application
               </button>
@@ -77,12 +92,14 @@ export default function JobCard({ job, expanded, onToggle, onApply }: JobCardPro
 
 function RecommendationBadge({ recommendation }: { recommendation: string }) {
   const styles: Record<string, string> = {
-    APPLY: 'bg-green-600 text-white',
-    MAYBE: 'bg-yellow-500 text-white',
-    SKIP: 'bg-gray-400 text-white',
+    APPLY: 'bg-success/10 text-success ring-1 ring-success/30',
+    MAYBE: 'bg-warning/10 text-warning ring-1 ring-warning/30',
+    SKIP: 'bg-surface-700 text-text-muted ring-1 ring-surface-600',
   };
   return (
-    <span className={`text-xs px-2 py-0.5 rounded font-medium ${styles[recommendation] || ''}`}>
+    <span
+      className={`text-xs px-2 py-0.5 rounded-full font-medium ${styles[recommendation] || 'bg-surface-700 text-text-muted'}`}
+    >
       {recommendation}
     </span>
   );
@@ -91,7 +108,7 @@ function RecommendationBadge({ recommendation }: { recommendation: string }) {
 function formatSalary(job: Job): string | null {
   if (!job.salaryMin && !job.salaryMax) return null;
   const currency = job.salaryCurrency || 'EUR';
-  const fmt = (n: number) => n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
+  const fmt = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
   if (job.salaryMin && job.salaryMax) {
     return `${currency} ${fmt(job.salaryMin)}-${fmt(job.salaryMax)}`;
   }

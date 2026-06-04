@@ -45,7 +45,6 @@ export default function Jobs() {
   const handleApply = async (jobId: string) => {
     try {
       await api.pipeline.apply(jobId);
-      // Could show toast or navigate to pipeline
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to track application');
     }
@@ -53,7 +52,7 @@ export default function Jobs() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-4">Job Search</h1>
+      <h1 className="text-2xl font-bold text-text-primary mb-6">Job Search</h1>
 
       <form onSubmit={handleSearch} className="flex gap-3 mb-6">
         <input
@@ -61,14 +60,14 @@ export default function Jobs() {
           placeholder="Search jobs..."
           value={params.query}
           onChange={(e) => setParams((p) => ({ ...p, query: e.target.value }))}
-          className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 bg-surface-800 border border-surface-600 text-text-primary placeholder:text-text-muted rounded-md px-4 py-2.5 focus:border-accent focus:ring-1 focus:ring-accent/30 outline-none text-sm"
         />
         <input
           type="text"
           placeholder="Location"
           value={params.location}
           onChange={(e) => setParams((p) => ({ ...p, location: e.target.value }))}
-          className="w-40 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-40 bg-surface-800 border border-surface-600 text-text-primary placeholder:text-text-muted rounded-md px-4 py-2.5 focus:border-accent focus:ring-1 focus:ring-accent/30 outline-none text-sm"
         />
         <input
           type="number"
@@ -77,26 +76,29 @@ export default function Jobs() {
           onChange={(e) =>
             setParams((p) => ({ ...p, minScore: e.target.value ? Number(e.target.value) : undefined }))
           }
-          className="w-28 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-28 bg-surface-800 border border-surface-600 text-text-primary placeholder:text-text-muted rounded-md px-4 py-2.5 focus:border-accent focus:ring-1 focus:ring-accent/30 outline-none text-sm font-mono"
         />
         <button
           type="submit"
-          className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700"
+          className="bg-accent text-white px-5 py-2.5 rounded-md text-sm font-medium hover:bg-accent-light transition-colors"
         >
           Search
         </button>
       </form>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded p-3 mb-4 text-sm">
+        <div className="bg-danger/10 border border-danger/20 text-danger rounded-lg p-4 text-sm mb-4">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="text-center py-8 text-gray-500">Loading...</div>
+        <div className="text-text-muted text-center py-12">Loading...</div>
       ) : jobs.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">No jobs found</div>
+        <div className="text-center py-12">
+          <p className="text-text-muted text-lg mb-2">No jobs found</p>
+          <p className="text-text-muted text-sm">Try adjusting your search filters or broadening your query.</p>
+        </div>
       ) : (
         <div className="space-y-3">
           {jobs.map((job) => (
@@ -108,7 +110,7 @@ export default function Jobs() {
                 onApply={handleApply}
               />
               {expandedId === job.id && job.skills.length > 0 && (
-                <div className="ml-4 mt-2 p-3 bg-gray-50 rounded">
+                <div className="ml-4 mt-2 p-3 bg-surface-800 border border-surface-600 rounded-lg">
                   <TechStack skills={job.skills} />
                 </div>
               )}
@@ -118,21 +120,21 @@ export default function Jobs() {
       )}
 
       {totalPages > 1 && (
-        <div className="flex justify-center gap-2 mt-6">
+        <div className="flex items-center justify-center gap-3 mt-6">
           <button
             disabled={params.page === 0}
             onClick={() => setParams((p) => ({ ...p, page: (p.page ?? 0) - 1 }))}
-            className="px-3 py-1 border rounded text-sm disabled:opacity-50"
+            className="bg-surface-800 border border-surface-600 rounded-md px-3 py-1.5 text-text-secondary text-sm hover:bg-surface-700 disabled:opacity-30 transition-colors"
           >
             Previous
           </button>
-          <span className="px-3 py-1 text-sm text-gray-600">
-            Page {(params.page ?? 0) + 1} of {totalPages}
+          <span className="text-sm text-text-muted font-mono">
+            {(params.page ?? 0) + 1} / {totalPages}
           </span>
           <button
             disabled={(params.page ?? 0) >= totalPages - 1}
             onClick={() => setParams((p) => ({ ...p, page: (p.page ?? 0) + 1 }))}
-            className="px-3 py-1 border rounded text-sm disabled:opacity-50"
+            className="bg-surface-800 border border-surface-600 rounded-md px-3 py-1.5 text-text-secondary text-sm hover:bg-surface-700 disabled:opacity-30 transition-colors"
           >
             Next
           </button>

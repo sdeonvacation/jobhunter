@@ -27,10 +27,27 @@ describe('TechStack', () => {
     expect(screen.getByText('PostgreSQL')).toBeInTheDocument();
   });
 
-  it('marks nice-to-have skills', () => {
+  it('marks nice-to-have skills with indicator', () => {
     render(<TechStack skills={mockSkills} />);
-    expect(screen.getByText('Docker (nice-to-have)')).toBeInTheDocument();
-    expect(screen.getByText('TypeScript (nice-to-have)')).toBeInTheDocument();
+    // Nice-to-have label rendered as separate span
+    const niceLabels = screen.getAllByText('(nice)');
+    expect(niceLabels).toHaveLength(2); // Docker and TypeScript
+  });
+
+  it('applies accent styling to required skills', () => {
+    const { container } = render(<TechStack skills={mockSkills} />);
+    const skillPills = container.querySelectorAll('span[class*="rounded-full"]');
+    const javaPill = Array.from(skillPills).find((el) => el.textContent?.includes('Java') && !el.textContent?.includes('(nice)'));
+    expect(javaPill?.className).toContain('bg-accent/10');
+    expect(javaPill?.className).toContain('text-accent');
+  });
+
+  it('applies muted styling to non-required skills', () => {
+    const { container } = render(<TechStack skills={mockSkills} />);
+    const skillPills = container.querySelectorAll('span[class*="rounded-full"]');
+    const dockerPill = Array.from(skillPills).find((el) => el.textContent?.includes('Docker'));
+    expect(dockerPill?.className).toContain('bg-surface-700');
+    expect(dockerPill?.className).toContain('text-text-secondary');
   });
 
   it('renders empty state gracefully', () => {

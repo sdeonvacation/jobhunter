@@ -14,25 +14,25 @@ describe('ScoreBadge', () => {
     expect(screen.getByText('60')).toBeInTheDocument();
   });
 
-  it('applies green styling for score >= 70', () => {
+  it('applies success styling for score >= 70', () => {
     const { container } = render(<ScoreBadge score={85} />);
     const badge = container.firstChild as HTMLElement;
-    expect(badge.className).toContain('bg-green-100');
-    expect(badge.className).toContain('text-green-800');
+    expect(badge.className).toContain('text-success');
+    expect(badge.className).toContain('bg-success/10');
   });
 
-  it('applies yellow styling for score 50-69', () => {
+  it('applies warning styling for score 40-69', () => {
     const { container } = render(<ScoreBadge score={55} />);
     const badge = container.firstChild as HTMLElement;
-    expect(badge.className).toContain('bg-yellow-100');
-    expect(badge.className).toContain('text-yellow-800');
+    expect(badge.className).toContain('text-warning');
+    expect(badge.className).toContain('bg-warning/10');
   });
 
-  it('applies red styling for score < 50', () => {
+  it('applies danger styling for score < 40', () => {
     const { container } = render(<ScoreBadge score={30} />);
     const badge = container.firstChild as HTMLElement;
-    expect(badge.className).toContain('bg-red-100');
-    expect(badge.className).toContain('text-red-800');
+    expect(badge.className).toContain('text-danger');
+    expect(badge.className).toContain('bg-danger/10');
   });
 
   it('uses small size class when size=sm', () => {
@@ -45,5 +45,29 @@ describe('ScoreBadge', () => {
     const { container } = render(<ScoreBadge score={50} />);
     const badge = container.firstChild as HTMLElement;
     expect(badge.className).toContain('text-sm');
+  });
+
+  it('applies font-mono for numeric display', () => {
+    const { container } = render(<ScoreBadge score={92} />);
+    const badge = container.firstChild as HTMLElement;
+    expect(badge.className).toContain('font-mono');
+  });
+
+  it('boundary: score 70 gets success styling', () => {
+    const { container } = render(<ScoreBadge score={70} />);
+    const badge = container.firstChild as HTMLElement;
+    expect(badge.className).toContain('text-success');
+  });
+
+  it('boundary: score 40 gets warning styling', () => {
+    const { container } = render(<ScoreBadge score={40} />);
+    const badge = container.firstChild as HTMLElement;
+    expect(badge.className).toContain('text-warning');
+  });
+
+  it('boundary: score 39 gets danger styling', () => {
+    const { container } = render(<ScoreBadge score={39} />);
+    const badge = container.firstChild as HTMLElement;
+    expect(badge.className).toContain('text-danger');
   });
 });

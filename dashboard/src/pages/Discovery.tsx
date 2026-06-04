@@ -33,20 +33,20 @@ export default function Discovery() {
     }
   }
 
-  if (loading) return <div className="text-center py-8 text-gray-500">Loading...</div>;
+  if (loading) return <div className="text-text-muted text-center py-12">Loading...</div>;
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-4">Discovery</h1>
+      <h1 className="text-2xl font-bold text-text-primary mb-6">Discovery</h1>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded p-3 mb-4 text-sm">
+        <div className="bg-danger/10 border border-danger/20 text-danger rounded-lg p-4 text-sm mb-4">
           {error}
         </div>
       )}
 
       {stats && (
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-4 gap-4 mb-8">
           <StatsCard title="Discovered" value={stats.totalDiscovered} />
           <StatsCard title="Resolved" value={stats.totalResolved} />
           <StatsCard title="Active" value={stats.activeCompanies} />
@@ -54,30 +54,30 @@ export default function Discovery() {
         </div>
       )}
 
-      <section className="mb-6">
-        <h2 className="text-lg font-semibold mb-3">Source Quality</h2>
-        <div className="bg-white rounded border border-gray-200 overflow-hidden">
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold text-text-primary mb-4">Source Quality</h2>
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
-                <th className="px-4 py-2 font-medium">Source</th>
-                <th className="px-4 py-2 font-medium text-right">Applications</th>
-                <th className="px-4 py-2 font-medium text-right">Interviews</th>
-                <th className="px-4 py-2 font-medium text-right">Interview Rate</th>
-                <th className="px-4 py-2 font-medium">Rate</th>
+              <tr className="text-left border-b border-surface-600">
+                <th className="pb-3 text-text-muted text-xs uppercase tracking-wider font-medium">Source</th>
+                <th className="pb-3 text-text-muted text-xs uppercase tracking-wider font-medium text-right">Applications</th>
+                <th className="pb-3 text-text-muted text-xs uppercase tracking-wider font-medium text-right">Interviews</th>
+                <th className="pb-3 text-text-muted text-xs uppercase tracking-wider font-medium text-right">Rate</th>
+                <th className="pb-3 text-text-muted text-xs uppercase tracking-wider font-medium w-32"></th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-surface-600">
               {quality.map((sq) => (
-                <tr key={sq.source} className="border-b border-gray-100">
-                  <td className="px-4 py-2 font-medium">{sq.source}</td>
-                  <td className="px-4 py-2 text-right">{sq.totalApplications}</td>
-                  <td className="px-4 py-2 text-right">{sq.totalInterviews}</td>
-                  <td className="px-4 py-2 text-right">{(sq.interviewRate * 100).toFixed(1)}%</td>
-                  <td className="px-4 py-2">
-                    <div className="w-24 bg-gray-200 rounded-full h-2">
+                <tr key={sq.source} className="hover:bg-surface-700/50 transition-colors">
+                  <td className="py-3 text-text-primary font-medium">{sq.source}</td>
+                  <td className="py-3 text-right text-text-secondary font-mono">{sq.totalApplications}</td>
+                  <td className="py-3 text-right text-text-secondary font-mono">{sq.totalInterviews}</td>
+                  <td className="py-3 text-right text-text-primary font-mono">{(sq.interviewRate * 100).toFixed(1)}%</td>
+                  <td className="py-3">
+                    <div className="bg-surface-700 rounded-full h-1.5">
                       <div
-                        className="bg-blue-600 h-2 rounded-full"
+                        className="bg-accent rounded-full h-1.5"
                         style={{ width: `${Math.min(sq.interviewRate * 100, 100)}%` }}
                       />
                     </div>
@@ -86,7 +86,7 @@ export default function Discovery() {
               ))}
               {quality.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-4 text-center text-gray-500">
+                  <td colSpan={5} className="py-8 text-center text-text-muted">
                     No source quality data yet
                   </td>
                 </tr>
@@ -97,37 +97,37 @@ export default function Discovery() {
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold mb-3">Recent Events</h2>
-        <div className="bg-white rounded border border-gray-200 overflow-hidden">
+        <h2 className="text-lg font-semibold text-text-primary mb-4">Recent Events</h2>
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
-                <th className="px-4 py-2 font-medium">Company</th>
-                <th className="px-4 py-2 font-medium">Provider</th>
-                <th className="px-4 py-2 font-medium">Source Job</th>
-                <th className="px-4 py-2 font-medium">Outcome</th>
-                <th className="px-4 py-2 font-medium">Date</th>
+              <tr className="text-left border-b border-surface-600">
+                <th className="pb-3 text-text-muted text-xs uppercase tracking-wider font-medium">Company</th>
+                <th className="pb-3 text-text-muted text-xs uppercase tracking-wider font-medium">Provider</th>
+                <th className="pb-3 text-text-muted text-xs uppercase tracking-wider font-medium">Source Job</th>
+                <th className="pb-3 text-text-muted text-xs uppercase tracking-wider font-medium">Outcome</th>
+                <th className="pb-3 text-text-muted text-xs uppercase tracking-wider font-medium">Date</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-surface-600">
               {events.map((event) => (
-                <tr key={event.id} className="border-b border-gray-100">
-                  <td className="px-4 py-2 font-medium">{event.companyName}</td>
-                  <td className="px-4 py-2 text-gray-600">{event.provider}</td>
-                  <td className="px-4 py-2 text-gray-600 truncate max-w-xs">
+                <tr key={event.id} className="hover:bg-surface-700/50 transition-colors">
+                  <td className="py-3 text-text-primary font-medium">{event.companyName}</td>
+                  <td className="py-3 text-text-secondary">{event.provider}</td>
+                  <td className="py-3 text-text-secondary truncate max-w-xs">
                     {event.sourceJobTitle || '-'}
                   </td>
-                  <td className="px-4 py-2">
+                  <td className="py-3">
                     <OutcomeBadge outcome={event.outcome} />
                   </td>
-                  <td className="px-4 py-2 text-gray-500">
+                  <td className="py-3 text-text-muted font-mono text-xs">
                     {new Date(event.discoveredAt).toLocaleDateString()}
                   </td>
                 </tr>
               ))}
               {events.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-4 text-center text-gray-500">
+                  <td colSpan={5} className="py-8 text-center text-text-muted">
                     No discovery events yet
                   </td>
                 </tr>
@@ -142,14 +142,14 @@ export default function Discovery() {
 
 function OutcomeBadge({ outcome }: { outcome: string }) {
   const colors: Record<string, string> = {
-    REGISTERED: 'bg-green-100 text-green-800',
-    ALREADY_EXISTS: 'bg-gray-100 text-gray-800',
-    DETECTION_FAILED: 'bg-red-100 text-red-800',
-    UNSUPPORTED_ATS: 'bg-yellow-100 text-yellow-800',
-    NEW_ENDPOINT_ADDED: 'bg-blue-100 text-blue-800',
+    REGISTERED: 'bg-success/10 text-success border border-success/20',
+    ALREADY_EXISTS: 'bg-surface-700 text-text-muted border border-surface-600',
+    DETECTION_FAILED: 'bg-danger/10 text-danger border border-danger/20',
+    UNSUPPORTED_ATS: 'bg-warning/10 text-warning border border-warning/20',
+    NEW_ENDPOINT_ADDED: 'bg-info/10 text-info border border-info/20',
   };
   return (
-    <span className={`text-xs px-2 py-0.5 rounded ${colors[outcome] || 'bg-gray-100'}`}>
+    <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${colors[outcome] || 'bg-surface-700 text-text-muted'}`}>
       {outcome.replace(/_/g, ' ')}
     </span>
   );

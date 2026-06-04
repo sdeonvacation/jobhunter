@@ -34,4 +34,21 @@ describe('Navigation', () => {
     expect(screen.getByText('Discovery').closest('a')).toHaveAttribute('href', '/discovery');
     expect(screen.getByText('Digest').closest('a')).toHaveAttribute('href', '/digest');
   });
+
+  it('renders SVG icons (not emoji)', () => {
+    const { container } = renderWithRouter();
+    const svgs = container.querySelectorAll('svg');
+    expect(svgs.length).toBe(5);
+  });
+
+  it('renders accent gradient underline', () => {
+    const { container } = renderWithRouter();
+    const gradientEl = container.querySelector('[class*="bg-gradient-to-r"]');
+    expect(gradientEl).toBeInTheDocument();
+  });
+
+  it('renders footer text', () => {
+    renderWithRouter();
+    expect(screen.getByText('Command Center')).toBeInTheDocument();
+  });
 });

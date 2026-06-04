@@ -2,28 +2,40 @@ import { useState, useEffect } from 'react';
 import type { Application, ApplicationStatus } from '../types';
 import { api } from '../api/client';
 
-const PIPELINE_STAGES: ApplicationStatus[] = [
-  'INTERESTED',
+const STATUSES: (ApplicationStatus | 'ALL')[] = [
+  'ALL',
   'APPLIED',
   'PHONE_SCREEN',
   'INTERVIEWING',
   'OFFERED',
+  'REJECTED',
 ];
 
 const stageLabels: Record<ApplicationStatus, string> = {
   INTERESTED: 'Interested',
   APPLIED: 'Applied',
-  PHONE_SCREEN: 'Phone Screen',
-  INTERVIEWING: 'Interviewing',
-  OFFERED: 'Offered',
+  PHONE_SCREEN: 'Screening',
+  INTERVIEWING: 'Interview',
+  OFFERED: 'Offer',
   REJECTED: 'Rejected',
   WITHDRAWN: 'Withdrawn',
+};
+
+const statusColors: Record<ApplicationStatus, string> = {
+  INTERESTED: 'bg-info/10 text-info border border-info/20',
+  APPLIED: 'bg-accent/10 text-accent-light border border-accent/20',
+  PHONE_SCREEN: 'bg-warning/10 text-warning border border-warning/20',
+  INTERVIEWING: 'bg-accent/10 text-accent-light border border-accent/20',
+  OFFERED: 'bg-success/10 text-success border border-success/20',
+  REJECTED: 'bg-danger/10 text-danger border border-danger/20',
+  WITHDRAWN: 'bg-surface-700 text-text-muted border border-surface-600',
 };
 
 export default function Pipeline() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<ApplicationStatus | 'ALL'>('ALL');
 
   useEffect(() => {
     loadApplications();
@@ -53,84 +65,99 @@ export default function Pipeline() {
     }
   }
 
-  const grouped = PIPELINE_STAGES.reduce(
-    (acc, stage) => {
-      acc[stage] = applications.filter((a) => a.status === stage);
-      return acc;
-    },
-    {} as Record<ApplicationStatus, Application[]>,
-  );
-
-  if (loading) return <div className="text-center py-8 text-gray-500">Loading...</div>;
+  const filtered = activeFilter === 'ALL'
+    ? applications
+    : applications.filter((a) => a.status === activeFilter);
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-4">Application Pipeline</h1>
+      <h1 className="text-2xl font-bold text-text-primary mb-6">Application Pipeline</h1>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded p-3 mb-4 text-sm">
+        <div className="bg-danger/10 border border-danger/20 text-danger rounded-lg p-4 text-sm mb-4">
           {error}
         </div>
       )}
 
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {PIPELINE_STAGES.map((stage) => (
-          <div
-            key={stage}
-            className="flex-shrink-0 w-64 bg-gray-100 rounded-lg p-3"
+      <div className="flex gap-2 mb-6">
+        {STATUSES.map((s) => (
+          <button
+            key={s}
+            onClick={() => setActiveFilter(s)}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              activeFilter === s
+                ? 'bg-accent text-white'
+                : 'bg-surface-700 text-text-secondary hover:bg-surface-600'
+            }`}
           >
-            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center justify-between">
-              {stageLabels[stage]}
-              <span className="bg-gray-300 text-gray-700 text-xs px-2 py-0.5 rounded-full">
-                {grouped[stage]?.length || 0}
-              </span>
-            </h3>
-
-            <div className="space-y-2">
-              {(grouped[stage] || []).map((app) => (
-                <PipelineCard
-                  key={app.id}
-                  application={app}
-                  currentStage={stage}
-                  onMove={moveToStage}
-                />
-              ))}
-            </div>
-          </div>
+            {s === 'ALL' ? 'All' : stageLabels[s]}
+          </button>
         ))}
       </div>
+
+      {loading ? (
+        <div className="text-text-muted text-center py-12">Loading...</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-text-muted text-lg mb-2">No applications tracked yet</p>
+          <p className="text-text-muted text-sm">Browse jobs and track your applications.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((app) => (
+            <ApplicationCard
+              key={app.id}
+              application={app}
+              onMove={moveToStage}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function PipelineCard({
+function ApplicationCard({
   application,
-  currentStage,
   onMove,
 }: {
   application: Application;
-  currentStage: ApplicationStatus;
   onMove: (id: string, stage: ApplicationStatus) => void;
 }) {
-  const stageIdx = PIPELINE_STAGES.indexOf(currentStage);
-  const nextStage = stageIdx < PIPELINE_STAGES.length - 1 ? PIPELINE_STAGES[stageIdx + 1] : null;
+  const nextStageMap: Partial<Record<ApplicationStatus, ApplicationStatus>> = {
+    INTERESTED: 'APPLIED',
+    APPLIED: 'PHONE_SCREEN',
+    PHONE_SCREEN: 'INTERVIEWING',
+    INTERVIEWING: 'OFFERED',
+  };
+  const nextStage = nextStageMap[application.status];
 
   return (
-    <div className="bg-white rounded border border-gray-200 p-3 shadow-sm">
-      <p className="text-sm font-medium text-gray-900 truncate">{application.job.title}</p>
-      <p className="text-xs text-gray-500">{application.job.company.name}</p>
+    <div className="bg-surface-800 border border-surface-600 rounded-lg p-4 hover:border-surface-500 transition-colors">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-text-primary truncate">{application.job.title}</p>
+          <p className="text-xs text-text-secondary mt-0.5">{application.job.company.name}</p>
+        </div>
+        <span className={`shrink-0 text-xs px-2 py-0.5 rounded-md font-medium ${statusColors[application.status]}`}>
+          {stageLabels[application.status]}
+        </span>
+      </div>
+
       {application.appliedDate && (
-        <p className="text-xs text-gray-400 mt-1">{application.appliedDate}</p>
+        <p className="text-xs text-text-muted mt-2 font-mono">{application.appliedDate}</p>
       )}
+
       {application.notes && (
-        <p className="text-xs text-gray-500 mt-1 truncate italic">{application.notes}</p>
+        <p className="text-xs text-text-muted mt-1.5 italic truncate">{application.notes}</p>
       )}
+
       {nextStage && (
         <button
           onClick={() => onMove(application.id, nextStage)}
-          className="mt-2 text-xs text-blue-600 hover:text-blue-800"
+          className="mt-3 text-xs text-accent hover:text-accent-light transition-colors font-medium"
         >
-          Move to {stageLabels[nextStage]} →
+          Move to {stageLabels[nextStage]} &rarr;
         </button>
       )}
     </div>

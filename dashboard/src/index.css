@@ -1,8 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+@layer base {
+  body {
+    @apply bg-surface-900 text-text-primary font-sans antialiased;
+    margin: 0;
+  }
+
+  /* Scrollbar styling for dark theme */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-surface-900;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-surface-600 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-surface-500;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface-800 border border-surface-600 rounded-lg;
+  }
+
+  .btn-primary {
+    @apply bg-accent hover:bg-accent-light text-white rounded-md px-4 py-2 text-sm font-medium transition-colors;
+  }
+
+  .btn-secondary {
+    @apply bg-surface-700 hover:bg-surface-600 text-text-secondary hover:text-text-primary rounded-md px-4 py-2 text-sm font-medium border border-surface-600 transition-colors;
+  }
 }

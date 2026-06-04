@@ -36,24 +36,24 @@ export default function Companies() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-4">Company Registry</h1>
+      <h1 className="text-2xl font-bold text-text-primary mb-6">Company Registry</h1>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded p-3 mb-4 text-sm">
+        <div className="bg-danger/10 border border-danger/20 text-danger rounded-lg p-4 text-sm mb-4">
           {error}
         </div>
       )}
 
-      <div className="flex items-center gap-4 mb-4">
-        <div className="flex gap-1">
+      <div className="flex items-center gap-4 mb-6">
+        <div className="flex gap-2">
           {STATUS_FILTERS.map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1 text-xs rounded ${
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 statusFilter === s
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-accent text-white'
+                  : 'bg-surface-700 text-text-secondary hover:bg-surface-600'
               }`}
             >
               {s}
@@ -63,7 +63,7 @@ export default function Companies() {
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as 'priorityScore' | 'name')}
-          className="text-sm border border-gray-300 rounded px-2 py-1"
+          className="bg-surface-800 border border-surface-600 text-text-primary rounded-md px-3 py-1.5 text-sm outline-none focus:border-accent"
         >
           <option value="priorityScore">Sort by Priority</option>
           <option value="name">Sort by Name</option>
@@ -71,30 +71,31 @@ export default function Companies() {
       </div>
 
       {loading ? (
-        <div className="text-center py-8 text-gray-500">Loading...</div>
+        <div className="text-text-muted text-center py-12">Loading...</div>
+      ) : sorted.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-text-muted text-lg mb-2">No companies found</p>
+          <p className="text-text-muted text-sm">Companies will appear here as they are discovered.</p>
+        </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-gray-500">
-                <th className="pb-2 font-medium">Name</th>
-                <th className="pb-2 font-medium">Status</th>
-                <th className="pb-2 font-medium">Country</th>
-                <th className="pb-2 font-medium text-right">Priority</th>
-                <th className="pb-2 font-medium text-right">Endpoints</th>
-                <th className="pb-2 font-medium text-right">Interview Rate</th>
-                <th className="pb-2 font-medium">Domain</th>
+              <tr className="text-left border-b border-surface-600">
+                <th className="pb-3 text-text-muted text-xs uppercase tracking-wider font-medium">Name</th>
+                <th className="pb-3 text-text-muted text-xs uppercase tracking-wider font-medium">Status</th>
+                <th className="pb-3 text-text-muted text-xs uppercase tracking-wider font-medium">Country</th>
+                <th className="pb-3 text-text-muted text-xs uppercase tracking-wider font-medium text-right">Priority</th>
+                <th className="pb-3 text-text-muted text-xs uppercase tracking-wider font-medium text-right">Endpoints</th>
+                <th className="pb-3 text-text-muted text-xs uppercase tracking-wider font-medium text-right">Interview Rate</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-surface-600">
               {sorted.map((company) => (
                 <CompanyRow key={company.id} company={company} />
               ))}
             </tbody>
           </table>
-          {sorted.length === 0 && (
-            <p className="text-center py-8 text-gray-500">No companies found</p>
-          )}
         </div>
       )}
     </div>
@@ -103,33 +104,47 @@ export default function Companies() {
 
 function CompanyRow({ company }: { company: Company }) {
   const statusColor: Record<string, string> = {
-    ACTIVE: 'bg-green-100 text-green-800',
-    DISCOVERED: 'bg-blue-100 text-blue-800',
-    PAUSED: 'bg-yellow-100 text-yellow-800',
-    PROTECTED: 'bg-orange-100 text-orange-800',
-    UNSUPPORTED: 'bg-red-100 text-red-800',
-    PENDING_DETECTION: 'bg-gray-100 text-gray-800',
+    ACTIVE: 'bg-success/10 text-success border border-success/20',
+    DISCOVERED: 'bg-info/10 text-info border border-info/20',
+    PAUSED: 'bg-warning/10 text-warning border border-warning/20',
+    PROTECTED: 'bg-warning/10 text-warning border border-warning/20',
+    UNSUPPORTED: 'bg-danger/10 text-danger border border-danger/20',
+    PENDING_DETECTION: 'bg-surface-700 text-text-muted border border-surface-600',
   };
 
   const endpointCount = company.endpointCount ?? company.careerEndpoints?.length ?? 0;
+  const interviewPct = company.totalApplications > 0
+    ? company.interviewRate * 100
+    : 0;
 
   return (
-    <tr className="border-b border-gray-100 hover:bg-gray-50">
-      <td className="py-2 font-medium">{company.name}</td>
-      <td className="py-2">
-        <span className={`text-xs px-2 py-0.5 rounded ${statusColor[company.status] || ''}`}>
+    <tr className="hover:bg-surface-700/50 transition-colors">
+      <td className="py-3 text-sm text-text-primary font-medium">{company.name}</td>
+      <td className="py-3">
+        <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${statusColor[company.status] || 'bg-surface-700 text-text-muted'}`}>
           {company.status}
         </span>
       </td>
-      <td className="py-2 text-xs text-gray-600">{company.country || '-'}</td>
-      <td className="py-2 text-right font-mono">{company.priorityScore.toFixed(1)}</td>
-      <td className="py-2 text-right">{endpointCount}</td>
-      <td className="py-2 text-right">
-        {company.totalApplications > 0
-          ? `${(company.interviewRate * 100).toFixed(0)}%`
-          : '-'}
+      <td className="py-3 text-sm text-text-secondary">{company.country || '-'}</td>
+      <td className="py-3 text-right">
+        <span className={`font-mono text-sm ${company.priorityScore > 70 ? 'text-accent' : 'text-text-primary'}`}>
+          {company.priorityScore.toFixed(1)}
+        </span>
       </td>
-      <td className="py-2 text-xs text-gray-500">{company.domain || '-'}</td>
+      <td className="py-3 text-right text-sm text-text-primary font-mono">{endpointCount}</td>
+      <td className="py-3 text-right">
+        <div className="flex items-center justify-end gap-2">
+          <div className="w-16 bg-surface-700 rounded-full h-1.5">
+            <div
+              className="bg-accent rounded-full h-1.5"
+              style={{ width: `${Math.min(interviewPct, 100)}%` }}
+            />
+          </div>
+          <span className="font-mono text-xs text-text-secondary w-8 text-right">
+            {company.totalApplications > 0 ? `${interviewPct.toFixed(0)}%` : '-'}
+          </span>
+        </div>
+      </td>
     </tr>
   );
 }

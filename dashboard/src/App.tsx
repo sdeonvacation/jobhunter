@@ -8,17 +8,19 @@ import Digest from './pages/Digest';
 
 export default function App() {
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen bg-surface-900">
       <Navigation />
-      <main className="flex-1 overflow-auto p-6">
-        <Routes>
-          <Route path="/" element={<Navigate to="/jobs" replace />} />
-          <Route path="/jobs" element={<Jobs />} />
-          <Route path="/pipeline" element={<Pipeline />} />
-          <Route path="/companies" element={<Companies />} />
-          <Route path="/discovery" element={<Discovery />} />
-          <Route path="/digest" element={<Digest />} />
-        </Routes>
+      <main className="flex-1 overflow-auto bg-surface-900 p-8">
+        <div className="max-w-7xl mx-auto">
+          <Routes>
+            <Route path="/" element={<Navigate to="/jobs" replace />} />
+            <Route path="/jobs" element={<Jobs />} />
+            <Route path="/pipeline" element={<Pipeline />} />
+            <Route path="/companies" element={<Companies />} />
+            <Route path="/discovery" element={<Discovery />} />
+            <Route path="/digest" element={<Digest />} />
+          </Routes>
+        </div>
       </main>
     </div>
   );

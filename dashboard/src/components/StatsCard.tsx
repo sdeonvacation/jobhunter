@@ -6,17 +6,27 @@ interface StatsCardProps {
 }
 
 export default function StatsCard({ title, value, subtitle, trend }: StatsCardProps) {
-  const trendIcon = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '';
-  const trendColor = trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : '';
+  const trendIcon = trend === 'up' ? '↑' : trend === 'down' ? '↓' : null;
+  const trendColor =
+    trend === 'up' ? 'text-success' : trend === 'down' ? 'text-danger' : '';
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
-      <p className="text-sm text-gray-500">{title}</p>
-      <p className="text-2xl font-bold mt-1">
-        {value}
-        {trendIcon && <span className={`ml-1 text-sm ${trendColor}`}>{trendIcon}</span>}
+    <div className="bg-surface-800 border border-surface-600 rounded-lg p-5 relative overflow-hidden">
+      {/* Accent gradient line at top */}
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-accent to-accent-light" />
+
+      <p className="text-text-muted text-xs uppercase tracking-wider font-medium">
+        {title}
       </p>
-      {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+      <p className="text-3xl font-bold text-text-primary font-mono mt-2">
+        {value}
+        {trendIcon && (
+          <span className={`ml-2 text-sm ${trendColor}`}>{trendIcon}</span>
+        )}
+      </p>
+      {subtitle && (
+        <p className="text-xs text-text-muted mt-1.5">{subtitle}</p>
+      )}
     </div>
   );
 }

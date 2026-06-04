@@ -34,4 +34,35 @@ describe('StatsCard', () => {
     expect(container.textContent).not.toContain('↑');
     expect(container.textContent).not.toContain('↓');
   });
+
+  it('applies uppercase tracking on title', () => {
+    const { container } = render(<StatsCard title="Active" value={3} />);
+    const titleEl = container.querySelector('[class*="uppercase"]');
+    expect(titleEl).toBeInTheDocument();
+    expect(titleEl?.textContent).toBe('Active');
+  });
+
+  it('applies font-mono on value', () => {
+    const { container } = render(<StatsCard title="Score" value={99} />);
+    const monoEl = container.querySelector('[class*="font-mono"]');
+    expect(monoEl).toBeInTheDocument();
+  });
+
+  it('has accent gradient line at top', () => {
+    const { container } = render(<StatsCard title="X" value={1} />);
+    const gradient = container.querySelector('[class*="bg-gradient-to-r"]');
+    expect(gradient).toBeInTheDocument();
+  });
+
+  it('applies success color for up trend', () => {
+    render(<StatsCard title="Up" value={5} trend="up" />);
+    const arrow = screen.getByText('↑');
+    expect(arrow.className).toContain('text-success');
+  });
+
+  it('applies danger color for down trend', () => {
+    render(<StatsCard title="Down" value={2} trend="down" />);
+    const arrow = screen.getByText('↓');
+    expect(arrow.className).toContain('text-danger');
+  });
 });

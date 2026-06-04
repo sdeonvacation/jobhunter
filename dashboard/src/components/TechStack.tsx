@@ -14,16 +14,6 @@ const categoryLabels: Record<SkillCategory, string> = {
   SOFT_SKILL: 'Soft Skills',
 };
 
-const categoryColors: Record<SkillCategory, string> = {
-  LANGUAGE: 'bg-blue-100 text-blue-800',
-  FRAMEWORK: 'bg-purple-100 text-purple-800',
-  DATABASE: 'bg-green-100 text-green-800',
-  CLOUD: 'bg-orange-100 text-orange-800',
-  TOOL: 'bg-gray-100 text-gray-800',
-  METHODOLOGY: 'bg-pink-100 text-pink-800',
-  SOFT_SKILL: 'bg-teal-100 text-teal-800',
-};
-
 export default function TechStack({ skills }: TechStackProps) {
   const grouped = skills.reduce(
     (acc, skill) => {
@@ -39,19 +29,23 @@ export default function TechStack({ skills }: TechStackProps) {
     <div className="space-y-3">
       {(Object.entries(grouped) as [SkillCategory, JobSkill[]][]).map(([category, catSkills]) => (
         <div key={category}>
-          <p className="text-xs font-medium text-gray-500 mb-1">
+          <p className="text-xs font-medium text-text-muted mb-1.5 uppercase tracking-wide">
             {categoryLabels[category]}
           </p>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1.5">
             {catSkills.map((skill) => (
               <span
                 key={skill.id}
-                className={`text-xs px-2 py-0.5 rounded ${categoryColors[category]} ${
-                  !skill.isRequired ? 'opacity-60' : ''
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  skill.isRequired
+                    ? 'bg-accent/10 text-accent border-accent/30'
+                    : 'bg-surface-700 text-text-secondary border-surface-600 opacity-75'
                 }`}
               >
                 {skill.skillName}
-                {!skill.isRequired && ' (nice-to-have)'}
+                {!skill.isRequired && (
+                  <span className="text-text-muted ml-1">(nice)</span>
+                )}
               </span>
             ))}
           </div>
