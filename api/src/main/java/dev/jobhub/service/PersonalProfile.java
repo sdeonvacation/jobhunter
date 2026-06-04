@@ -57,7 +57,9 @@ public record PersonalProfile(
             List<String> bonusSignals,
             double bonusWeight,
             Map<String, Double> skillWeights,
-            Map<String, List<String>> skillVariants
+            Map<String, List<String>> skillVariants,
+            List<String> primarySkills,
+            int primarySkillCap
     ) {
     }
 

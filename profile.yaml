@@ -177,6 +177,8 @@ filters:
 
 scoring:
   benchmark-weight: 22.0
+  primary-skills: ["java", "spring boot", "kotlin"]
+  primary-skill-cap: 70
   thresholds:
     apply-score: 40
     apply-min-matches: 4
@@ -222,7 +224,7 @@ scoring:
     go: 0.3
     react: 0.3
   skill-variants:
-    java: ["\\bjava\\b"]
+    java: ["\\bjava\\b", "jvm"]
     spring boot: ["spring", "springboot"]
     kotlin: ["kotlin"]
     postgresql: ["postgres", "postgresql"]
@@ -232,7 +234,7 @@ scoring:
     docker: ["docker", "container"]
     typescript: ["typescript", "type script"]
     microservices: ["microservice", "micro-service"]
-    rest apis: ["rest", "restful", "api"]
+    rest apis: ["\\brest\\b", "restful", "rest api"]
     ci/cd: ["ci/cd", "ci cd", "continuous integration", "continuous delivery"]
     sql: ["\\bsql\\b"]
     git: ["\\bgit\\b", "github", "gitlab"]

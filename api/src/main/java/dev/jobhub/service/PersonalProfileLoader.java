@@ -157,8 +157,13 @@ public class PersonalProfileLoader {
             }
         }
 
+        List<String> primarySkills = (List<String>) scoringMap.getOrDefault("primary-skills", List.of());
+        int primarySkillCap = scoringMap.containsKey("primary-skill-cap")
+                ? ((Number) scoringMap.get("primary-skill-cap")).intValue() : 70;
+
         return new PersonalProfile.ScoringConfig(
-                benchmarkWeight, thresholds, bonusSignals, bonusWeight, skillWeights, skillVariants);
+                benchmarkWeight, thresholds, bonusSignals, bonusWeight, skillWeights, skillVariants,
+                primarySkills, primarySkillCap);
     }
 
     private PersonalProfile emptyProfile() {

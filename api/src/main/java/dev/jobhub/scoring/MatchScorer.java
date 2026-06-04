@@ -56,7 +56,7 @@ public class MatchScorer {
     private static final int DEFAULT_MAYBE_SCORE = 25;
     private static final int DEFAULT_MAYBE_MIN_MATCHES = 2;
     private static final double DEFAULT_BONUS_WEIGHT = 2.0;
-    private static final List<String> DEFAULT_BONUS_SIGNALS = List.of("ai", "machine learning", "llm");
+    private static final int DEFAULT_PRIMARY_SKILL_CAP = 70;
 
     private final PersonalProfileLoader profileLoader;
     private final Map<String, Double> skillWeights;
@@ -68,6 +68,8 @@ public class MatchScorer {
     private final int maybeMinMatches;
     private final List<String> bonusSignals;
     private final double bonusWeight;
+    private final List<String> primarySkills;
+    private final int primarySkillCap;
 
     public MatchScorer(PersonalProfileLoader profileLoader) {
         this.profileLoader = profileLoader;
@@ -78,8 +80,7 @@ public class MatchScorer {
             this.skillWeights = scoring.skillWeights().isEmpty()
                     ? DEFAULT_SKILL_WEIGHTS : scoring.skillWeights();
             this.benchmarkWeight = scoring.benchmarkWeight();
-            this.bonusSignals = scoring.bonusSignals().isEmpty()
-                    ? DEFAULT_BONUS_SIGNALS : scoring.bonusSignals();
+            this.bonusSignals = scoring.bonusSignals();
             this.bonusWeight = scoring.bonusWeight();
 
             if (scoring.thresholds() != null) {
@@ -95,6 +96,9 @@ public class MatchScorer {
             }
 
             this.compiledVariants = compileVariants(scoring.skillVariants());
+            this.primarySkills = scoring.primarySkills() != null ? scoring.primarySkills() : List.of();
+            this.primarySkillCap = scoring.primarySkillCap() > 0
+                    ? scoring.primarySkillCap() : DEFAULT_PRIMARY_SKILL_CAP;
         } else {
             this.skillWeights = DEFAULT_SKILL_WEIGHTS;
             this.benchmarkWeight = DEFAULT_BENCHMARK_WEIGHT;
@@ -102,9 +106,11 @@ public class MatchScorer {
             this.applyMinMatches = DEFAULT_APPLY_MIN_MATCHES;
             this.maybeScore = DEFAULT_MAYBE_SCORE;
             this.maybeMinMatches = DEFAULT_MAYBE_MIN_MATCHES;
-            this.bonusSignals = DEFAULT_BONUS_SIGNALS;
+            this.bonusSignals = List.of();
             this.bonusWeight = DEFAULT_BONUS_WEIGHT;
             this.compiledVariants = Map.of();
+            this.primarySkills = List.of();
+            this.primarySkillCap = DEFAULT_PRIMARY_SKILL_CAP;
         }
     }
 
@@ -164,6 +170,14 @@ public class MatchScorer {
 
         int overallScore = (int) Math.round((earnedScore / benchmarkWeight) * 100);
         overallScore = Math.max(0, Math.min(100, overallScore));
+
+        // Primary language penalty: cap score if no core JVM skill matched
+        boolean hasPrimarySkill = matchedSkills.stream()
+                .anyMatch(s -> primarySkills.stream()
+                        .anyMatch(ps -> ps.equalsIgnoreCase(s)));
+        if (!hasPrimarySkill && overallScore > primarySkillCap) {
+            overallScore = primarySkillCap;
+        }
 
         Recommendation recommendation = computeRecommendation(overallScore, matchedSkills.size());
 
