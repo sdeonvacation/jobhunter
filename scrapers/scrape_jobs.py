@@ -43,6 +43,36 @@ GERMANY_PATTERN = re.compile(
 )
 REMOTE_PATTERN = re.compile(r"\b(remote|anywhere)\b", re.IGNORECASE)
 
+# German-language title indicators
+GERMAN_TITLE_PATTERN = re.compile(
+    r"(\bm/w/d\b|\bw/m/d\b|\(m/w/d\)|\(w/m/d\)|\(all genders\)|"
+    r"Entwickler|Ingenieur|Berater|Sachbearbeiter|Werkstudent|Pflicht|"
+    r"Fachinformatiker|Führung|Referent|Spezialist|Teamleitung|Leiter)",
+    re.IGNORECASE,
+)
+
+
+def is_german_language(title: str, description: str) -> bool:
+    """Detect German-language postings by title or description start."""
+    if GERMAN_TITLE_PATTERN.search(title or ""):
+        return True
+    # Check first 200 chars of description for German
+    desc_start = (description or "")[:200].lower()
+    german_indicators = [
+        "wir ",
+        "als ",
+        "du ",
+        "ihre ",
+        "unser ",
+        "die stelle",
+        "über uns",
+        "aufgaben",
+        "anforderungen",
+        "qualifikation",
+        "bewerbung",
+    ]
+    return any(ind in desc_start for ind in german_indicators)
+
 
 def is_relevant_title(title: str) -> bool:
     if not title:
@@ -110,16 +140,20 @@ def insert_job(cur, job: dict, source: str) -> bool:
     # Determine filter status
     title = job.get("title", "")
     location = job.get("location", "")
+    description = job.get("description", "")
 
-    if is_relevant_title(title) and is_target_location(location):
-        language_filter = "KEEP"
-        filter_reason = None
+    if is_german_language(title, description):
+        language_filter = "SKIP"
+        filter_reason = "German JD"
     elif not is_relevant_title(title):
         language_filter = "SKIP"
         filter_reason = "non-engineering role"
-    else:
+    elif not is_target_location(location):
         language_filter = "SKIP"
         filter_reason = "location: non-target"
+    else:
+        language_filter = "KEEP"
+        filter_reason = None
 
     company_id = get_or_create_company(cur, job.get("company_name") or "Unknown")
 
