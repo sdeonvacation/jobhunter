@@ -63,6 +63,13 @@ public class CareerEndpoint {
     @Column(name = "last_crawled_at", columnDefinition = "TIMESTAMP")
     private LocalDateTime lastCrawledAt;
 
+    @Column(name = "last_error_message", columnDefinition = "TEXT")
+    private String lastErrorMessage;
+
+    @Column(name = "consecutive_errors", nullable = false)
+    @Builder.Default
+    private int consecutiveErrors = 0;
+
     @Column(name = "crawl_frequency_hours")
     @Builder.Default
     private int crawlFrequencyHours = 4;

@@ -143,6 +143,8 @@ public class CrawlService {
         if (result.status() == ExtractionStatus.ERROR) {
             endpoint.setLastCrawlStatus(CrawlStatus.ERROR);
             endpoint.setLastCrawledAt(LocalDateTime.now());
+            endpoint.setLastErrorMessage(result.errorMessage());
+            endpoint.setConsecutiveErrors(endpoint.getConsecutiveErrors() + 1);
             endpointRepository.save(endpoint);
             log.warn("Extraction error for endpoint [{}]: {}", endpoint.getId(), result.errorMessage());
             return 0;
@@ -226,6 +228,8 @@ public class CrawlService {
         // Update endpoint status
         endpoint.setLastCrawlStatus(CrawlStatus.SUCCESS);
         endpoint.setLastCrawledAt(LocalDateTime.now());
+        endpoint.setConsecutiveErrors(0);
+        endpoint.setLastErrorMessage(null);
         endpointRepository.save(endpoint);
 
         log.info("Endpoint [{}]: {} total, {} new jobs", endpoint.getId(), result.totalFound(), newJobsCount);

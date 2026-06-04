@@ -1,11 +1,14 @@
 package dev.jobhub.controller;
 
 import dev.jobhub.model.CareerEndpoint;
+import dev.jobhub.model.enums.CrawlStatus;
 import dev.jobhub.repository.CareerEndpointRepository;
 import dev.jobhub.service.CrawlService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -43,9 +46,57 @@ public class AdminController {
         return ResponseEntity.ok(new BackfillResult(filled));
     }
 
+    @GetMapping("/health")
+    public ResponseEntity<HealthReport> getHealth() {
+        List<CareerEndpoint> errorEndpoints = careerEndpointRepository
+                .findByIsActiveTrueAndLastCrawlStatus(CrawlStatus.ERROR);
+        List<CareerEndpoint> emptyEndpoints = careerEndpointRepository
+                .findByIsActiveTrueAndLastCrawlStatus(CrawlStatus.EMPTY);
+
+        List<EndpointHealth> errors = errorEndpoints.stream()
+                .map(e -> new EndpointHealth(
+                        e.getId(),
+                        e.getCompany() != null ? e.getCompany().getName() : "Unknown",
+                        e.getAtsType().name(),
+                        e.getAtsSlug(),
+                        e.getUrl(),
+                        e.getLastCrawlStatus().name(),
+                        e.getLastErrorMessage(),
+                        e.getConsecutiveErrors(),
+                        e.getLastCrawledAt()
+                )).toList();
+
+        List<EndpointHealth> empties = emptyEndpoints.stream()
+                .map(e -> new EndpointHealth(
+                        e.getId(),
+                        e.getCompany() != null ? e.getCompany().getName() : "Unknown",
+                        e.getAtsType().name(),
+                        e.getAtsSlug(),
+                        e.getUrl(),
+                        e.getLastCrawlStatus().name(),
+                        null,
+                        0,
+                        e.getLastCrawledAt()
+                )).toList();
+
+        long totalActive = careerEndpointRepository.countByIsActiveTrue();
+        long totalErrored = errors.size();
+        long totalEmpty = empties.size();
+        long neverCrawled = careerEndpointRepository.countByIsActiveTrueAndLastCrawlStatusIsNull();
+
+        return ResponseEntity.ok(new HealthReport(totalActive, totalErrored, totalEmpty, neverCrawled, errors, empties));
+    }
+
     public record CrawlResult(int endpointsProcessed, int jobsFound, int errors) {}
-
     public record SingleCrawlResult(UUID endpointId, int jobsFound) {}
-
     public record BackfillResult(int descriptionsBackfilled) {}
+
+    public record EndpointHealth(
+            UUID id, String companyName, String atsType, String atsSlug,
+            String url, String status, String errorMessage,
+            int consecutiveErrors, LocalDateTime lastCrawledAt) {}
+
+    public record HealthReport(
+            long totalEndpoints, long errored, long empty, long neverCrawled,
+            List<EndpointHealth> errors, List<EndpointHealth> empties) {}
 }

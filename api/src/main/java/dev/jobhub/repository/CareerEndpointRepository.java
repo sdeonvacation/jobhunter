@@ -27,6 +27,12 @@ public interface CareerEndpointRepository extends JpaRepository<CareerEndpoint, 
         return findEndpointsDueForCrawl(cutoff, org.springframework.data.domain.PageRequest.of(0, limit));
     }
 
-    @Query("SELECT e FROM CareerEndpoint e WHERE e.isActive = true AND e.lastCrawlStatus = :status")
+    @Query("SELECT e FROM CareerEndpoint e JOIN FETCH e.company WHERE e.isActive = true AND e.lastCrawlStatus = :status")
     List<CareerEndpoint> findByIsActiveTrueAndLastCrawlStatus(@Param("status") dev.jobhub.model.enums.CrawlStatus status);
+
+    long countByIsActiveTrue();
+
+    long countByIsActiveTrueAndLastCrawlStatus(dev.jobhub.model.enums.CrawlStatus status);
+
+    long countByIsActiveTrueAndLastCrawlStatusIsNull();
 }

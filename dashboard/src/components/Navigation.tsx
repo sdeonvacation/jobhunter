@@ -43,6 +43,15 @@ const links = [
       </svg>
     ),
   },
+  {
+    to: '/health',
+    label: 'Health',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 10h3l2-5 4 10 2-5h3" />
+      </svg>
+    ),
+  },
 ];
 
 export default function Navigation() {

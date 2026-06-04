@@ -4,6 +4,7 @@ import Jobs from './pages/Jobs';
 import DailyDigest from './pages/DailyDigest';
 import Applied from './pages/Applied';
 import Companies from './pages/Companies';
+import Health from './pages/Health';
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
             <Route path="/jobs" element={<Jobs />} />
             <Route path="/applied" element={<Applied />} />
             <Route path="/companies" element={<Companies />} />
+            <Route path="/health" element={<Health />} />
             <Route path="*" element={<Navigate to="/digest" replace />} />
           </Routes>
         </div>
