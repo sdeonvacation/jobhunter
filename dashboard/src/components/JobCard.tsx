@@ -28,7 +28,7 @@ export default function JobCard({ job, index = 0, onMarkApplied, onUndoApplied }
       href={job.applyUrl || '#'}
       target="_blank"
       rel="noopener noreferrer"
-      className="block bg-surface-800 border border-surface-600 rounded-lg p-5 transition-all duration-200 ease-out hover:border-accent/30 hover:-translate-y-px hover:shadow-glow opacity-0 animate-slide-up"
+      className="block bg-surface-800 border border-surface-600 rounded-lg p-5 transition-all duration-200 ease-out hover:border-accent/30 hover:-translate-y-px hover:shadow-glow animate-slide-up"
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className="flex items-start justify-between">

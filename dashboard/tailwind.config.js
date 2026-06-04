@@ -35,8 +35,8 @@ export default {
         'glow-danger': '0 0 20px rgba(239, 68, 68, 0.1)',
       },
       animation: {
-        'fade-in': 'fadeIn 200ms ease-out forwards',
-        'slide-up': 'slideUp 250ms ease-out forwards',
+        'fade-in': 'fadeIn 200ms ease-out both',
+        'slide-up': 'slideUp 250ms ease-out both',
         'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
         shimmer: 'shimmer 2s linear infinite',
         'pulse-glow': 'pulseGlow 2s ease-in-out infinite',

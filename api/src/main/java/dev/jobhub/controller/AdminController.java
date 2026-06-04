@@ -3,6 +3,7 @@ package dev.jobhub.controller;
 import dev.jobhub.model.CareerEndpoint;
 import dev.jobhub.model.enums.CrawlStatus;
 import dev.jobhub.repository.CareerEndpointRepository;
+import dev.jobhub.scheduler.ScoringScheduler;
 import dev.jobhub.service.CrawlService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,10 +18,13 @@ public class AdminController {
 
     private final CrawlService crawlService;
     private final CareerEndpointRepository careerEndpointRepository;
+    private final ScoringScheduler scoringScheduler;
 
-    public AdminController(CrawlService crawlService, CareerEndpointRepository careerEndpointRepository) {
+    public AdminController(CrawlService crawlService, CareerEndpointRepository careerEndpointRepository,
+                           ScoringScheduler scoringScheduler) {
         this.crawlService = crawlService;
         this.careerEndpointRepository = careerEndpointRepository;
+        this.scoringScheduler = scoringScheduler;
     }
 
     @PostMapping("/crawl")
@@ -44,6 +48,12 @@ public class AdminController {
     public ResponseEntity<BackfillResult> backfillDescriptions() {
         int filled = crawlService.backfillSmartRecruitersDescriptions();
         return ResponseEntity.ok(new BackfillResult(filled));
+    }
+
+    @PostMapping("/score")
+    public ResponseEntity<String> triggerScoring() {
+        scoringScheduler.scoreAllUnscored();
+        return ResponseEntity.ok("Scoring complete");
     }
 
     @GetMapping("/health")
