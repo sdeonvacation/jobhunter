@@ -77,7 +77,11 @@ public class WorkdayExtractor implements JobExtractor {
                     break;
                 }
 
-                total = page.path("total").asInt(0);
+                // Workday only returns total on first page; subsequent pages return 0
+                int pageTotal = page.path("total").asInt(0);
+                if (pageTotal > 0) {
+                    total = pageTotal;
+                }
                 JsonNode postings = page.path("jobPostings");
 
                 if (!postings.isArray() || postings.isEmpty()) {
@@ -156,7 +160,7 @@ public class WorkdayExtractor implements JobExtractor {
                 .bodyValue(body)
                 .retrieve()
                 .bodyToMono(String.class)
-                .block();
+                .block(Duration.ofSeconds(45));
     }
 
     private String buildRequestBody(int offset, boolean includeSortBy) {
@@ -175,8 +179,8 @@ public class WorkdayExtractor implements JobExtractor {
     private RawJobData mapJob(JsonNode node, String baseUrl) {
         try {
             String externalPath = node.path("externalPath").asText(null);
-            String title = node.path("title").asText(null);
-            String location = node.path("locationsText").asText(null);
+            String title = truncate(node.path("title").asText(null), 500);
+            String location = truncate(node.path("locationsText").asText(null), 500);
             String postedOnRaw = node.path("postedOn").asText(null);
             String rawJson = node.toString();
 
@@ -242,5 +246,12 @@ public class WorkdayExtractor implements JobExtractor {
 
     private Duration elapsed(Instant start) {
         return Duration.between(start, Instant.now());
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
     }
 }
