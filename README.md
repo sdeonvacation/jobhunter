@@ -2,16 +2,7 @@
 
 ![JobHunter Dashboard](docs/screenshot.png)
 
-**Autonomous job discovery platform that finds, filters, and scores engineering roles across Germany — so you spend time applying, not searching.**
-
-## The Problem
-
-Job hunting as a software engineer means:
-- Checking 50+ company career pages manually
-- Wading through irrelevant roles (managers, designers, analysts)
-- Missing new postings because you can't check daily
-- No way to compare fit across hundreds of listings
-- Losing track of what you applied to
+**Autonomous job discovery platform that finds, filters, and scores open jobs on various platforms — so you spend time applying, not searching.**
 
 ## What JobHub Does
 
@@ -19,9 +10,9 @@ Job hunting as a software engineer means:
 Monitors 500+ company career pages across 12 different hiring platforms. New jobs are picked up within hours of being posted — no manual checking required.
 
 ### Filters intelligently
-Only shows you what matters:
+Only shows you what matters (examples):
 - Engineering roles only (excludes management, design, legal, HR, etc.)
-- Germany-based or remote positions
+- Seleted location-based or remote positions
 - English-language postings
 - Appropriate experience level (skips "10+ years required")
 - Deduplicates cross-posted listings
@@ -109,7 +100,7 @@ Edit `profile.yaml` at the project root. This single file controls everything ab
 Example snippet:
 ```yaml
 name: Sam
-title: Senior Backend Engineer
+title: Backend Engineer
 years-of-experience: 4
 
 skills:
@@ -129,7 +120,7 @@ filters:
     max-years: 5
 
 scoring:
-  primary-skills: ["java", "spring boot", "kotlin"]
+  primary-skills: ["java", "spring boot"]
   primary-skill-cap: 70
   skill-weights:
     java: 5.0
