@@ -6,43 +6,30 @@ import type { Job } from '../types';
 const mockJob: Job = {
   id: 'job-1',
   title: 'Senior Backend Engineer',
-  company: { id: 'c1', name: 'TechCorp' },
+  companyName: 'TechCorp',
   location: 'Berlin, Germany',
-  isRemote: 'HYBRID',
+  remoteType: 'HYBRID',
   description: '<p>Build cool stuff</p>',
   applyUrl: 'https://apply.example.com',
-  isActive: true,
-  skills: [],
+  topSkills: ['Java', 'Spring'],
   source: 'GREENHOUSE',
-  createdAt: '2024-01-01T00:00:00',
   salaryMin: 80000,
   salaryMax: 120000,
   salaryCurrency: 'EUR',
   salaryPeriod: 'YEARLY',
-  opportunityScore: {
-    id: 'os-1',
-    score: 82,
-    breakdown: { match: 40, company: 20, freshness: 22 },
-    computedAt: '2024-01-01T00:00:00',
-  },
-  matchScore: {
-    id: 'ms-1',
-    overallScore: 75,
-    matchedSkills: ['Java', 'Spring'],
-    missingSkills: ['Go'],
-    recommendation: 'APPLY',
-    scoredAt: '2024-01-01T00:00:00',
-  },
+  opportunityScore: 82,
+  matchScore: 75,
+  recommendation: 'APPLY',
 };
 
 const minimalJob: Job = {
   id: 'job-2',
   title: 'Frontend Dev',
-  company: { id: 'c2', name: 'StartupCo' },
-  isActive: true,
-  skills: [],
+  companyName: 'StartupCo',
+  topSkills: [],
   source: 'LEVER',
-  createdAt: '2024-02-01T00:00:00',
+  opportunityScore: 0,
+  matchScore: 0,
 };
 
 describe('JobCard', () => {

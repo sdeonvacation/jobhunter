@@ -109,9 +109,9 @@ export default function Jobs() {
                 onToggle={() => setExpandedId(expandedId === job.id ? null : job.id)}
                 onApply={handleApply}
               />
-              {expandedId === job.id && job.skills.length > 0 && (
+              {expandedId === job.id && job.topSkills && job.topSkills.length > 0 && (
                 <div className="ml-4 mt-2 p-3 bg-surface-800 border border-surface-600 rounded-lg">
-                  <TechStack skills={job.skills} />
+                  <TechStack skills={job.topSkills} />
                 </div>
               )}
             </div>

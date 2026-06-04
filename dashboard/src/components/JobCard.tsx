@@ -10,7 +10,7 @@ interface JobCardProps {
 
 export default function JobCard({ job, expanded, onToggle, onApply }: JobCardProps) {
   const salary = formatSalary(job);
-  const recommendation = job.matchScore?.recommendation;
+  const recommendation = job.recommendation;
 
   return (
     <div
@@ -22,14 +22,14 @@ export default function JobCard({ job, expanded, onToggle, onApply }: JobCardPro
           <h3 className="text-base font-semibold text-text-primary truncate">
             {job.title}
           </h3>
-          <p className="text-sm text-text-secondary mt-0.5">{job.company.name}</p>
+          <p className="text-sm text-text-secondary mt-0.5">{job.companyName}</p>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             {job.location && (
               <span className="text-xs text-text-muted">{job.location}</span>
             )}
-            {job.isRemote && (
+            {job.remoteType && (
               <span className="bg-info/10 text-info text-xs px-2 py-0.5 rounded-full ring-1 ring-info/20">
-                {job.isRemote}
+                {job.remoteType}
               </span>
             )}
             {salary && (
@@ -41,11 +41,11 @@ export default function JobCard({ job, expanded, onToggle, onApply }: JobCardPro
         </div>
 
         <div className="flex items-center gap-2 ml-3 shrink-0">
-          {job.opportunityScore && (
-            <ScoreBadge score={job.opportunityScore.score} label="Opp" />
+          {job.opportunityScore > 0 && (
+            <ScoreBadge score={job.opportunityScore} label="Opp" />
           )}
-          {job.matchScore && (
-            <ScoreBadge score={job.matchScore.overallScore} label="Match" size="sm" />
+          {job.matchScore > 0 && (
+            <ScoreBadge score={job.matchScore} label="Match" size="sm" />
           )}
           {recommendation && (
             <RecommendationBadge recommendation={recommendation} />

@@ -40,11 +40,11 @@ export interface MatchScore {
 export interface Job {
   id: string;
   title: string;
-  company: CompanySummary;
+  companyName: string;
   location?: string;
   locationCity?: string;
   locationCountry?: string;
-  isRemote?: RemoteType;
+  remoteType?: RemoteType;
   description?: string;
   applyUrl?: string;
   postedDate?: string;
@@ -54,12 +54,13 @@ export interface Job {
   salaryMax?: number;
   salaryCurrency?: string;
   salaryPeriod?: SalaryPeriod;
-  isActive: boolean;
-  skills: JobSkill[];
-  matchScore?: MatchScore;
-  opportunityScore?: OpportunityScore;
+  isActive?: boolean;
+  topSkills: string[];
+  matchScore: number;
+  opportunityScore: number;
+  recommendation?: Recommendation | null;
   source: AtsType;
-  createdAt: string;
+  createdAt?: string;
 }
 
 export interface CompanySummary {
