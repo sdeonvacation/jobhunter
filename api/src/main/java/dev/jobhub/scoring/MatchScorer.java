@@ -19,11 +19,34 @@ import java.util.regex.Pattern;
 @Component
 public class MatchScorer {
 
-    private static final Map<String, Double> PROFICIENCY_SCORES = Map.of(
-            "expert", 1.0,
-            "advanced", 0.85,
-            "intermediate", 0.65,
-            "beginner", 0.4
+    // Skill weights: heavy = core backend, low = frontend/secondary
+    private static final Map<String, Double> SKILL_WEIGHTS = Map.ofEntries(
+            // Heavy weight (core backend + infra)
+            Map.entry("java", 3.0),
+            Map.entry("spring boot", 2.5),
+            Map.entry("kotlin", 2.5),
+            Map.entry("kubernetes", 3.0),
+            Map.entry("docker", 2.5),
+            Map.entry("aws", 2.5),
+            Map.entry("kafka", 3.0),
+            Map.entry("postgresql", 2.0),
+            Map.entry("microservices", 2.0),
+            Map.entry("terraform", 2.0),
+            // Medium weight
+            Map.entry("redis", 1.5),
+            Map.entry("elasticsearch", 1.5),
+            Map.entry("ci/cd", 1.5),
+            Map.entry("sql", 1.5),
+            Map.entry("rest apis", 1.0),
+            Map.entry("hibernate/jpa", 1.5),
+            Map.entry("gradle", 1.0),
+            Map.entry("git", 0.5),
+            // Low weight (frontend/secondary)
+            Map.entry("typescript", 0.3),
+            Map.entry("node.js", 0.3),
+            Map.entry("javascript", 0.3),
+            Map.entry("go", 0.3),
+            Map.entry("react", 0.3)
     );
 
     private final PersonalProfileLoader profileLoader;
@@ -51,16 +74,24 @@ public class MatchScorer {
         double earnedScore = 0.0;
 
         for (PersonalProfile.ProfileSkill skill : skills) {
-            double weight = 1.0; // All profile skills weighted equally
+            double weight = SKILL_WEIGHTS.getOrDefault(skill.name().toLowerCase(), 1.0);
             totalWeight += weight;
 
             if (matchesSkill(textLower, skill.name())) {
-                double profScore = PROFICIENCY_SCORES.getOrDefault(skill.proficiency(), 0.65);
-                earnedScore += weight * profScore;
+                earnedScore += weight;
                 matchedSkills.add(skill.name());
             } else {
                 missingSkills.add(skill.name());
             }
+        }
+
+        // Also check for bonus signals not in profile
+        if (textLower.contains("ai") || textLower.contains("machine learning") || textLower.contains("llm")) {
+            earnedScore += 2.0;
+            totalWeight += 2.0;
+            matchedSkills.add("AI/ML");
+        } else {
+            totalWeight += 2.0;
         }
 
         int overallScore = totalWeight > 0
@@ -105,13 +136,18 @@ public class MatchScorer {
             case "redis" -> text.contains("redis");
             case "elasticsearch" -> text.contains("elasticsearch") || text.contains("elastic") || text.contains("opensearch");
             case "terraform" -> text.contains("terraform") || text.contains("infrastructure as code");
+            case "node.js" -> text.contains("node.js") || text.contains("nodejs") || Pattern.compile("\\bnode\\b").matcher(text).find();
+            case "javascript" -> text.contains("javascript") || Pattern.compile("\\bjs\\b").matcher(text).find();
+            case "go" -> Pattern.compile("\\bgolang\\b|\\bgo\\b").matcher(text).find();
+            case "react" -> Pattern.compile("\\breact\\b").matcher(text).find();
+            case "ai/ml" -> text.contains("ai") || text.contains("machine learning") || text.contains("llm");
             default -> false;
         };
     }
 
     private Recommendation computeRecommendation(int score, int matchCount) {
-        if (score >= 50 && matchCount >= 5) return Recommendation.APPLY;
-        if (score >= 30 && matchCount >= 3) return Recommendation.MAYBE;
+        if (score >= 45 && matchCount >= 4) return Recommendation.APPLY;
+        if (score >= 25 && matchCount >= 2) return Recommendation.MAYBE;
         return Recommendation.SKIP;
     }
 

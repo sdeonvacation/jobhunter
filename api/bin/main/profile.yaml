@@ -1,6 +1,6 @@
 name: Sam
-title: Software Engineer
-years-of-experience: 4
+title: Senior Backend Engineer
+years-of-experience: 8
 
 skills:
   - name: Java
@@ -9,6 +9,9 @@ skills:
   - name: Spring Boot
     proficiency: expert
     category: framework
+  - name: Kotlin
+    proficiency: advanced
+    category: language
   - name: PostgreSQL
     proficiency: expert
     category: database
@@ -43,9 +46,9 @@ skills:
     proficiency: expert
     category: tooling
   - name: Hibernate/JPA
-    proficiency: intermediate
+    proficiency: expert
     category: framework
-  - name: Maven
+  - name: Gradle
     proficiency: advanced
     category: tooling
   - name: Redis
@@ -57,20 +60,11 @@ skills:
   - name: Terraform
     proficiency: intermediate
     category: infrastructure
-  - name: AI
-    proficiency: expert
-    category: infrastructure
-  - name: Claude
-    proficiency: expert
-    category: infrastructure
-  - name: Github Copilot
-    proficiency: expert
-    category: infrastructure
 
 preferences:
-  locations: ["Germany", "remote"]
+  locations: ["Germany", "Netherlands", "remote"]
   employment-type: FULL_TIME
-  min-salary-eur: 65000
-  seniority: ["senior", "junior", "mid"]
+  min-salary-eur: 85000
+  seniority: ["senior", "staff", "lead"]
   languages: ["English", "German"]
   excluded-industries: ["gambling", "defense", "surveillance"]
