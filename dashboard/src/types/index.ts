@@ -150,6 +150,7 @@ export interface JobSearchParams {
   query?: string;
   location?: string;
   minScore?: number;
+  sort?: string;
   page?: number;
   size?: number;
 }

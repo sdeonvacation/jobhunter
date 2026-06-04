@@ -36,4 +36,7 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
     Page<JobPosting> findByIsActiveTrue(Pageable pageable);
 
     Page<JobPosting> findByIsActiveTrueAndLanguageFilter(FilterDecision filter, Pageable pageable);
+
+    Page<JobPosting> findByIsActiveTrueAndLanguageFilterAndLocationContainingIgnoreCase(
+            FilterDecision filter, String location, Pageable pageable);
 }

@@ -44,13 +44,26 @@ public class JobController {
             @RequestParam(required = false) String location,
             @RequestParam(required = false) Integer minScore,
             @RequestParam(required = false) String source,
+            @RequestParam(defaultValue = "matchScore") String sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "discoveredDate"));
+        Sort sortOrder = switch (sort) {
+            case "date" -> Sort.by(Sort.Direction.DESC, "discoveredDate");
+            default -> Sort.by(Sort.Direction.DESC, "matchScore.overallScore")
+                    .and(Sort.by(Sort.Direction.DESC, "discoveredDate"));
+        };
 
-        Page<JobPosting> jobs = jobPostingRepository.findByIsActiveTrueAndLanguageFilter(
-                FilterDecision.KEEP, pageable);
+        Pageable pageable = PageRequest.of(page, size, sortOrder);
+
+        Page<JobPosting> jobs;
+        if (location != null && !location.isBlank()) {
+            jobs = jobPostingRepository.findByIsActiveTrueAndLanguageFilterAndLocationContainingIgnoreCase(
+                    FilterDecision.KEEP, location, pageable);
+        } else {
+            jobs = jobPostingRepository.findByIsActiveTrueAndLanguageFilter(
+                    FilterDecision.KEEP, pageable);
+        }
 
         return jobs.map(DtoMapper::toJobSummary);
     }
