@@ -9,6 +9,9 @@ public enum AtsType {
     WORKDAY,
     WORKDAY_PROTECTED,
     STEPSTONE,
+    ARBEITNOW,
+    INDEED,
+    LINKEDIN,
     CUSTOM,
     UNKNOWN
 }
