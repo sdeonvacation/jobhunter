@@ -149,6 +149,7 @@ export interface DailyDigest {
 export interface JobSearchParams {
   query?: string;
   location?: string;
+  company?: string;
   minScore?: number;
   sort?: string;
   page?: number;

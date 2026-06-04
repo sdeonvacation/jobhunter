@@ -42,6 +42,7 @@ public class JobController {
     public Page<JobSummaryDto> searchJobs(
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String location,
+            @RequestParam(required = false) String company,
             @RequestParam(required = false) Integer minScore,
             @RequestParam(required = false) String source,
             @RequestParam(defaultValue = "matchScore") String sort,
@@ -57,7 +58,13 @@ public class JobController {
         Pageable pageable = PageRequest.of(page, size, sortOrder);
 
         Page<JobPosting> jobs;
-        if (location != null && !location.isBlank()) {
+        if (company != null && !company.isBlank() && location != null && !location.isBlank()) {
+            jobs = jobPostingRepository.findByIsActiveTrueAndLanguageFilterAndCompanyNameAndLocationContainingIgnoreCase(
+                    FilterDecision.KEEP, company, location, pageable);
+        } else if (company != null && !company.isBlank()) {
+            jobs = jobPostingRepository.findByIsActiveTrueAndLanguageFilterAndCompanyName(
+                    FilterDecision.KEEP, company, pageable);
+        } else if (location != null && !location.isBlank()) {
             jobs = jobPostingRepository.findByIsActiveTrueAndLanguageFilterAndLocationContainingIgnoreCase(
                     FilterDecision.KEEP, location, pageable);
         } else {
@@ -66,6 +73,11 @@ public class JobController {
         }
 
         return jobs.map(DtoMapper::toJobSummary);
+    }
+
+    @GetMapping("/companies")
+    public List<String> getCompaniesWithJobs() {
+        return jobPostingRepository.findDistinctCompanyNamesWithVisibleJobs(FilterDecision.KEEP);
     }
 
     @GetMapping("/{id}")

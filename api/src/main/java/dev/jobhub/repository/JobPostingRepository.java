@@ -39,4 +39,13 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     Page<JobPosting> findByIsActiveTrueAndLanguageFilterAndLocationContainingIgnoreCase(
             FilterDecision filter, String location, Pageable pageable);
+
+    Page<JobPosting> findByIsActiveTrueAndLanguageFilterAndCompanyName(
+            FilterDecision filter, String companyName, Pageable pageable);
+
+    Page<JobPosting> findByIsActiveTrueAndLanguageFilterAndCompanyNameAndLocationContainingIgnoreCase(
+            FilterDecision filter, String companyName, String location, Pageable pageable);
+
+    @Query("SELECT DISTINCT j.company.name FROM JobPosting j WHERE j.isActive = true AND j.languageFilter = :filter ORDER BY j.company.name")
+    List<String> findDistinctCompanyNamesWithVisibleJobs(@Param("filter") FilterDecision filter);
 }

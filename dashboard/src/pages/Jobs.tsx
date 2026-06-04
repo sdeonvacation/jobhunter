@@ -19,20 +19,28 @@ export default function Jobs() {
   const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(0);
   const [sort, setSort] = useState('matchScore');
+  const [companies, setCompanies] = useState<string[]>([]);
+  const [company, setCompany] = useState('');
 
   const [params, setParams] = useState<JobSearchParams>({
     query: '',
     location: '',
-    minScore: undefined,
     page: 0,
     size: 20,
   });
+
+  useEffect(() => {
+    fetch('/api/jobs/companies')
+      .then((r) => r.json())
+      .then(setCompanies)
+      .catch(() => {});
+  }, []);
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await api.jobs.search({ ...params, sort });
+      const result = await api.jobs.search({ ...params, sort, company: company || undefined });
       setJobs(result.content);
       setTotalPages(result.totalPages);
     } catch (err) {
@@ -40,7 +48,7 @@ export default function Jobs() {
     } finally {
       setLoading(false);
     }
-  }, [params, sort]);
+  }, [params, sort, company]);
 
   useEffect(() => {
     fetchJobs();
@@ -58,6 +66,16 @@ export default function Jobs() {
           onChange={(e) => setParams((p) => ({ ...p, query: e.target.value, page: 0 }))}
           className="flex-1 min-w-[200px] bg-surface-800 border border-surface-600 text-text-primary placeholder:text-text-muted rounded-md px-4 py-2.5 focus:border-accent focus:ring-1 focus:ring-accent/30 outline-none text-sm"
         />
+        <select
+          value={company}
+          onChange={(e) => { setCompany(e.target.value); setParams((p) => ({ ...p, page: 0 })); }}
+          className="bg-surface-800 border border-surface-600 text-text-primary rounded-md px-4 py-2.5 focus:border-accent focus:ring-1 focus:ring-accent/30 outline-none text-sm"
+        >
+          <option value="">All Companies</option>
+          {companies.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
         <select
           value={params.location}
           onChange={(e) => setParams((p) => ({ ...p, location: e.target.value, page: 0 }))}
