@@ -133,8 +133,10 @@ jobhunt/
 
 ## Runtime Notes
 
-- PostgreSQL runs in Colima (`colima-reactive-resume` profile) on port **5434** (not default 5432).
+- PostgreSQL runs in Colima (`colima-jobhunt` profile) on port **5435**.
+- Start DB: `cd /Users/i570749/projects/jobhunt && docker -c colima-jobhunt compose up -d db`
 - DB credentials: `jobhub/jobhub` database `jobhub`.
 - API uses launchd plist at `/tmp/dev.jobhub.api.plist` to stay alive across shell sessions.
+- Dashboard uses launchd plist at `/tmp/dev.jobhub.dashboard.plist`.
 - Testcontainers need Colima default profile Docker socket (currently incompatible with Docker 29 API).
 - `JAVA_HOME` must point to Temurin 21, not the system Java 25.
