@@ -88,7 +88,19 @@ public class LocationFilterImpl implements LocationFilter {
                     "\\bsingapore\\b",
                     "\\baustralia\\b", "sydney", "melbourne",
                     "\\bbrazil\\b", "s[aã]o\\s+paulo",
-                    "\\bmexico\\b", "mexico\\s+city"
+                    "\\bmexico\\b", "mexico\\s+city",
+                    "\\bitaly\\b", "\\bmilan\\b", "\\brome\\b",
+                    "\\bfrance\\b", "\\bparis\\b",
+                    "\\bspain\\b", "\\bmadrid\\b", "\\bbarcelona\\b",
+                    "\\bportugal\\b", "\\blisbon\\b",
+                    "\\bpoland\\b", "\\bwarsaw\\b", "\\bkrakow\\b",
+                    "\\bczech\\b", "\\bprague\\b",
+                    "\\bhungary\\b", "\\bbudapest\\b",
+                    "\\bromania\\b", "\\bbucharest\\b",
+                    "\\baustria\\b", "\\bvienna\\b",
+                    "\\bswitzerland\\b", "\\bzurich\\b", "\\bgeneva\\b",
+                    "\\bireland\\b", "\\bdublin\\b", "\\bcork\\b",
+                    "\\bcanada\\b", "\\btoronto\\b", "\\bvancouver\\b", "\\bmontreal\\b"
             ),
             Pattern.CASE_INSENSITIVE
     );
