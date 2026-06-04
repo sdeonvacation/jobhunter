@@ -18,8 +18,10 @@ import java.util.*;
 public class SmartRecruitersExtractor implements JobExtractor {
 
     private static final String API_URL = "https://api.smartrecruiters.com/v1/companies/%s/postings";
+    private static final String DETAIL_URL = "https://api.smartrecruiters.com/v1/companies/%s/postings/%s";
     private static final int PAGE_SIZE = 100;
     private static final int MAX_PAGES = 20;
+    private static final Duration DETAIL_TIMEOUT = Duration.ofSeconds(15);
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
@@ -74,7 +76,7 @@ public class SmartRecruitersExtractor implements JobExtractor {
                 }
 
                 for (JsonNode node : content) {
-                    RawJobData job = mapJob(node);
+                    RawJobData job = mapJob(node, slug);
                     if (job != null) {
                         allJobs.add(job);
                     }
@@ -100,7 +102,7 @@ public class SmartRecruitersExtractor implements JobExtractor {
         }
     }
 
-    private RawJobData mapJob(JsonNode node) {
+    private RawJobData mapJob(JsonNode node, String companySlug) {
         try {
             String externalId = node.path("id").asText(null);
             if (externalId == null) {
@@ -115,12 +117,9 @@ public class SmartRecruitersExtractor implements JobExtractor {
             String region = loc.path("region").asText("");
             String location = truncate(buildLocation(city, region, country), 500);
 
-            // Apply URL
-            String applyUrl = node.path("ref").asText(null);
-            if (applyUrl == null || applyUrl.isBlank()) {
-                String companyId = node.path("company").path("identifier").asText("");
-                applyUrl = "https://jobs.smartrecruiters.com/" + companyId + "/" + externalId;
-            }
+            // Apply URL - use public jobs site, not the API ref
+            String companyId = node.path("company").path("identifier").asText("");
+            String applyUrl = "https://jobs.smartrecruiters.com/" + companyId + "/" + externalId;
 
             // Date
             String releasedDate = node.path("releasedDate").asText(null);
@@ -134,6 +133,40 @@ public class SmartRecruitersExtractor implements JobExtractor {
             );
         } catch (Exception e) {
             log.warn("SmartRecruiters: failed to map job: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Fetch description for a single posting from the detail endpoint.
+     * Used by backfill process for KEEP jobs only.
+     */
+    public String fetchDescription(String companySlug, String postingId) {
+        try {
+            String url = String.format(DETAIL_URL, companySlug, postingId);
+            String response = webClient.get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block(DETAIL_TIMEOUT);
+
+            if (response == null || response.isBlank()) return null;
+
+            JsonNode root = objectMapper.readTree(response);
+            JsonNode sections = root.path("jobAd").path("sections");
+            if (sections.isMissingNode()) return null;
+
+            StringBuilder desc = new StringBuilder();
+            for (String key : List.of("jobDescription", "qualifications", "additionalInformation")) {
+                String text = sections.path(key).path("text").asText("");
+                if (!text.isBlank()) {
+                    if (desc.length() > 0) desc.append("\n");
+                    desc.append(text.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim());
+                }
+            }
+            return desc.length() > 0 ? desc.toString() : null;
+        } catch (Exception e) {
+            log.debug("SmartRecruiters: failed to fetch description for {}/{}: {}", companySlug, postingId, e.getMessage());
             return null;
         }
     }

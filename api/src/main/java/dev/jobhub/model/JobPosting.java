@@ -122,6 +122,16 @@ public class JobPosting {
     @Column(name = "last_crawled_at", columnDefinition = "TIMESTAMP")
     private LocalDateTime lastCrawledAt;
 
+    @Column(name = "applied", nullable = false)
+    @Builder.Default
+    private boolean applied = false;
+
+    @Column(name = "applied_at", columnDefinition = "TIMESTAMP")
+    private LocalDateTime appliedAt;
+
+    @Column(name = "required_yoe")
+    private Integer requiredYoe;
+
     @Column(name = "created_at", columnDefinition = "TIMESTAMP", updatable = false)
     private LocalDateTime createdAt;
 

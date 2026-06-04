@@ -9,6 +9,9 @@ skills:
   - name: Spring Boot
     proficiency: expert
     category: framework
+  - name: Kotlin
+    proficiency: intermediate
+    category: language
   - name: PostgreSQL
     proficiency: expert
     category: database
@@ -66,6 +69,15 @@ skills:
   - name: Github Copilot
     proficiency: expert
     category: infrastructure
+  - name: JUnit
+    proficiency: expert
+    category: testing
+  - name: SOLID
+    proficiency: expert
+    category: architecture
+  - name: Distributed Systems
+    proficiency: advanced
+    category: architecture
 
 preferences:
   locations: ["Germany", "remote"]

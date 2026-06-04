@@ -3,11 +3,23 @@ import ScoreBadge from './ScoreBadge';
 
 interface JobCardProps {
   job: Job;
+  onMarkApplied?: (id: string) => void;
+  onUndoApplied?: (id: string) => void;
 }
 
-export default function JobCard({ job }: JobCardProps) {
+export default function JobCard({ job, onMarkApplied, onUndoApplied }: JobCardProps) {
   const salary = formatSalary(job);
   const recommendation = job.recommendation;
+
+  const handleApplied = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (job.applied && onUndoApplied) {
+      onUndoApplied(job.id);
+    } else if (!job.applied && onMarkApplied) {
+      onMarkApplied(job.id);
+    }
+  };
 
   return (
     <a
@@ -51,6 +63,21 @@ export default function JobCard({ job }: JobCardProps) {
           )}
           {recommendation && (
             <RecommendationBadge recommendation={recommendation} />
+          )}
+          {(onMarkApplied || onUndoApplied) && (
+            <button
+              onClick={handleApplied}
+              title={job.applied ? 'Undo applied' : 'Mark as applied'}
+              className={`w-8 h-8 flex items-center justify-center rounded-md border transition-all ${
+                job.applied
+                  ? 'bg-success/20 border-success/40 text-success'
+                  : 'border-surface-600 text-text-muted hover:border-success/40 hover:text-success hover:bg-success/10'
+              }`}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3.5 8 6.5 11 12.5 5" />
+              </svg>
+            </button>
           )}
         </div>
       </div>

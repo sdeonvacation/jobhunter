@@ -21,9 +21,9 @@ public class MatchScorer {
 
     // Skill weights: heavy = core backend, low = frontend/secondary
     private static final Map<String, Double> SKILL_WEIGHTS = Map.ofEntries(
-            // Heavy weight (core backend + infra)
-            Map.entry("java", 3.0),
-            Map.entry("spring boot", 2.5),
+            // Heavy weight (core stack - Java/Spring is primary signal)
+            Map.entry("java", 5.0),
+            Map.entry("spring boot", 4.5),
             Map.entry("kotlin", 2.5),
             Map.entry("kubernetes", 3.0),
             Map.entry("docker", 2.5),
@@ -41,6 +41,9 @@ public class MatchScorer {
             Map.entry("hibernate/jpa", 1.5),
             Map.entry("gradle", 1.0),
             Map.entry("git", 0.5),
+            Map.entry("junit", 1.5),
+            Map.entry("solid", 1.5),
+            Map.entry("distributed systems", 2.0),
             // Low weight (frontend/secondary)
             Map.entry("typescript", 0.3),
             Map.entry("node.js", 0.3),
@@ -94,9 +97,10 @@ public class MatchScorer {
             totalWeight += 2.0;
         }
 
-        int overallScore = totalWeight > 0
-                ? (int) Math.round((earnedScore / totalWeight) * 100)
-                : 0;
+        // Score using a benchmark: a realistic "great match" job earns ~22 weight.
+        // This avoids penalizing jobs for not mentioning every skill in the profile.
+        double BENCHMARK_WEIGHT = 22.0;
+        int overallScore = (int) Math.round((earnedScore / BENCHMARK_WEIGHT) * 100);
         overallScore = Math.max(0, Math.min(100, overallScore));
 
         Recommendation recommendation = computeRecommendation(overallScore, matchedSkills.size());
@@ -134,6 +138,9 @@ public class MatchScorer {
             case "hibernate/jpa" -> text.contains("hibernate") || text.contains("jpa");
             case "gradle" -> text.contains("gradle") || text.contains("maven");
             case "redis" -> text.contains("redis");
+            case "junit" -> text.contains("junit") || text.contains("testing framework") || text.contains("unit test");
+            case "solid" -> text.contains("solid") || text.contains("design principle") || text.contains("clean code");
+            case "distributed systems" -> text.contains("distributed") || text.contains("scalab") || text.contains("high availability");
             case "elasticsearch" -> text.contains("elasticsearch") || text.contains("elastic") || text.contains("opensearch");
             case "terraform" -> text.contains("terraform") || text.contains("infrastructure as code");
             case "node.js" -> text.contains("node.js") || text.contains("nodejs") || Pattern.compile("\\bnode\\b").matcher(text).find();
@@ -146,7 +153,7 @@ public class MatchScorer {
     }
 
     private Recommendation computeRecommendation(int score, int matchCount) {
-        if (score >= 45 && matchCount >= 4) return Recommendation.APPLY;
+        if (score >= 40 && matchCount >= 4) return Recommendation.APPLY;
         if (score >= 25 && matchCount >= 2) return Recommendation.MAYBE;
         return Recommendation.SKIP;
     }

@@ -41,7 +41,8 @@ public final class DtoMapper {
                 job.getSalaryCurrency(),
                 job.getPostedDate(),
                 job.getSource() != null ? job.getSource().name() : null,
-                job.getApplyUrl()
+                job.getApplyUrl(),
+                job.isApplied()
         );
     }
 

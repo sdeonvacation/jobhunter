@@ -58,6 +58,18 @@ export const api = {
     search(params: JobSearchParams): Promise<PageResponse<Job>> {
       return fetchApi(`/api/jobs${toQueryString(params as unknown as Record<string, unknown>)}`);
     },
+    getApplied(page = 0, size = 20): Promise<PageResponse<Job>> {
+      return fetchApi(`/api/jobs/applied?page=${page}&size=${size}`);
+    },
+    getToday(page = 0, size = 50, sort = 'matchScore'): Promise<PageResponse<Job>> {
+      return fetchApi(`/api/jobs/today?page=${page}&size=${size}&sort=${sort}`);
+    },
+    markApplied(id: string, applied = true): Promise<void> {
+      return fetchApi(`/api/jobs/${id}/applied`, {
+        method: 'PATCH',
+        body: JSON.stringify({ applied }),
+      });
+    },
     getById(id: string): Promise<Job> {
       return fetchApi(`/api/jobs/${id}`);
     },

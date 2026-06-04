@@ -1,6 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Navigation from './components/Navigation';
 import Jobs from './pages/Jobs';
+import DailyDigest from './pages/DailyDigest';
+import Applied from './pages/Applied';
 import Companies from './pages/Companies';
 
 export default function App() {
@@ -10,10 +12,12 @@ export default function App() {
       <main className="flex-1 overflow-auto bg-surface-900 p-8">
         <div className="max-w-7xl mx-auto">
           <Routes>
-            <Route path="/" element={<Navigate to="/jobs" replace />} />
+            <Route path="/" element={<Navigate to="/digest" replace />} />
+            <Route path="/digest" element={<DailyDigest />} />
             <Route path="/jobs" element={<Jobs />} />
+            <Route path="/applied" element={<Applied />} />
             <Route path="/companies" element={<Companies />} />
-            <Route path="*" element={<Navigate to="/jobs" replace />} />
+            <Route path="*" element={<Navigate to="/digest" replace />} />
           </Routes>
         </div>
       </main>

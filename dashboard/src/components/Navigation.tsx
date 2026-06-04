@@ -2,12 +2,32 @@ import { NavLink } from 'react-router-dom';
 
 const links = [
   {
+    to: '/digest',
+    label: 'Daily Digest',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="14" height="14" rx="2" />
+        <path d="M3 8h14" />
+        <path d="M8 3v14" />
+      </svg>
+    ),
+  },
+  {
     to: '/jobs',
     label: 'Jobs',
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="9" cy="9" r="6" />
         <path d="M13.5 13.5L17 17" />
+      </svg>
+    ),
+  },
+  {
+    to: '/applied',
+    label: 'Applied',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="4 10 8 14 16 6" />
       </svg>
     ),
   },

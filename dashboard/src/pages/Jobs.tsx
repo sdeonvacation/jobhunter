@@ -32,7 +32,7 @@ export default function Jobs() {
   useEffect(() => {
     fetch('/api/jobs/companies')
       .then((r) => r.json())
-      .then(setCompanies)
+      .then((data: string[]) => setCompanies(data.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))))
       .catch(() => {});
   }, []);
 
@@ -49,6 +49,15 @@ export default function Jobs() {
       setLoading(false);
     }
   }, [params, sort, company]);
+
+  const handleMarkApplied = async (id: string) => {
+    try {
+      await api.jobs.markApplied(id);
+      setJobs((prev) => prev.filter((j) => j.id !== id));
+    } catch (err) {
+      console.error('Failed to mark applied', err);
+    }
+  };
 
   useEffect(() => {
     fetchJobs();
@@ -113,7 +122,7 @@ export default function Jobs() {
       ) : (
         <div className="space-y-3">
           {jobs.map((job) => (
-            <JobCard key={job.id} job={job} />
+            <JobCard key={job.id} job={job} onMarkApplied={handleMarkApplied} />
           ))}
         </div>
       )}

@@ -5,10 +5,13 @@ import dev.jobhub.extraction.ExtractionResult;
 import dev.jobhub.extraction.JobExtractor;
 import dev.jobhub.extraction.JobExtractorRegistry;
 import dev.jobhub.extraction.RawJobData;
+import dev.jobhub.extraction.SmartRecruitersExtractor;
 import dev.jobhub.filter.FilterResult;
 import dev.jobhub.filter.LanguageFilter;
 import dev.jobhub.filter.LocationFilter;
 import dev.jobhub.filter.RoleRelevanceFilter;
+import dev.jobhub.filter.YoeFilter;
+import dev.jobhub.filter.DeduplicationFilter;
 import dev.jobhub.model.CareerEndpoint;
 import dev.jobhub.model.JobPosting;
 import dev.jobhub.model.enums.CrawlStatus;
@@ -32,26 +35,35 @@ public class CrawlService {
     private final CareerEndpointRepository endpointRepository;
     private final JobPostingRepository jobPostingRepository;
     private final JobExtractorRegistry extractorRegistry;
+    private final SmartRecruitersExtractor smartRecruitersExtractor;
     private final LanguageFilter languageFilter;
     private final RoleRelevanceFilter roleRelevanceFilter;
     private final LocationFilter locationFilter;
+    private final YoeFilter yoeFilter;
+    private final DeduplicationFilter deduplicationFilter;
     private final CrawlProperties crawlProperties;
     private final ScoringScheduler scoringScheduler;
 
     public CrawlService(CareerEndpointRepository endpointRepository,
                         JobPostingRepository jobPostingRepository,
                         JobExtractorRegistry extractorRegistry,
+                        SmartRecruitersExtractor smartRecruitersExtractor,
                         LanguageFilter languageFilter,
                         RoleRelevanceFilter roleRelevanceFilter,
                         LocationFilter locationFilter,
+                        YoeFilter yoeFilter,
+                        DeduplicationFilter deduplicationFilter,
                         CrawlProperties crawlProperties,
                         ScoringScheduler scoringScheduler) {
         this.endpointRepository = endpointRepository;
         this.jobPostingRepository = jobPostingRepository;
         this.extractorRegistry = extractorRegistry;
+        this.smartRecruitersExtractor = smartRecruitersExtractor;
         this.languageFilter = languageFilter;
         this.roleRelevanceFilter = roleRelevanceFilter;
         this.locationFilter = locationFilter;
+        this.yoeFilter = yoeFilter;
+        this.deduplicationFilter = deduplicationFilter;
         this.crawlProperties = crawlProperties;
         this.scoringScheduler = scoringScheduler;
     }
@@ -94,6 +106,13 @@ public class CrawlService {
             } catch (Exception e) {
                 log.error("Post-crawl scoring failed (jobs will be scored on next scheduler run)", e);
             }
+        }
+
+        // Backfill descriptions for SmartRecruiters KEEP jobs (fast: only ~50 jobs)
+        try {
+            backfillSmartRecruitersDescriptions();
+        } catch (Exception e) {
+            log.error("SmartRecruiters description backfill failed", e);
         }
 
         return new int[]{endpointsCrawled, totalJobs, errors};
@@ -150,12 +169,21 @@ public class CrawlService {
                     endpoint.getAtsType(), rawJob.externalId());
 
             if (existingOpt.isPresent()) {
-                // Existing job: update lastCrawledAt
+                // Existing job: update lastCrawledAt + backfill missing description
                 JobPosting existing = existingOpt.get();
                 existing.setLastCrawledAt(LocalDateTime.now());
+                if (existing.getDescription() == null && rawJob.description() != null) {
+                    existing.setDescription(rawJob.description());
+                }
+                if (existing.getApplyUrl() == null && rawJob.applyUrl() != null) {
+                    existing.setApplyUrl(rawJob.applyUrl());
+                }
                 jobPostingRepository.save(existing);
             } else {
-                // New job: apply filter cascade (language → role → location)
+                // New job: apply filter cascade (language → role → location → yoe → dedup)
+                String companyName = endpoint.getCompany() != null ? endpoint.getCompany().getName() : "";
+                String fingerprint = deduplicationFilter.generateFingerprint(rawJob.title(), companyName, rawJob.location());
+
                 FilterResult filterResult = languageFilter.filter(rawJob.title(), rawJob.description());
                 if (filterResult.decision() == FilterDecision.KEEP) {
                     FilterResult roleResult = roleRelevanceFilter.filter(rawJob.title());
@@ -165,11 +193,28 @@ public class CrawlService {
                         FilterResult locationResult = locationFilter.filter(rawJob.location());
                         if (locationResult.decision() == FilterDecision.SKIP) {
                             filterResult = locationResult;
+                        } else {
+                            // YOE filter
+                            Integer yoe = yoeFilter.extractYoe(rawJob.description());
+                            FilterResult yoeResult = yoeFilter.filter(yoe);
+                            if (yoeResult.decision() == FilterDecision.SKIP) {
+                                filterResult = yoeResult;
+                            } else {
+                                // Deduplication: check if same title+company already exists
+                                Optional<JobPosting> duplicate = jobPostingRepository
+                                        .findFirstByFingerprintAndLanguageFilter(fingerprint, FilterDecision.KEEP);
+                                if (duplicate.isPresent()) {
+                                    filterResult = FilterResult.skip("duplicate of " + duplicate.get().getSource());
+                                }
+                            }
                         }
                     }
                 }
 
+                Integer yoe = yoeFilter.extractYoe(rawJob.description());
                 JobPosting posting = buildJobPosting(endpoint, rawJob, filterResult);
+                posting.setRequiredYoe(yoe);
+                posting.setFingerprint(fingerprint);
                 jobPostingRepository.save(posting);
                 newJobsCount++;
             }
@@ -231,5 +276,39 @@ public class CrawlService {
         } catch (Exception e) {
             log.error("Failed to mark endpoint error status for [{}]", endpoint.getId(), e);
         }
+    }
+
+    /**
+     * Backfill descriptions for SmartRecruiters KEEP jobs that have no description.
+     * Only fetches details for filtered (visible) jobs, not all 1000+.
+     */
+    @Transactional
+    public int backfillSmartRecruitersDescriptions() {
+        List<JobPosting> jobsWithoutDesc = jobPostingRepository
+                .findBySourceAndLanguageFilterAndDescriptionIsNull(
+                        dev.jobhub.model.enums.AtsType.SMARTRECRUITERS,
+                        FilterDecision.KEEP);
+
+        if (jobsWithoutDesc.isEmpty()) {
+            return 0;
+        }
+
+        log.info("Backfilling descriptions for {} SmartRecruiters KEEP jobs", jobsWithoutDesc.size());
+        int filled = 0;
+
+        for (JobPosting job : jobsWithoutDesc) {
+            String slug = job.getEndpoint() != null ? job.getEndpoint().getAtsSlug() : null;
+            if (slug == null) continue;
+
+            String description = smartRecruitersExtractor.fetchDescription(slug, job.getExternalId());
+            if (description != null) {
+                job.setDescription(description);
+                jobPostingRepository.save(job);
+                filled++;
+            }
+        }
+
+        log.info("Backfilled {}/{} SmartRecruiters descriptions", filled, jobsWithoutDesc.size());
+        return filled;
     }
 }

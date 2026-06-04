@@ -1,8 +1,10 @@
 export interface SearchJobsParams {
   query?: string;
+  company?: string;
   location?: string;
   min_score?: number;
   source?: string;
+  sort?: string;
   limit?: number;
 }
 
@@ -65,7 +67,17 @@ export class JobHubClient {
   }
 
   async searchJobs(params: SearchJobsParams): Promise<unknown> {
-    const query = this.buildQuery(params);
+    const apiParams: Record<string, string> = {};
+    if (params.query) apiParams.query = params.query;
+    if (params.company) apiParams.company = params.company;
+    if (params.location) apiParams.location = params.location;
+    if (params.min_score !== undefined) apiParams.minScore = String(params.min_score);
+    if (params.source) apiParams.source = params.source;
+    if (params.sort) apiParams.sort = params.sort;
+    if (params.limit) apiParams.size = String(params.limit);
+    const query = Object.keys(apiParams).length > 0
+      ? '?' + new URLSearchParams(apiParams).toString()
+      : '';
     return this.request(`/api/jobs${query}`);
   }
 

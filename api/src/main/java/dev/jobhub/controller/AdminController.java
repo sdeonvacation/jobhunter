@@ -37,7 +37,15 @@ public class AdminController {
         return ResponseEntity.ok(new SingleCrawlResult(endpointId, jobsFound));
     }
 
+    @PostMapping("/backfill-descriptions")
+    public ResponseEntity<BackfillResult> backfillDescriptions() {
+        int filled = crawlService.backfillSmartRecruitersDescriptions();
+        return ResponseEntity.ok(new BackfillResult(filled));
+    }
+
     public record CrawlResult(int endpointsProcessed, int jobsFound, int errors) {}
 
     public record SingleCrawlResult(UUID endpointId, int jobsFound) {}
+
+    public record BackfillResult(int descriptionsBackfilled) {}
 }

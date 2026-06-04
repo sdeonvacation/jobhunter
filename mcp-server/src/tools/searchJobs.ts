@@ -2,10 +2,12 @@ import { z } from 'zod';
 import { JobHubClient } from '../client.js';
 
 const inputSchema = z.object({
-  query: z.string().optional().describe('Search query (title, skills, company)'),
+  query: z.string().optional().describe('Search query (title, skills)'),
+  company: z.string().optional().describe('Filter by company name (exact match)'),
   location: z.string().optional().describe('Location filter'),
   min_score: z.number().optional().describe('Minimum OpportunityScore (0-100)'),
-  source: z.enum(['GREENHOUSE', 'LEVER', 'ASHBY', 'WORKDAY', 'STEPSTONE']).optional().describe('ATS source filter'),
+  source: z.enum(['GREENHOUSE', 'LEVER', 'ASHBY', 'WORKDAY', 'SMARTRECRUITERS', 'ARBEITNOW', 'INDEED']).optional().describe('ATS source filter'),
+  sort: z.enum(['matchScore', 'date']).optional().describe('Sort order: matchScore (default) or date'),
   limit: z.number().default(20).describe('Max results to return'),
 });
 

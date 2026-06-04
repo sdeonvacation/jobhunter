@@ -20,5 +20,6 @@ public record JobSummaryDto(
         String salaryCurrency,
         LocalDate postedDate,
         String source,
-        String applyUrl
+        String applyUrl,
+        boolean applied
 ) {}

@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -59,19 +60,44 @@ public class JobController {
 
         Page<JobPosting> jobs;
         if (company != null && !company.isBlank() && location != null && !location.isBlank()) {
-            jobs = jobPostingRepository.findByIsActiveTrueAndLanguageFilterAndCompanyNameAndLocationContainingIgnoreCase(
+            jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndCompanyNameAndLocationContainingIgnoreCase(
                     FilterDecision.KEEP, company, location, pageable);
         } else if (company != null && !company.isBlank()) {
-            jobs = jobPostingRepository.findByIsActiveTrueAndLanguageFilterAndCompanyName(
+            jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndCompanyName(
                     FilterDecision.KEEP, company, pageable);
         } else if (location != null && !location.isBlank()) {
-            jobs = jobPostingRepository.findByIsActiveTrueAndLanguageFilterAndLocationContainingIgnoreCase(
+            jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndLocationContainingIgnoreCase(
                     FilterDecision.KEEP, location, pageable);
         } else {
-            jobs = jobPostingRepository.findByIsActiveTrueAndLanguageFilter(
+            jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilter(
                     FilterDecision.KEEP, pageable);
         }
 
+        return jobs.map(DtoMapper::toJobSummary);
+    }
+
+    @GetMapping("/applied")
+    public Page<JobSummaryDto> getAppliedJobs(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "appliedAt"));
+        Page<JobPosting> jobs = jobPostingRepository.findByIsActiveTrueAndAppliedTrue(pageable);
+        return jobs.map(DtoMapper::toJobSummary);
+    }
+
+    @GetMapping("/today")
+    public Page<JobSummaryDto> getTodayJobs(
+            @RequestParam(defaultValue = "matchScore") String sort,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        Sort sortOrder = switch (sort) {
+            case "date" -> Sort.by(Sort.Direction.DESC, "discoveredDate");
+            default -> Sort.by(Sort.Direction.DESC, "matchScore.overallScore")
+                    .and(Sort.by(Sort.Direction.DESC, "discoveredDate"));
+        };
+        Pageable pageable = PageRequest.of(page, size, sortOrder);
+        Page<JobPosting> jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndDiscoveredDate(
+                FilterDecision.KEEP, LocalDate.now(), pageable);
         return jobs.map(DtoMapper::toJobSummary);
     }
 
@@ -90,6 +116,20 @@ public class JobController {
         JobPosting job = jobOpt.get();
         List<JobSkill> skills = jobSkillRepository.findByJobId(id);
         return ResponseEntity.ok(DtoMapper.toJobDetail(job, skills));
+    }
+
+    @PatchMapping("/{id}/applied")
+    public ResponseEntity<Void> markApplied(@PathVariable UUID id, @RequestBody(required = false) Map<String, Boolean> body) {
+        Optional<JobPosting> jobOpt = jobPostingRepository.findById(id);
+        if (jobOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        JobPosting job = jobOpt.get();
+        boolean applied = body == null || body.getOrDefault("applied", true);
+        job.setApplied(applied);
+        job.setAppliedAt(applied ? java.time.LocalDateTime.now() : null);
+        jobPostingRepository.save(job);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{id}/tech-stack")

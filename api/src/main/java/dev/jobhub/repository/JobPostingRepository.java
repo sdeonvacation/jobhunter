@@ -48,4 +48,25 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     @Query("SELECT DISTINCT j.company.name FROM JobPosting j WHERE j.isActive = true AND j.languageFilter = :filter ORDER BY j.company.name")
     List<String> findDistinctCompanyNamesWithVisibleJobs(@Param("filter") FilterDecision filter);
+
+    @Query("SELECT j FROM JobPosting j LEFT JOIN FETCH j.endpoint WHERE j.source = :source AND j.languageFilter = :filter AND j.description IS NULL AND j.isActive = true")
+    List<JobPosting> findBySourceAndLanguageFilterAndDescriptionIsNull(@Param("source") AtsType source, @Param("filter") FilterDecision filter);
+
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilter(FilterDecision filter, Pageable pageable);
+
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndLocationContainingIgnoreCase(
+            FilterDecision filter, String location, Pageable pageable);
+
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndCompanyName(
+            FilterDecision filter, String companyName, Pageable pageable);
+
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndCompanyNameAndLocationContainingIgnoreCase(
+            FilterDecision filter, String companyName, String location, Pageable pageable);
+
+    Page<JobPosting> findByIsActiveTrueAndAppliedTrue(Pageable pageable);
+
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndDiscoveredDate(
+            FilterDecision filter, java.time.LocalDate discoveredDate, Pageable pageable);
+
+    Optional<JobPosting> findFirstByFingerprintAndLanguageFilter(String fingerprint, FilterDecision filter);
 }

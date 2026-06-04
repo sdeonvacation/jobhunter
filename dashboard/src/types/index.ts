@@ -55,6 +55,7 @@ export interface Job {
   salaryCurrency?: string;
   salaryPeriod?: SalaryPeriod;
   isActive?: boolean;
+  applied?: boolean;
   topSkills: string[];
   matchScore: number;
   opportunityScore: number;
