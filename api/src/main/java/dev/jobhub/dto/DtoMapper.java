@@ -40,7 +40,8 @@ public final class DtoMapper {
                 job.getSalaryMax(),
                 job.getSalaryCurrency(),
                 job.getPostedDate(),
-                job.getSource() != null ? job.getSource().name() : null
+                job.getSource() != null ? job.getSource().name() : null,
+                job.getApplyUrl()
         );
     }
 

@@ -19,5 +19,6 @@ public record JobSummaryDto(
         BigDecimal salaryMax,
         String salaryCurrency,
         LocalDate postedDate,
-        String source
+        String source,
+        String applyUrl
 ) {}

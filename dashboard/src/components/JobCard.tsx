@@ -3,23 +3,22 @@ import ScoreBadge from './ScoreBadge';
 
 interface JobCardProps {
   job: Job;
-  expanded?: boolean;
-  onToggle: () => void;
-  onApply?: (jobId: string) => void;
 }
 
-export default function JobCard({ job, expanded, onToggle, onApply }: JobCardProps) {
+export default function JobCard({ job }: JobCardProps) {
   const salary = formatSalary(job);
   const recommendation = job.recommendation;
 
   return (
-    <div
-      className="bg-surface-800 border border-surface-600 rounded-lg p-5 hover:border-accent/30 transition-all cursor-pointer"
-      onClick={onToggle}
+    <a
+      href={job.applyUrl || '#'}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block bg-surface-800 border border-surface-600 rounded-lg p-5 hover:border-accent/30 transition-all"
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <h3 className="text-base font-semibold text-text-primary truncate">
+          <h3 className="text-base font-semibold text-text-primary truncate hover:text-accent transition-colors">
             {job.title}
           </h3>
           <p className="text-sm text-text-secondary mt-0.5">{job.companyName}</p>
@@ -37,6 +36,9 @@ export default function JobCard({ job, expanded, onToggle, onApply }: JobCardPro
                 {salary}
               </span>
             )}
+            {job.postedDate && (
+              <span className="text-xs text-text-muted">{job.postedDate}</span>
+            )}
           </div>
         </div>
 
@@ -52,41 +54,7 @@ export default function JobCard({ job, expanded, onToggle, onApply }: JobCardPro
           )}
         </div>
       </div>
-
-      {expanded && (
-        <div
-          className="mt-4 pt-4 border-t border-surface-600"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {job.description && (
-            <div
-              className="text-sm text-text-secondary mb-4 max-h-64 overflow-y-auto leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: job.description }}
-            />
-          )}
-          <div className="flex items-center gap-3">
-            {job.applyUrl && (
-              <a
-                href={job.applyUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-primary inline-flex items-center gap-1.5"
-              >
-                Apply Externally
-              </a>
-            )}
-            {onApply && (
-              <button
-                onClick={() => onApply(job.id)}
-                className="bg-success/10 text-success hover:bg-success/20 ring-1 ring-success/30 rounded-md px-4 py-2 text-sm font-medium transition-colors"
-              >
-                Track Application
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+    </a>
   );
 }
 

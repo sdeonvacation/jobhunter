@@ -118,7 +118,7 @@ public class LocationFilterImpl implements LocationFilter {
             return FilterResult.keep();
         }
         if (MULTI_LOCATION_PATTERN.matcher(location).find()) {
-            return FilterResult.keep();
+            return FilterResult.skip("location: ambiguous multi-location");
         }
 
         // Netherlands is explicitly excluded (before remote check)

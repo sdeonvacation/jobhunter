@@ -2,13 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import type { Job, JobSearchParams } from '../types';
 import { api } from '../api/client';
 import JobCard from '../components/JobCard';
-import TechStack from '../components/TechStack';
 
 export default function Jobs() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(0);
 
   const [params, setParams] = useState<JobSearchParams>({
@@ -42,14 +40,6 @@ export default function Jobs() {
     setParams((p) => ({ ...p, page: 0 }));
   };
 
-  const handleApply = async (jobId: string) => {
-    try {
-      await api.pipeline.apply(jobId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to track application');
-    }
-  };
-
   return (
     <div>
       <h1 className="text-2xl font-bold text-text-primary mb-6">Job Search</h1>
@@ -68,15 +58,6 @@ export default function Jobs() {
           value={params.location}
           onChange={(e) => setParams((p) => ({ ...p, location: e.target.value }))}
           className="w-40 bg-surface-800 border border-surface-600 text-text-primary placeholder:text-text-muted rounded-md px-4 py-2.5 focus:border-accent focus:ring-1 focus:ring-accent/30 outline-none text-sm"
-        />
-        <input
-          type="number"
-          placeholder="Min Score"
-          value={params.minScore ?? ''}
-          onChange={(e) =>
-            setParams((p) => ({ ...p, minScore: e.target.value ? Number(e.target.value) : undefined }))
-          }
-          className="w-28 bg-surface-800 border border-surface-600 text-text-primary placeholder:text-text-muted rounded-md px-4 py-2.5 focus:border-accent focus:ring-1 focus:ring-accent/30 outline-none text-sm font-mono"
         />
         <button
           type="submit"
@@ -97,24 +78,12 @@ export default function Jobs() {
       ) : jobs.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-text-muted text-lg mb-2">No jobs found</p>
-          <p className="text-text-muted text-sm">Try adjusting your search filters or broadening your query.</p>
+          <p className="text-text-muted text-sm">Try adjusting your search filters.</p>
         </div>
       ) : (
         <div className="space-y-3">
           {jobs.map((job) => (
-            <div key={job.id}>
-              <JobCard
-                job={job}
-                expanded={expandedId === job.id}
-                onToggle={() => setExpandedId(expandedId === job.id ? null : job.id)}
-                onApply={handleApply}
-              />
-              {expandedId === job.id && job.topSkills && job.topSkills.length > 0 && (
-                <div className="ml-4 mt-2 p-3 bg-surface-800 border border-surface-600 rounded-lg">
-                  <TechStack skills={job.topSkills} />
-                </div>
-              )}
-            </div>
+            <JobCard key={job.id} job={job} />
           ))}
         </div>
       )}
