@@ -7,6 +7,7 @@ import dev.jobhub.extraction.JobExtractorRegistry;
 import dev.jobhub.extraction.RawJobData;
 import dev.jobhub.filter.FilterResult;
 import dev.jobhub.filter.LanguageFilter;
+import dev.jobhub.filter.LocationFilter;
 import dev.jobhub.filter.RoleRelevanceFilter;
 import dev.jobhub.model.CareerEndpoint;
 import dev.jobhub.model.Company;
@@ -45,6 +46,7 @@ class CrawlServiceTest {
     @Mock private JobExtractorRegistry extractorRegistry;
     @Mock private LanguageFilter languageFilter;
     @Mock private RoleRelevanceFilter roleRelevanceFilter;
+    @Mock private LocationFilter locationFilter;
     @Mock private JobExtractor jobExtractor;
     @Mock private ScoringScheduler scoringScheduler;
 
@@ -56,7 +58,8 @@ class CrawlServiceTest {
         properties = new CrawlProperties(4, 2, 50, 30);
         crawlService = new CrawlService(
                 endpointRepository, jobPostingRepository,
-                extractorRegistry, languageFilter, roleRelevanceFilter, properties, scoringScheduler);
+                extractorRegistry, languageFilter, roleRelevanceFilter,
+                locationFilter, properties, scoringScheduler);
     }
 
     @Test
@@ -81,6 +84,7 @@ class CrawlServiceTest {
         when(jobPostingRepository.findByEndpointIdAndIsActiveTrue(endpoint.getId())).thenReturn(List.of());
         when(languageFilter.filter("Engineer", "Java dev role")).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter("Engineer")).thenReturn(FilterResult.keep());
+        when(locationFilter.filter("Berlin")).thenReturn(FilterResult.keep());
         when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
         when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -163,6 +167,7 @@ class CrawlServiceTest {
         when(jobPostingRepository.findByEndpointIdAndIsActiveTrue(endpoint.getId())).thenReturn(List.of(staleJob));
         when(languageFilter.filter(any(), any())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(any())).thenReturn(FilterResult.keep());
+        when(locationFilter.filter(any())).thenReturn(FilterResult.keep());
         when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
         when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
 

@@ -7,6 +7,7 @@ import dev.jobhub.extraction.JobExtractorRegistry;
 import dev.jobhub.extraction.RawJobData;
 import dev.jobhub.filter.FilterResult;
 import dev.jobhub.filter.LanguageFilter;
+import dev.jobhub.filter.LocationFilter;
 import dev.jobhub.filter.RoleRelevanceFilter;
 import dev.jobhub.model.CareerEndpoint;
 import dev.jobhub.model.JobPosting;
@@ -33,6 +34,7 @@ public class CrawlService {
     private final JobExtractorRegistry extractorRegistry;
     private final LanguageFilter languageFilter;
     private final RoleRelevanceFilter roleRelevanceFilter;
+    private final LocationFilter locationFilter;
     private final CrawlProperties crawlProperties;
     private final ScoringScheduler scoringScheduler;
 
@@ -41,6 +43,7 @@ public class CrawlService {
                         JobExtractorRegistry extractorRegistry,
                         LanguageFilter languageFilter,
                         RoleRelevanceFilter roleRelevanceFilter,
+                        LocationFilter locationFilter,
                         CrawlProperties crawlProperties,
                         ScoringScheduler scoringScheduler) {
         this.endpointRepository = endpointRepository;
@@ -48,6 +51,7 @@ public class CrawlService {
         this.extractorRegistry = extractorRegistry;
         this.languageFilter = languageFilter;
         this.roleRelevanceFilter = roleRelevanceFilter;
+        this.locationFilter = locationFilter;
         this.crawlProperties = crawlProperties;
         this.scoringScheduler = scoringScheduler;
     }
@@ -151,12 +155,17 @@ public class CrawlService {
                 existing.setLastCrawledAt(LocalDateTime.now());
                 jobPostingRepository.save(existing);
             } else {
-                // New job: apply language filter, then role relevance filter
+                // New job: apply filter cascade (language → role → location)
                 FilterResult filterResult = languageFilter.filter(rawJob.title(), rawJob.description());
                 if (filterResult.decision() == FilterDecision.KEEP) {
                     FilterResult roleResult = roleRelevanceFilter.filter(rawJob.title());
                     if (roleResult.decision() == FilterDecision.SKIP) {
                         filterResult = roleResult;
+                    } else {
+                        FilterResult locationResult = locationFilter.filter(rawJob.location());
+                        if (locationResult.decision() == FilterDecision.SKIP) {
+                            filterResult = locationResult;
+                        }
                     }
                 }
 
