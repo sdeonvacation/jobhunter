@@ -6,6 +6,7 @@ Runs as a standalone script, inserts jobs directly into PostgreSQL.
 
 import json
 import logging
+import os
 import re
 import uuid
 from datetime import datetime, date
@@ -13,6 +14,7 @@ from typing import Optional
 
 import psycopg2
 import requests
+import yaml
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -25,31 +27,48 @@ DB_CONFIG = {
     "password": "jobhub",
 }
 
-# --- Filters (mirrors Java filters) ---
+# --- Filters (loaded from profile.yaml) ---
 
+PROFILE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "profile.yaml"
+)
+
+
+def _load_profile():
+    with open(PROFILE_PATH, "r") as f:
+        return yaml.safe_load(f)
+
+
+_profile = _load_profile()
+_filters = _profile.get("filters", {})
+_role_cfg = _filters.get("role", {})
+_location_cfg = _filters.get("location", {})
+
+# Build include pattern from profile
+_include_patterns = _role_cfg.get("include-patterns", [])
 ENGINEERING_PATTERN = re.compile(
-    r"(engineer|developer|programmer|\bsre\b|devops|software|backend|frontend|fullstack|"
-    r"full.stack|platform|infrastructure|\bcloud\b|\bml\b|machine.learn|\bsde\b|"
-    r"tech.lead|\bcto\b|\bqa\b|\bsdet\b|site.reliab|\bdevsecops\b|\bk8s\b|kubernetes)",
-    re.IGNORECASE,
-)
-EXCLUDED_ROLES = re.compile(
-    r"(\bmanager\b|\barchitect\b|\banalyst\b|\bdirector\b|\bprincipal\b|"
-    r"\blead\b|\bfrontend\b|\bfront[.\s-]end\b|\bcounsel\b|\bdesigner\b|"
-    r"\brecruiter\b|\bmarketing\b|\bsales\b|\bintern\b|\btrainee\b|\bstudent\b)",
+    "(" + "|".join(_include_patterns) + ")",
     re.IGNORECASE,
 )
 
-GERMANY_PATTERN = re.compile(
-    r"(\bgermany\b|\bdeutschland\b|\bberlin\b|\bmunich\b|\bmünchen\b|\bhamburg\b|\bfrankfurt\b|"
-    r"\bcologne\b|\bköln\b|\bstuttgart\b|\bdüsseldorf\b|\bdortmund\b|\bdresden\b|\bleipzig\b|"
-    r"\bnuremberg\b|\bnürnberg\b|\bhannover\b|\bbremen\b|\bbonn\b|\bmannheim\b|\bkarlsruhe\b|"
-    r"\bheidelberg\b|\bpotsdam\b|\bwalldorf\b|\bfreiburg\b|\bessen\b|\bduisburg\b|"
-    r"\bwiesbaden\b|\bmainz\b|\baachen\b|\bregensburg\b|\baugsburg\b|\brostock\b|\bjena\b|\bbielefeld\b)",
+# Build exclude pattern from profile
+_exclude_keywords = _role_cfg.get("exclude-keywords", [])
+EXCLUDED_ROLES = re.compile(
+    "(" + "|".join(r"\b" + kw + r"\b" for kw in _exclude_keywords) + ")",
     re.IGNORECASE,
 )
+
+# Build location patterns from profile
+_germany_cities = _location_cfg.get("germany-cities", [])
+GERMANY_PATTERN = re.compile(
+    "(" + "|".join(_germany_cities) + ")",
+    re.IGNORECASE,
+)
+
+_remote_patterns = _location_cfg.get("remote-patterns", [])
 REMOTE_PATTERN = re.compile(
-    r"^remote(\s*-\s*(eu|europe|emea|global|worldwide|dach|germany))?$", re.IGNORECASE
+    "(" + "|".join(_remote_patterns) + ")",
+    re.IGNORECASE,
 )
 
 
@@ -58,7 +77,7 @@ def is_target_location(location: str) -> bool:
         return False
     if GERMANY_PATTERN.search(location):
         return True
-    if REMOTE_PATTERN.match(location.strip()):
+    if REMOTE_PATTERN.search(location.strip()):
         return True
     return False
 
