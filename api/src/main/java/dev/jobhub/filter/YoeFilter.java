@@ -18,9 +18,9 @@ public class YoeFilter {
 
     private final int maxYoe;
 
-    // Matches patterns like "5+ years of experience", "3 years experience", "7 yrs of professional experience"
+    // Matches patterns like "5+ years of experience", "3 years experience", "7 yrs of software development experience"
     private static final Pattern YOE_PATTERN = Pattern.compile(
-            "(\\d+)\\+?\\s*(?:years?|yrs?)\\s*(?:of\\s+)?(?:professional\\s+|relevant\\s+|hands-on\\s+|industry\\s+|work\\s+|software\\s+|engineering\\s+|proven\\s+|solid\\s+|demonstrable\\s+|practical\\s+|minimum\\s+|direct\\s+)?(?:experience|exp)",
+            "(\\d+)\\+?\\s*(?:years?|yrs?)\\s*(?:of\\s+)?(?:[\\w-]+\\s+){0,2}(?:experience|exp)",
             Pattern.CASE_INSENSITIVE
     );
 
