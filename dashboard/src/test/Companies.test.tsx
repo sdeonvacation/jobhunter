@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import Companies from '../pages/Companies';
 import { api } from '../api/client';
 
@@ -7,9 +7,18 @@ vi.mock('../api/client', () => ({
   api: {
     companies: {
       list: vi.fn(),
+      updatePriority: vi.fn(),
     },
   },
 }));
+
+const mockPageResponse = (companies: any[], totalElements?: number, totalPages?: number) => ({
+  content: companies,
+  totalElements: totalElements ?? companies.length,
+  totalPages: totalPages ?? 1,
+  number: 0,
+  size: 20,
+});
 
 const mockCompanies = [
   {
@@ -18,7 +27,7 @@ const mockCompanies = [
     domain: 'acme.com',
     country: 'DE',
     status: 'ACTIVE' as const,
-    priorityScore: 85.5,
+    priorityScore: 4,
     endpointCount: 3,
     interviewRate: 0.25,
     totalApplications: 8,
@@ -29,7 +38,7 @@ const mockCompanies = [
     domain: 'beta.io',
     country: 'US',
     status: 'DISCOVERED' as const,
-    priorityScore: 42.0,
+    priorityScore: 2,
     endpointCount: 1,
     interviewRate: 0,
     totalApplications: 0,
@@ -41,8 +50,8 @@ describe('Companies page', () => {
     vi.clearAllMocks();
   });
 
-  it('renders company list with endpointCount', async () => {
-    vi.mocked(api.companies.list).mockResolvedValue(mockCompanies as any);
+  it('renders company list from page response', async () => {
+    vi.mocked(api.companies.list).mockResolvedValue(mockPageResponse(mockCompanies));
 
     render(<Companies />);
 
@@ -51,17 +60,13 @@ describe('Companies page', () => {
     });
 
     expect(screen.getByText('Beta Inc')).toBeInTheDocument();
-    // endpointCount rendered
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();
-    // Priority score
-    expect(screen.getByText('85.5')).toBeInTheDocument();
-    // Interview rate
     expect(screen.getByText('25%')).toBeInTheDocument();
   });
 
   it('shows empty state when no companies', async () => {
-    vi.mocked(api.companies.list).mockResolvedValue([]);
+    vi.mocked(api.companies.list).mockResolvedValue(mockPageResponse([]));
 
     render(<Companies />);
 
@@ -80,6 +85,123 @@ describe('Companies page', () => {
     });
   });
 
+  it('displays pagination controls', async () => {
+    vi.mocked(api.companies.list).mockResolvedValue(mockPageResponse(mockCompanies, 45, 3));
+
+    render(<Companies />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Page 1 of 3')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('45 companies')).toBeInTheDocument();
+    expect(screen.getByText('Previous')).toBeDisabled();
+    expect(screen.getByText('Next')).not.toBeDisabled();
+  });
+
+  it('navigates to next page', async () => {
+    vi.mocked(api.companies.list)
+      .mockResolvedValueOnce(mockPageResponse(mockCompanies, 45, 3))
+      .mockResolvedValueOnce({ content: mockCompanies, totalElements: 45, totalPages: 3, number: 1, size: 20 });
+
+    render(<Companies />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Page 1 of 3')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Next'));
+
+    await waitFor(() => {
+      expect(vi.mocked(api.companies.list)).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 1, size: 20 })
+      );
+    });
+  });
+
+  it('resets page on status filter change', async () => {
+    vi.mocked(api.companies.list).mockResolvedValue(mockPageResponse(mockCompanies, 45, 3));
+
+    render(<Companies />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('ACTIVE'));
+
+    await waitFor(() => {
+      expect(vi.mocked(api.companies.list)).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'ACTIVE', page: 0 })
+      );
+    });
+  });
+
+  it('renders search input and debounces search', async () => {
+    vi.useFakeTimers();
+    vi.mocked(api.companies.list).mockResolvedValue(mockPageResponse(mockCompanies));
+
+    render(<Companies />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+    });
+
+    const searchInput = screen.getByPlaceholderText('Search companies...');
+    expect(searchInput).toBeInTheDocument();
+
+    fireEvent.change(searchInput, { target: { value: 'acme' } });
+
+    // Not called immediately with search
+    expect(vi.mocked(api.companies.list)).not.toHaveBeenCalledWith(
+      expect.objectContaining({ search: 'acme' })
+    );
+
+    // After debounce
+    vi.advanceTimersByTime(300);
+
+    await waitFor(() => {
+      expect(vi.mocked(api.companies.list)).toHaveBeenCalledWith(
+        expect.objectContaining({ search: 'acme', page: 0 })
+      );
+    });
+
+    vi.useRealTimers();
+  });
+
+  it('renders priority dots for each company', async () => {
+    vi.mocked(api.companies.list).mockResolvedValue(mockPageResponse(mockCompanies));
+
+    render(<Companies />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+    });
+
+    // Each company has 5 priority dot buttons
+    const priorityButtons = screen.getAllByRole('button', { name: /Set priority/ });
+    expect(priorityButtons.length).toBe(10); // 2 companies * 5 dots
+  });
+
+  it('calls updatePriority on dot click with optimistic update', async () => {
+    vi.mocked(api.companies.list).mockResolvedValue(mockPageResponse(mockCompanies));
+    vi.mocked(api.companies.updatePriority).mockResolvedValue(undefined);
+
+    render(<Companies />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+    });
+
+    // Click priority 5 on first company
+    const buttons = screen.getAllByRole('button', { name: 'Set priority 5' });
+    fireEvent.click(buttons[0]);
+
+    await waitFor(() => {
+      expect(api.companies.updatePriority).toHaveBeenCalledWith('1', 5);
+    });
+  });
+
   it('does not crash when careerEndpoints and endpointCount both missing', async () => {
     const minimal = [{
       id: '3',
@@ -89,37 +211,55 @@ describe('Companies page', () => {
       interviewRate: 0,
       totalApplications: 0,
     }];
-    vi.mocked(api.companies.list).mockResolvedValue(minimal as any);
+    vi.mocked(api.companies.list).mockResolvedValue(mockPageResponse(minimal));
 
     render(<Companies />);
 
     await waitFor(() => {
       expect(screen.getByText('Minimal Co')).toBeInTheDocument();
     });
-    // endpointCount falls back to 0
     expect(screen.getByText('0')).toBeInTheDocument();
   });
 
-  it('uses careerEndpoints.length as fallback when endpointCount absent', async () => {
-    const withEndpoints = [{
-      id: '4',
-      name: 'Legacy Co',
+  it('maps legacy 0-100 priority scores to 1-5 dots', async () => {
+    const legacy = [{
+      id: '5',
+      name: 'Legacy Score Co',
       status: 'ACTIVE' as const,
-      priorityScore: 50.0,
-      interviewRate: 0.5,
-      totalApplications: 2,
-      careerEndpoints: [
-        { id: 'e1', url: 'https://example.com', atsType: 'GREENHOUSE', verified: true, isActive: true },
-        { id: 'e2', url: 'https://example.com/2', atsType: 'LEVER', verified: false, isActive: true },
-      ],
+      priorityScore: 85.0, // Should map to priority 5
+      interviewRate: 0,
+      totalApplications: 0,
+      endpointCount: 1,
     }];
-    vi.mocked(api.companies.list).mockResolvedValue(withEndpoints as any);
+    vi.mocked(api.companies.list).mockResolvedValue(mockPageResponse(legacy));
 
     render(<Companies />);
 
     await waitFor(() => {
-      expect(screen.getByText('Legacy Co')).toBeInTheDocument();
+      expect(screen.getByText('Legacy Score Co')).toBeInTheDocument();
     });
-    expect(screen.getByText('2')).toBeInTheDocument();
+
+    // All 5 dots should be present
+    const buttons = screen.getAllByRole('button', { name: /Set priority/ });
+    expect(buttons.length).toBe(5);
+  });
+
+  it('shows singular "company" for count of 1', async () => {
+    const single = [{
+      id: '6',
+      name: 'Solo Co',
+      status: 'ACTIVE' as const,
+      priorityScore: 3,
+      interviewRate: 0,
+      totalApplications: 0,
+      endpointCount: 0,
+    }];
+    vi.mocked(api.companies.list).mockResolvedValue(mockPageResponse(single, 1, 1));
+
+    render(<Companies />);
+
+    await waitFor(() => {
+      expect(screen.getByText('1 company')).toBeInTheDocument();
+    });
   });
 });

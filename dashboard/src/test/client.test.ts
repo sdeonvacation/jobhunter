@@ -97,30 +97,31 @@ describe('api.companies', () => {
     vi.restoreAllMocks();
   });
 
-  it('list() unwraps PageResponse content', async () => {
+  it('list() returns PageResponse', async () => {
     const companies = [{ id: '1', name: 'Acme' }];
+    const pageResponse = {
+      content: companies,
+      totalElements: 1,
+      totalPages: 1,
+      number: 0,
+      size: 20,
+    };
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({
-        content: companies,
-        totalElements: 1,
-        totalPages: 1,
-        number: 0,
-        size: 100,
-      }),
+      json: () => Promise.resolve(pageResponse),
     });
 
     const result = await api.companies.list();
 
     expect(fetch).toHaveBeenCalledWith(
-      '/api/companies?size=100',
+      '/api/companies?page=0&size=20',
       expect.any(Object),
     );
-    expect(result).toEqual(companies);
+    expect(result).toEqual(pageResponse);
   });
 
-  it('list() passes status filter in query string', async () => {
+  it('list() passes status and search filters in query string', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -129,14 +130,14 @@ describe('api.companies', () => {
         totalElements: 0,
         totalPages: 0,
         number: 0,
-        size: 100,
+        size: 20,
       }),
     });
 
-    await api.companies.list('ACTIVE');
+    await api.companies.list({ status: 'ACTIVE', search: 'acme', page: 1, size: 20 });
 
     expect(fetch).toHaveBeenCalledWith(
-      '/api/companies?status=ACTIVE&size=100',
+      '/api/companies?status=ACTIVE&search=acme&page=1&size=20',
       expect.any(Object),
     );
   });

@@ -10,20 +10,19 @@ import dev.jobhub.repository.CompanyRepository;
 import dev.jobhub.repository.JobPostingRepository;
 import dev.jobhub.service.CompanyService;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/companies")
-@org.springframework.transaction.annotation.Transactional(readOnly = true)
+@Transactional(readOnly = true)
 public class CompanyController {
 
     private final CompanyRepository companyRepository;
@@ -41,30 +40,30 @@ public class CompanyController {
     @GetMapping
     public Page<CompanySummaryDto> listCompanies(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "priorityScore") String sort) {
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, sort));
 
-        List<Company> companies;
-        if (status != null && !status.isBlank()) {
+        Page<Company> companies;
+        boolean hasStatus = status != null && !status.isBlank();
+        boolean hasSearch = search != null && !search.isBlank();
+
+        if (hasStatus && hasSearch) {
             CompanyStatus companyStatus = CompanyStatus.valueOf(status.toUpperCase());
-            companies = companyRepository.findByStatus(companyStatus);
+            companies = companyRepository.findByStatusAndNameContaining(companyStatus, search, pageable);
+        } else if (hasStatus) {
+            CompanyStatus companyStatus = CompanyStatus.valueOf(status.toUpperCase());
+            companies = companyRepository.findByStatus(companyStatus, pageable);
+        } else if (hasSearch) {
+            companies = companyRepository.findByIsActiveTrueAndNameContaining(search, pageable);
         } else {
-            companies = companyRepository.findByIsActiveTrue();
+            companies = companyRepository.findByIsActiveTrue(pageable);
         }
 
-        List<CompanySummaryDto> dtos = companies.stream()
-                .map(DtoMapper::toCompanySummary)
-                .toList();
-
-        // Manual pagination since repo returns List
-        int start = Math.min((int) pageable.getOffset(), dtos.size());
-        int end = Math.min(start + pageable.getPageSize(), dtos.size());
-        List<CompanySummaryDto> pageContent = dtos.subList(start, end);
-
-        return new PageImpl<>(pageContent, pageable, dtos.size());
+        return companies.map(DtoMapper::toCompanySummary);
     }
 
     @GetMapping("/{id}")
@@ -83,6 +82,7 @@ public class CompanyController {
     }
 
     @PostMapping
+    @Transactional
     public ResponseEntity<CompanySummaryDto> addCompany(@RequestBody AddCompanyRequest request) {
         if (request.name() == null || request.name().isBlank()) {
             return ResponseEntity.badRequest().build();
@@ -100,5 +100,23 @@ public class CompanyController {
         return ResponseEntity.ok(DtoMapper.toCompanySummary(saved));
     }
 
+    @PatchMapping("/{id}/priority")
+    @Transactional
+    public ResponseEntity<Void> updatePriority(@PathVariable UUID id, @RequestBody PriorityRequest request) {
+        if (request.priority() < 1 || request.priority() > 5) {
+            return ResponseEntity.badRequest().build();
+        }
+        Optional<Company> opt = companyRepository.findById(id);
+        if (opt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        Company company = opt.get();
+        company.setPriorityScore((double) request.priority());
+        companyRepository.save(company);
+        return ResponseEntity.ok().build();
+    }
+
     public record AddCompanyRequest(String name, String domain, String country, String careersUrl) {}
+
+    public record PriorityRequest(int priority) {}
 }

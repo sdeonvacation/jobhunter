@@ -18,6 +18,7 @@ import {
   getDiscoveryStatsTool,
   getSourceQualityTool,
   addCompanyTool,
+  getTopJobsKeywordsTool,
 } from './tools/index.js';
 import { profileResources, jobResources } from './resources/index.js';
 
@@ -46,6 +47,7 @@ const tools = [
   getDiscoveryStatsTool,
   getSourceQualityTool,
   addCompanyTool,
+  getTopJobsKeywordsTool,
 ] as const;
 
 for (const tool of tools) {

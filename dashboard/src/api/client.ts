@@ -42,7 +42,9 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   if (response.status === 204) return undefined as T;
-  return response.json();
+  const text = await response.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text);
 }
 
 function toQueryString(params: Record<string, unknown>): string {
@@ -88,9 +90,13 @@ export const api = {
   },
 
   companies: {
-    list(status?: string): Promise<Company[]> {
-      const qs = status ? `?status=${status}&size=100` : '?size=100';
-      return fetchApi<PageResponse<Company>>(`/api/companies${qs}`).then(r => r.content);
+    list(params?: { status?: string; search?: string; page?: number; size?: number }): Promise<PageResponse<Company>> {
+      const qs = new URLSearchParams();
+      if (params?.status) qs.set('status', params.status);
+      if (params?.search) qs.set('search', params.search);
+      qs.set('page', String(params?.page ?? 0));
+      qs.set('size', String(params?.size ?? 20));
+      return fetchApi<PageResponse<Company>>(`/api/companies?${qs.toString()}`);
     },
     getById(id: string): Promise<Company> {
       return fetchApi(`/api/companies/${id}`);
@@ -99,6 +105,12 @@ export const api = {
       return fetchApi('/api/companies', {
         method: 'POST',
         body: JSON.stringify(data),
+      });
+    },
+    updatePriority(id: string, priority: number): Promise<void> {
+      return fetchApi(`/api/companies/${id}/priority`, {
+        method: 'PATCH',
+        body: JSON.stringify({ priority }),
       });
     },
   },

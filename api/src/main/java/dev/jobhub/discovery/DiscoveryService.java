@@ -15,6 +15,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -128,6 +131,46 @@ public class DiscoveryService {
                 registered, alreadyExists, newEndpoints, failed);
 
         return new int[]{deduplicated.size(), registered, alreadyExists, failed};
+    }
+
+    /**
+     * Resolve career endpoints for DISCOVERED companies that have no endpoints yet.
+     * Returns stats: [total, resolved, failed, skipped]
+     */
+    @Transactional
+    public int[] resolveDiscoveredCompanies(Integer limit) {
+        Pageable pageable = limit != null ? PageRequest.of(0, limit) : Pageable.unpaged();
+        List<Company> companies = companyRepository.findByStatusAndNoEndpoints(CompanyStatus.DISCOVERED, pageable);
+
+        log.info("Resolving endpoints for {} discovered companies without endpoints", companies.size());
+
+        int resolved = 0;
+        int failed = 0;
+        int skipped = 0;
+
+        for (Company company : companies) {
+            try {
+                ResolutionResultDto resolution = endpointResolver.resolve(company.getName(), company.getDomain());
+
+                if (resolution.selectedUrl() != null && resolution.confidence() != Confidence.AMBIGUOUS) {
+                    createCareerEndpoint(company, resolution);
+                    persistResolutionResult(company, resolution);
+                    resolved++;
+                } else {
+                    skipped++;
+                    log.debug("Skipped '{}': no confident resolution (confidence={})",
+                            company.getName(), resolution.confidence());
+                }
+            } catch (Exception e) {
+                failed++;
+                log.warn("Failed to resolve endpoint for '{}': {}", company.getName(), e.getMessage());
+            }
+        }
+
+        log.info("Resolution batch complete: total={}, resolved={}, failed={}, skipped={}",
+                companies.size(), resolved, failed, skipped);
+
+        return new int[]{companies.size(), resolved, failed, skipped};
     }
 
     private DiscoveryOutcome processDiscoveredCompany(String normalizedName, DiscoveredCompany discovered) {

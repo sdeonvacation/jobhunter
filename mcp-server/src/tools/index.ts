@@ -14,3 +14,4 @@ export { getProfileTool } from './getProfile.js';
 export { getDiscoveryStatsTool } from './getDiscoveryStats.js';
 export { getSourceQualityTool } from './getSourceQuality.js';
 export { addCompanyTool } from './addCompany.js';
+export { getTopJobsKeywordsTool } from './getTopJobsKeywords.js';

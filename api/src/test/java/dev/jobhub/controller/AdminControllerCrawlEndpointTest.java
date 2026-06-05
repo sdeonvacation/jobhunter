@@ -1,8 +1,10 @@
 package dev.jobhub.controller;
 
 import dev.jobhub.controller.AdminController.SingleCrawlResult;
+import dev.jobhub.discovery.DiscoveryService;
 import dev.jobhub.model.CareerEndpoint;
 import dev.jobhub.repository.CareerEndpointRepository;
+import dev.jobhub.scheduler.ScoringScheduler;
 import dev.jobhub.service.CrawlService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,12 +25,14 @@ class AdminControllerCrawlEndpointTest {
 
     @Mock private CrawlService crawlService;
     @Mock private CareerEndpointRepository careerEndpointRepository;
+    @Mock private ScoringScheduler scoringScheduler;
+    @Mock private DiscoveryService discoveryService;
 
     private AdminController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new AdminController(crawlService, careerEndpointRepository);
+        controller = new AdminController(crawlService, careerEndpointRepository, scoringScheduler, discoveryService);
     }
 
     @Test

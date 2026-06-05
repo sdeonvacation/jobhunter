@@ -1,5 +1,6 @@
 package dev.jobhub.controller;
 
+import dev.jobhub.discovery.DiscoveryService;
 import dev.jobhub.model.CareerEndpoint;
 import dev.jobhub.model.enums.CrawlStatus;
 import dev.jobhub.repository.CareerEndpointRepository;
@@ -19,12 +20,14 @@ public class AdminController {
     private final CrawlService crawlService;
     private final CareerEndpointRepository careerEndpointRepository;
     private final ScoringScheduler scoringScheduler;
+    private final DiscoveryService discoveryService;
 
     public AdminController(CrawlService crawlService, CareerEndpointRepository careerEndpointRepository,
-                           ScoringScheduler scoringScheduler) {
+                           ScoringScheduler scoringScheduler, DiscoveryService discoveryService) {
         this.crawlService = crawlService;
         this.careerEndpointRepository = careerEndpointRepository;
         this.scoringScheduler = scoringScheduler;
+        this.discoveryService = discoveryService;
     }
 
     @PostMapping("/crawl")
@@ -54,6 +57,12 @@ public class AdminController {
     public ResponseEntity<String> triggerScoring() {
         scoringScheduler.scoreAllUnscored();
         return ResponseEntity.ok("Scoring complete");
+    }
+
+    @PostMapping("/resolve")
+    public ResponseEntity<ResolveResult> triggerResolve(@RequestParam(required = false) Integer limit) {
+        int[] stats = discoveryService.resolveDiscoveredCompanies(limit);
+        return ResponseEntity.ok(new ResolveResult(stats[0], stats[1], stats[2], stats[3]));
     }
 
     @GetMapping("/health")
@@ -100,6 +109,7 @@ public class AdminController {
     public record CrawlResult(int endpointsProcessed, int jobsFound, int errors) {}
     public record SingleCrawlResult(UUID endpointId, int jobsFound) {}
     public record BackfillResult(int descriptionsBackfilled) {}
+    public record ResolveResult(int total, int resolved, int failed, int skipped) {}
 
     public record EndpointHealth(
             UUID id, String companyName, String atsType, String atsSlug,
