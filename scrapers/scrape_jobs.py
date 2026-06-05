@@ -335,6 +335,14 @@ def main():
     conn.close()
     log.info(f"=== Done. Total new jobs: {total_inserted} ===")
 
+    # Trigger scoring for newly inserted jobs
+    if total_inserted > 0:
+        try:
+            resp = requests.post("http://localhost:8080/api/admin/score", timeout=60)
+            log.info(f"Scoring triggered: {resp.status_code} {resp.text}")
+        except Exception as e:
+            log.warning(f"Could not trigger scoring (API down?): {e}")
+
 
 if __name__ == "__main__":
     main()
