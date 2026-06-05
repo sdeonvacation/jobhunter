@@ -15,6 +15,7 @@ from typing import Optional
 import psycopg2
 import requests
 import yaml
+from langdetect import detect_langs, LangDetectException
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -82,35 +83,23 @@ def is_target_location(location: str) -> bool:
     return False
 
 
-# German-language title indicators
-GERMAN_TITLE_PATTERN = re.compile(
-    r"(\bm/w/d\b|\bw/m/d\b|\(m/w/d\)|\(w/m/d\)|\(m\|w\|d\)|\(w\|m\|d\)|\(all genders\)|"
-    r"\bf/m/d\b|\(f/m/d\)|\(f\|m\|d\)|"
-    r"Entwickler|Ingenieur|Berater|Sachbearbeiter|Werkstudent|Pflicht|"
-    r"Fachinformatiker|Führung|Referent|Spezialist|Teamleitung|Leiter)",
-    re.IGNORECASE,
-)
+GERMAN_CONFIDENCE_THRESHOLD = 0.7
+MIN_TEXT_LENGTH_FOR_DETECTION = 50
 
 
 def is_german_language(title: str, description: str) -> bool:
-    """Detect German-language postings by title or description start."""
-    if GERMAN_TITLE_PATTERN.search(title or ""):
-        return True
-    desc_start = (description or "")[:200].lower()
-    german_indicators = [
-        "wir ",
-        "als ",
-        "du ",
-        "ihre ",
-        "unser ",
-        "die stelle",
-        "über uns",
-        "aufgaben",
-        "anforderungen",
-        "qualifikation",
-        "bewerbung",
-    ]
-    return any(ind in desc_start for ind in german_indicators)
+    """Detect German-language postings using statistical language detection."""
+    text = ((title or "") + " " + (description or "")).strip()
+    if len(text) < MIN_TEXT_LENGTH_FOR_DETECTION:
+        return False
+    try:
+        langs = detect_langs(text[:1000])
+        for lang in langs:
+            if lang.lang == "de" and lang.prob >= GERMAN_CONFIDENCE_THRESHOLD:
+                return True
+    except LangDetectException:
+        pass
+    return False
 
 
 def is_relevant_title(title: str) -> bool:
