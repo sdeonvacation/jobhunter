@@ -33,7 +33,12 @@ ENGINEERING_PATTERN = re.compile(
     r"tech.lead|\bcto\b|\bqa\b|\bsdet\b|site.reliab|\bdevsecops\b|\bk8s\b|kubernetes)",
     re.IGNORECASE,
 )
-EXCLUDED_ROLES = re.compile(r"(\bmanager\b|\barchitect\b|\banalyst\b)", re.IGNORECASE)
+EXCLUDED_ROLES = re.compile(
+    r"(\bmanager\b|\barchitect\b|\banalyst\b|\bdirector\b|\bprincipal\b|"
+    r"\blead\b|\bfrontend\b|\bfront[.\s-]end\b|\bcounsel\b|\bdesigner\b|"
+    r"\brecruiter\b|\bmarketing\b|\bsales\b|\bintern\b|\btrainee\b|\bstudent\b)",
+    re.IGNORECASE,
+)
 
 GERMANY_PATTERN = re.compile(
     r"(\bgermany\b|\bdeutschland\b|\bberlin\b|\bmunich\b|\bmünchen\b|\bhamburg\b|\bfrankfurt\b|"
@@ -60,7 +65,8 @@ def is_target_location(location: str) -> bool:
 
 # German-language title indicators
 GERMAN_TITLE_PATTERN = re.compile(
-    r"(\bm/w/d\b|\bw/m/d\b|\(m/w/d\)|\(w/m/d\)|\(all genders\)|"
+    r"(\bm/w/d\b|\bw/m/d\b|\(m/w/d\)|\(w/m/d\)|\(m\|w\|d\)|\(w\|m\|d\)|\(all genders\)|"
+    r"\bf/m/d\b|\(f/m/d\)|\(f\|m\|d\)|"
     r"Entwickler|Ingenieur|Berater|Sachbearbeiter|Werkstudent|Pflicht|"
     r"Fachinformatiker|Führung|Referent|Spezialist|Teamleitung|Leiter)",
     re.IGNORECASE,
