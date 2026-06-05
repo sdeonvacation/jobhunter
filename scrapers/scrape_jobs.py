@@ -96,6 +96,16 @@ def is_relevant_title(title: str) -> bool:
     return bool(ENGINEERING_PATTERN.search(title))
 
 
+def load_companies_with_endpoints(cur) -> set:
+    """Load normalized names of companies that have active career endpoints."""
+    cur.execute(
+        "SELECT c.normalized_name FROM company c "
+        "JOIN career_endpoint ce ON ce.company_id = c.id "
+        "WHERE ce.is_active = true"
+    )
+    return {row[0] for row in cur.fetchall()}
+
+
 def get_or_create_company(cur, company_name: str) -> str:
     """Get existing company or create a new one. Returns company UUID."""
     if not company_name:
@@ -127,11 +137,21 @@ def get_or_create_company(cur, company_name: str) -> str:
     return company_id
 
 
-def insert_job(cur, job: dict, source: str) -> bool:
+def insert_job(
+    cur, job: dict, source: str, companies_with_endpoints: Optional[set] = None
+) -> bool:
     """Insert a job if it doesn't already exist. Returns True if inserted."""
     external_id = job.get("external_id")
     if not external_id:
         return False
+
+    # Skip jobs from companies that already have an active career endpoint
+    # (those companies are crawled directly with better apply URLs)
+    company_name = job.get("company_name", "")
+    if companies_with_endpoints and company_name:
+        normalized = re.sub(r"[^a-z0-9]", "", company_name.lower())[:255]
+        if normalized in companies_with_endpoints:
+            return False
 
     # Check if exists
     cur.execute(
@@ -297,6 +317,12 @@ def main():
     conn.autocommit = False
     cur = conn.cursor()
 
+    # Load companies already tracked via career endpoints (skip their Indeed duplicates)
+    companies_with_endpoints = load_companies_with_endpoints(cur)
+    log.info(
+        f"Loaded {len(companies_with_endpoints)} companies with active endpoints (will skip)"
+    )
+
     total_inserted = 0
 
     # 1. Arbeitnow
@@ -304,7 +330,7 @@ def main():
     arbeitnow_jobs = scrape_arbeitnow(max_pages=10)
     inserted = 0
     for job in arbeitnow_jobs:
-        if insert_job(cur, job, "ARBEITNOW"):
+        if insert_job(cur, job, "ARBEITNOW", companies_with_endpoints):
             inserted += 1
     conn.commit()
     log.info(f"Arbeitnow: {len(arbeitnow_jobs)} fetched, {inserted} new inserted")
@@ -325,7 +351,7 @@ def main():
     jobspy_jobs = scrape_jobspy(search_terms, location="Germany", results_wanted=30)
     inserted = 0
     for job in jobspy_jobs:
-        if insert_job(cur, job, "INDEED"):
+        if insert_job(cur, job, "INDEED", companies_with_endpoints):
             inserted += 1
     conn.commit()
     log.info(f"JobSpy: {len(jobspy_jobs)} fetched, {inserted} new inserted")
