@@ -257,3 +257,9 @@ scoring:
     go: ["\\bgolang\\b", "\\bgo\\b"]
     react: ["\\breact\\b"]
     ai/ml: ["ai", "machine learning", "llm"]
+
+# LinkedIn job search configuration
+linkedin-search:
+  query: '(software OR java OR backend) AND (developer OR engineer OR associate) NOT graduate NOT lead NOT junior NOT staff NOT principal'
+  locations: ["Germany", "Remote"]
+  date-posted: week

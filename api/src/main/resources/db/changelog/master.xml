@@ -7,5 +7,6 @@
 
     <include file="db/changelog/001-initial-schema.sql"/>
     <include file="db/changelog/002-seed-companies.sql"/>
+    <include file="db/changelog/003-linkedin-integration.sql"/>
 
 </databaseChangeLog>

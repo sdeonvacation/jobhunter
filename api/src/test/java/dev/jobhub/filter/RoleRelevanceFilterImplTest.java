@@ -24,7 +24,7 @@ class RoleRelevanceFilterImplTest {
         when(loader.getProfile()).thenReturn(new PersonalProfile(
                 "", "", 0, List.of(),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
-                null, null));
+                null, null, null));
         filter = new RoleRelevanceFilterImpl(loader);
     }
 

@@ -1,7 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Job, JobSearchParams } from '../types';
 import { api } from '../api/client';
 import JobCard from '../components/JobCard';
+
+type SourceTab = 'ats' | 'indeed' | 'linkedin';
+
+const TAB_LABELS: Record<SourceTab, string> = {
+  ats: 'ATS',
+  indeed: 'Indeed',
+  linkedin: 'LinkedIn',
+};
 
 const LOCATIONS = [
   { value: '', label: 'All Locations' },
@@ -18,9 +26,11 @@ export default function Jobs() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
   const [sort, setSort] = useState('matchScore');
   const [companies, setCompanies] = useState<string[]>([]);
   const [company, setCompany] = useState('');
+  const [sourceTab, setSourceTab] = useState<SourceTab>('ats');
 
   const [params, setParams] = useState<JobSearchParams>({
     query: '',
@@ -40,15 +50,16 @@ export default function Jobs() {
     setLoading(true);
     setError(null);
     try {
-      const result = await api.jobs.search({ ...params, sort, company: company || undefined });
+      const result = await api.jobs.search({ ...params, sort, company: company || undefined, source: sourceTab });
       setJobs(result.content);
       setTotalPages(result.totalPages);
+      setTotalElements(result.totalElements);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch jobs');
     } finally {
       setLoading(false);
     }
-  }, [params, sort, company]);
+  }, [params, sort, company, sourceTab]);
 
   const handleMarkApplied = async (id: string) => {
     try {
@@ -59,6 +70,18 @@ export default function Jobs() {
     }
   };
 
+  const tabCounts = useMemo(() => ({
+    ats: sourceTab === 'ats' ? totalElements : null,
+    indeed: sourceTab === 'indeed' ? totalElements : null,
+    linkedin: sourceTab === 'linkedin' ? totalElements : null,
+  }), [totalElements, sourceTab]);
+
+  // Remove client-side filtering - backend handles source filtering now
+  useEffect(() => {
+    // Reset to page 0 when tab changes
+    setParams((prev) => ({ ...prev, page: 0 }));
+  }, [sourceTab]);
+
   useEffect(() => {
     fetchJobs();
   }, [fetchJobs]);
@@ -66,6 +89,23 @@ export default function Jobs() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-text-primary mb-6">Job Search</h1>
+
+      <div className="flex gap-1 mb-4">
+        {(['ats', 'indeed', 'linkedin'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setSourceTab(tab)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              sourceTab === tab
+                ? 'bg-accent/20 text-accent border border-accent/30'
+                : 'text-text-muted hover:text-text-secondary hover:bg-surface-700'
+            }`}
+          >
+            {TAB_LABELS[tab]}
+            <span className="ml-1.5 text-xs font-mono opacity-70">{tabCounts[tab]}</span>
+          </button>
+        ))}
+      </div>
 
       <div className="flex gap-3 mb-6 flex-wrap">
         {/* Search input with icon and focus glow */}

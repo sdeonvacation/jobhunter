@@ -2,18 +2,39 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: jobhunter
-      POSTGRES_USER: jobhunter
-      POSTGRES_PASSWORD: jobhunter
+      POSTGRES_DB: jobhub
+      POSTGRES_USER: jobhub
+      POSTGRES_PASSWORD: jobhub
     ports:
       - "5435:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U jobhunter -d jobhunter"]
+      test: ["CMD-SHELL", "pg_isready -U jobhub -d jobhub"]
       interval: 5s
       timeout: 3s
       retries: 5
+
+  linkedin-mcp:
+    image: stickerdaniel/linkedin-mcp-server:latest
+    platform: linux/arm64
+    ports:
+      - "8000:8000"
+    environment:
+      TRANSPORT: streamable-http
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      HTTP_PATH: /mcp
+    volumes:
+      - ${HOME}/.linkedin-mcp:/home/pwuser/.linkedin-mcp
+    mem_limit: 2g
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/mcp"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   api:
     build: ./api
@@ -22,15 +43,19 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 5432
-      DB_USER: jobhunter
-      DB_PASSWORD: jobhunter
+      DB_USER: jobhub
+      DB_PASSWORD: jobhub
       AI_API_KEY: ${AI_API_KEY:-}
       AI_PROVIDER: ${AI_PROVIDER:-anthropic}
+      LINKEDIN_MCP_ENABLED: ${LINKEDIN_MCP_ENABLED:-true}
+      LINKEDIN_MCP_URL: http://linkedin-mcp:8000
     volumes:
       - ./profile.yaml:/app/profile.yaml:ro
       - ./keywords.yaml:/app/keywords.yaml:ro
     depends_on:
       db:
+        condition: service_healthy
+      linkedin-mcp:
         condition: service_healthy
 
   dashboard:

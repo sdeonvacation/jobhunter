@@ -5,10 +5,13 @@ import dev.jobhub.extraction.ExtractionResult;
 import dev.jobhub.extraction.JobExtractor;
 import dev.jobhub.extraction.JobExtractorRegistry;
 import dev.jobhub.extraction.RawJobData;
+import dev.jobhub.extraction.SmartRecruitersExtractor;
+import dev.jobhub.filter.DeduplicationFilter;
 import dev.jobhub.filter.FilterResult;
 import dev.jobhub.filter.LanguageFilter;
 import dev.jobhub.filter.LocationFilter;
 import dev.jobhub.filter.RoleRelevanceFilter;
+import dev.jobhub.filter.YoeFilter;
 import dev.jobhub.model.CareerEndpoint;
 import dev.jobhub.model.Company;
 import dev.jobhub.model.JobPosting;
@@ -44,9 +47,12 @@ class CrawlServiceTest {
     @Mock private CareerEndpointRepository endpointRepository;
     @Mock private JobPostingRepository jobPostingRepository;
     @Mock private JobExtractorRegistry extractorRegistry;
+    @Mock private SmartRecruitersExtractor smartRecruitersExtractor;
     @Mock private LanguageFilter languageFilter;
     @Mock private RoleRelevanceFilter roleRelevanceFilter;
     @Mock private LocationFilter locationFilter;
+    @Mock private YoeFilter yoeFilter;
+    @Mock private DeduplicationFilter deduplicationFilter;
     @Mock private JobExtractor jobExtractor;
     @Mock private ScoringScheduler scoringScheduler;
 
@@ -58,8 +64,8 @@ class CrawlServiceTest {
         properties = new CrawlProperties(4, 2, 50, 30);
         crawlService = new CrawlService(
                 endpointRepository, jobPostingRepository,
-                extractorRegistry, languageFilter, roleRelevanceFilter,
-                locationFilter, properties, scoringScheduler);
+                extractorRegistry, smartRecruitersExtractor, languageFilter, roleRelevanceFilter,
+                locationFilter, yoeFilter, deduplicationFilter, properties, scoringScheduler);
     }
 
     @Test

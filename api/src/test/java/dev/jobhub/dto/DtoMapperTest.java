@@ -63,6 +63,7 @@ class DtoMapperTest {
         assertThat(dto.topSkills()).containsExactly("Java"); // only required skills
         assertThat(dto.salaryMin()).isEqualByComparingTo(BigDecimal.valueOf(70000));
         assertThat(dto.source()).isEqualTo("GREENHOUSE");
+        assertThat(dto.externalLinks()).isEmpty();
     }
 
     @Test
@@ -181,7 +182,7 @@ class DtoMapperTest {
                         List.of("Berlin", "Munich"), "FULL_TIME", 80000,
                         List.of("senior"), List.of("en", "de"), List.of("finance")
                 ),
-                null, null
+                null, null, null
         );
 
         ProfileDto dto = DtoMapper.toProfile(profile);

@@ -1,6 +1,12 @@
 import type { Job } from '../types';
 import ScoreBadge from './ScoreBadge';
 
+const SOURCE_BUTTON_CONFIG: Record<string, { label: string; color: string }> = {
+  linkedin: { label: 'LinkedIn', color: 'bg-blue-500/10 text-blue-400 ring-blue-500/20' },
+  indeed: { label: 'Indeed', color: 'bg-purple-500/10 text-purple-400 ring-purple-500/20' },
+  stepstone: { label: 'StepStone', color: 'bg-emerald-500/10 text-emerald-400 ring-emerald-500/20' },
+};
+
 interface JobCardProps {
   job: Job;
   index?: number;
@@ -79,6 +85,26 @@ export default function JobCard({ job, index = 0, onMarkApplied, onUndoApplied }
                   {skill}
                 </span>
               ))}
+            </div>
+          )}
+          {job.externalLinks && Object.keys(job.externalLinks).length > 0 && (
+            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+              {Object.entries(job.externalLinks).map(([key, url]) => {
+                const config = SOURCE_BUTTON_CONFIG[key.toLowerCase()];
+                if (!config) return null;
+                return (
+                  <a
+                    key={key}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className={`text-[10px] px-2 py-0.5 rounded-full ring-1 font-medium hover:brightness-125 transition-all ${config.color}`}
+                  >
+                    {config.label}
+                  </a>
+                );
+              })}
             </div>
           )}
         </div>

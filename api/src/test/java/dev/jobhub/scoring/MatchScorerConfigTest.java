@@ -110,7 +110,7 @@ class MatchScorerConfigTest {
                 "Test", "Dev", 3,
                 List.of(new PersonalProfile.ProfileSkill("Java", "expert", "language")),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
-                null, null));
+                null, null, null));
         MatchScorer scorer = new MatchScorer(loader);
 
         // Should still work with defaults — "java" direct match
@@ -174,7 +174,8 @@ class MatchScorerConfigTest {
                 null,
                 new PersonalProfile.ScoringConfig(
                         benchmarkWeight, thresholds, bonusSignals, bonusWeight,
-                        skillWeights, skillVariants)
+                        skillWeights, skillVariants, List.of(), 70, List.of(), 50),
+                null
         ));
         return loader;
     }

@@ -59,7 +59,7 @@ class LocationFilterConfigTest {
                 "", "", 0, List.of(),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
                 new PersonalProfile.FilterConfig(null, null, null),
-                null));
+                null, null));
         LocationFilterImpl filter = new LocationFilterImpl(loader);
 
         assertThat(filter.filter("Frankfurt").decision()).isEqualTo(FilterDecision.KEEP);
@@ -74,7 +74,7 @@ class LocationFilterConfigTest {
                         null,
                         new PersonalProfile.LocationFilterConfig(cities, remotePatterns),
                         null),
-                null));
+                null, null));
         return loader;
     }
 
@@ -83,7 +83,7 @@ class LocationFilterConfigTest {
         when(loader.getProfile()).thenReturn(new PersonalProfile(
                 "", "", 0, List.of(),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
-                null, null));
+                null, null, null));
         return loader;
     }
 }

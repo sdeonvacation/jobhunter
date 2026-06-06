@@ -39,7 +39,7 @@ class YoeFilterConfigTest {
                 "", "", 0, List.of(),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
                 new PersonalProfile.FilterConfig(null, null, null),
-                null));
+                null, null));
         YoeFilter filter = new YoeFilter(loader);
 
         assertThat(filter.filter(5).decision()).isEqualTo(FilterDecision.KEEP);
@@ -73,7 +73,7 @@ class YoeFilterConfigTest {
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
                 new PersonalProfile.FilterConfig(null, null,
                         new PersonalProfile.YoeFilterConfig(maxYears)),
-                null));
+                null, null));
         return loader;
     }
 
@@ -82,7 +82,7 @@ class YoeFilterConfigTest {
         when(loader.getProfile()).thenReturn(new PersonalProfile(
                 "", "", 0, List.of(),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
-                null, null));
+                null, null, null));
         return loader;
     }
 }

@@ -13,7 +13,8 @@ public record PersonalProfile(
         List<ProfileSkill> skills,
         Preferences preferences,
         FilterConfig filters,
-        ScoringConfig scoring
+        ScoringConfig scoring,
+        LinkedInSearchConfig linkedInSearch
 ) {
 
     public record ProfileSkill(String name, String proficiency, String category) {
@@ -70,6 +71,13 @@ public record PersonalProfile(
             int applyMinMatches,
             int maybeScore,
             int maybeMinMatches
+    ) {
+    }
+
+    public record LinkedInSearchConfig(
+            String query,
+            List<String> locations,
+            String datePosted
     ) {
     }
 }

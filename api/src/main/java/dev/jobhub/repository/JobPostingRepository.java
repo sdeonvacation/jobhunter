@@ -11,9 +11,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -72,4 +69,18 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     @Query(value = "SELECT id FROM job_posting WHERE CAST(id AS TEXT) LIKE :prefix || '%' LIMIT 1", nativeQuery = true)
     Optional<UUID> findIdByPrefix(@Param("prefix") String prefix);
+
+    @Query("SELECT jp FROM JobPosting jp WHERE jp.company.normalizedName = :companyName " +
+           "AND LOWER(jp.title) LIKE LOWER(CONCAT('%', :titleKeyword, '%')) " +
+           "AND jp.isActive = true AND jp.source NOT IN (dev.jobhub.model.enums.AtsType.LINKEDIN, dev.jobhub.model.enums.AtsType.INDEED)")
+    List<JobPosting> findByCompanyNormalizedNameAndTitleContaining(
+            @Param("companyName") String companyName, @Param("titleKeyword") String titleKeyword);
+
+    boolean existsBySourceAndExternalId(AtsType source, String externalId);
+
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSource(
+            FilterDecision languageFilter, AtsType source, Pageable pageable);
+
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceNotIn(
+            FilterDecision languageFilter, List<AtsType> source, Pageable pageable);
 }

@@ -1,10 +1,9 @@
 package dev.jobhub.config;
 
-import dev.jobhub.scheduler.CrawlScheduler;
 import dev.jobhub.scheduler.DigestScheduler;
 import dev.jobhub.scheduler.DiscoveryScheduler;
 import dev.jobhub.scheduler.GdprPurgeScheduler;
-import dev.jobhub.scheduler.ScoringScheduler;
+import dev.jobhub.scheduler.PipelineScheduler;
 import org.quartz.CronScheduleBuilder;
 import org.quartz.JobBuilder;
 import org.quartz.JobDetail;
@@ -17,34 +16,37 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class QuartzConfig {
 
-    // --- Crawl ---
+    // --- Pipeline (Crawl → LinkedIn → Scoring) ---
 
     @Bean
-    public JobDetail crawlJobDetail() {
-        return JobBuilder.newJob(CrawlScheduler.class)
-                .withIdentity("crawlJob", "crawl")
+    public JobDetail pipelineJobDetail() {
+        return JobBuilder.newJob(PipelineScheduler.class)
+                .withIdentity("pipelineJob", "pipeline")
                 .storeDurably()
                 .requestRecovery(true)
                 .build();
     }
 
     @Bean
-    public Trigger crawlTrigger(JobDetail crawlJobDetail) {
+    public Trigger pipelineTrigger(
+            JobDetail pipelineJobDetail,
+            @Value("${pipeline.schedule:0 0 */6 * * ?}") String cronExpression
+    ) {
         return TriggerBuilder.newTrigger()
-                .forJob(crawlJobDetail)
-                .withIdentity("crawlTrigger", "crawl")
+                .forJob(pipelineJobDetail)
+                .withIdentity("pipelineTrigger", "pipeline")
                 .withSchedule(
-                        CronScheduleBuilder.cronSchedule("0 0 */12 * * ?")
+                        CronScheduleBuilder.cronSchedule(cronExpression)
                                 .withMisfireHandlingInstructionFireAndProceed()
                 )
                 .build();
     }
 
     @Bean
-    public Trigger crawlStartupTrigger(JobDetail crawlJobDetail) {
+    public Trigger pipelineStartupTrigger(JobDetail pipelineJobDetail) {
         return TriggerBuilder.newTrigger()
-                .forJob(crawlJobDetail)
-                .withIdentity("crawlStartupTrigger", "crawl")
+                .forJob(pipelineJobDetail)
+                .withIdentity("pipelineStartupTrigger", "pipeline")
                 .startAt(new java.util.Date(System.currentTimeMillis() + 10_000))
                 .build();
     }
@@ -72,41 +74,6 @@ public class QuartzConfig {
                         CronScheduleBuilder.cronSchedule(cronExpression)
                                 .withMisfireHandlingInstructionFireAndProceed()
                 )
-                .build();
-    }
-
-    // --- Scoring ---
-
-    @Bean
-    public JobDetail scoringJobDetail() {
-        return JobBuilder.newJob(ScoringScheduler.class)
-                .withIdentity("scoringJob", "scoring")
-                .storeDurably()
-                .requestRecovery(true)
-                .build();
-    }
-
-    @Bean
-    public Trigger scoringTrigger(
-            JobDetail scoringJobDetail,
-            @Value("${scoring.schedule:0 0 7 * * ?}") String cronExpression
-    ) {
-        return TriggerBuilder.newTrigger()
-                .forJob(scoringJobDetail)
-                .withIdentity("scoringTrigger", "scoring")
-                .withSchedule(
-                        CronScheduleBuilder.cronSchedule(cronExpression)
-                                .withMisfireHandlingInstructionFireAndProceed()
-                )
-                .build();
-    }
-
-    @Bean
-    public Trigger scoringStartupTrigger(JobDetail scoringJobDetail) {
-        return TriggerBuilder.newTrigger()
-                .forJob(scoringJobDetail)
-                .withIdentity("scoringStartupTrigger", "scoring")
-                .startAt(new java.util.Date(System.currentTimeMillis() + 30_000))
                 .build();
     }
 

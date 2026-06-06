@@ -176,7 +176,7 @@ class CompanyPriorityScorerTest {
                         List.of("English", "German"),
                         List.of()
                 ),
-                null, null
+                null, null, null
         );
     }
 }

@@ -76,7 +76,7 @@ class JobControllerTest {
         when(jobPostingRepository.findByIsActiveTrueAndLanguageFilter(eq(FilterDecision.KEEP), any(Pageable.class)))
                 .thenReturn(page);
 
-        var result = controller.searchJobs(null, null, null, null, 0, 20);
+        var result = controller.searchJobs(null, null, null, null, null, "matchScore", 0, 20);
 
         assertThat(result.getContent()).hasSize(1);
         var dto = result.getContent().get(0);

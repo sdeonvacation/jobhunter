@@ -5,5 +5,6 @@ public enum DiscoverySource {
     SCRAPER,
     STEPSTONE,
     LINKEDIN_ALERT,
+    LINKEDIN,
     JOBSPY
 }

@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -93,6 +94,11 @@ public class JobPosting {
     @Column(name = "raw_content", columnDefinition = "jsonb")
     private Map<String, Object> rawContent;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "external_links", columnDefinition = "jsonb")
+    @Builder.Default
+    private Map<String, String> externalLinks = new HashMap<>();
+
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private boolean isActive = true;
@@ -118,6 +124,21 @@ public class JobPosting {
 
     @Column(name = "recruiter_data_expires_at", columnDefinition = "TIMESTAMP")
     private LocalDateTime recruiterDataExpiresAt;
+
+    @Column(name = "poster_name")
+    private String posterName;
+
+    @Column(name = "poster_title")
+    private String posterTitle;
+
+    @Column(name = "poster_linkedin_url")
+    private String posterLinkedinUrl;
+
+    @Column(name = "poster_avatar_url")
+    private String posterAvatarUrl;
+
+    @Column(name = "poster_contact_id")
+    private UUID posterContactId;
 
     @Column(name = "last_crawled_at", columnDefinition = "TIMESTAMP")
     private LocalDateTime lastCrawledAt;

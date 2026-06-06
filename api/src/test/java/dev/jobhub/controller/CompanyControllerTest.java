@@ -2,6 +2,7 @@ package dev.jobhub.controller;
 
 import dev.jobhub.model.Company;
 import dev.jobhub.model.enums.CompanyStatus;
+import dev.jobhub.repository.CareerEndpointRepository;
 import dev.jobhub.repository.CompanyRepository;
 import dev.jobhub.repository.JobPostingRepository;
 import dev.jobhub.service.CompanyService;
@@ -31,12 +32,13 @@ class CompanyControllerTest {
     @Mock private CompanyRepository companyRepository;
     @Mock private CompanyService companyService;
     @Mock private JobPostingRepository jobPostingRepository;
+    @Mock private CareerEndpointRepository careerEndpointRepository;
 
     private CompanyController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new CompanyController(companyRepository, companyService, jobPostingRepository);
+        controller = new CompanyController(companyRepository, companyService, jobPostingRepository, careerEndpointRepository);
     }
 
     @Test

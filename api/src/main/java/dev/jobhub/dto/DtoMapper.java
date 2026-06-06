@@ -42,7 +42,8 @@ public final class DtoMapper {
                 job.getPostedDate(),
                 job.getSource() != null ? job.getSource().name() : null,
                 job.getApplyUrl(),
-                job.isApplied()
+                job.isApplied(),
+                job.getExternalLinks()
         );
     }
 

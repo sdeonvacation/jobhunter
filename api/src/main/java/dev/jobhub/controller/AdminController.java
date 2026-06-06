@@ -1,11 +1,13 @@
 package dev.jobhub.controller;
 
 import dev.jobhub.discovery.DiscoveryService;
+import dev.jobhub.linkedin.LinkedInJobSearchService;
 import dev.jobhub.model.CareerEndpoint;
 import dev.jobhub.model.enums.CrawlStatus;
 import dev.jobhub.repository.CareerEndpointRepository;
 import dev.jobhub.scheduler.ScoringScheduler;
 import dev.jobhub.service.CrawlService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,6 +23,9 @@ public class AdminController {
     private final CareerEndpointRepository careerEndpointRepository;
     private final ScoringScheduler scoringScheduler;
     private final DiscoveryService discoveryService;
+
+    @Autowired(required = false)
+    private LinkedInJobSearchService linkedInJobSearchService;
 
     public AdminController(CrawlService crawlService, CareerEndpointRepository careerEndpointRepository,
                            ScoringScheduler scoringScheduler, DiscoveryService discoveryService) {
@@ -59,10 +64,25 @@ public class AdminController {
         return ResponseEntity.ok("Scoring complete");
     }
 
+    @PostMapping("/discover")
+    public ResponseEntity<DiscoverResult> triggerDiscovery() {
+        int[] stats = discoveryService.runDiscovery();
+        return ResponseEntity.ok(new DiscoverResult(stats[0], stats[1], stats[2]));
+    }
+
     @PostMapping("/resolve")
     public ResponseEntity<ResolveResult> triggerResolve(@RequestParam(required = false) Integer limit) {
         int[] stats = discoveryService.resolveDiscoveredCompanies(limit);
         return ResponseEntity.ok(new ResolveResult(stats[0], stats[1], stats[2], stats[3]));
+    }
+
+    @PostMapping("/linkedin-search")
+    public ResponseEntity<?> triggerLinkedInSearch() {
+        if (linkedInJobSearchService == null) {
+            return ResponseEntity.badRequest().body("LinkedIn MCP integration is not enabled");
+        }
+        int[] stats = linkedInJobSearchService.searchAndMatch();
+        return ResponseEntity.ok(new LinkedInSearchResult(stats[0], stats[1], stats[2]));
     }
 
     @GetMapping("/health")
@@ -110,6 +130,8 @@ public class AdminController {
     public record SingleCrawlResult(UUID endpointId, int jobsFound) {}
     public record BackfillResult(int descriptionsBackfilled) {}
     public record ResolveResult(int total, int resolved, int failed, int skipped) {}
+    public record DiscoverResult(int providersQueried, int companiesFound, int newCompanies) {}
+    public record LinkedInSearchResult(int enriched, int created, int searches) {}
 
     public record EndpointHealth(
             UUID id, String companyName, String atsType, String atsSlug,

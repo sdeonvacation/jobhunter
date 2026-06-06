@@ -203,7 +203,7 @@ class OpportunityScorerTest {
                         List.of("English", "German"),
                         List.of()
                 ),
-                null, null
+                null, null, null
         );
     }
 }

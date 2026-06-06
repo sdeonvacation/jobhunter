@@ -40,6 +40,28 @@ discovery:
       postal-codes: ["10115", "80331", "20095", "60311", "50667"]
     linkedin-alerts:
       enabled: false
+    linkedin:
+      enabled: ${LINKEDIN_MCP_ENABLED:true}
+      keywords: ["backend engineer", "Java developer", "Spring Boot", "Kotlin"]
+      locations: ["Germany", "Netherlands", "remote"]
+
+linkedin-mcp:
+  enabled: ${LINKEDIN_MCP_ENABLED:true}
+  base-url: ${LINKEDIN_MCP_URL:http://localhost:8000}
+  path: /mcp
+  timeout-seconds: 30
+  rate-limit:
+    search-per-hour: 20
+    profile-per-hour: 15
+    action-per-hour: 10
+    total-per-hour: 50
+  circuit-breaker:
+    failure-threshold: 3
+    cooldown-minutes: 60
+  enrichment:
+    enabled: true
+    batch-size: 10
+    delay-between-ms: 3000
 
 resolution:
   google-search:

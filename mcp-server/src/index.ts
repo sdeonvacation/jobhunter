@@ -9,6 +9,10 @@ import {
   getTopJobsTool,
   getJobsTool,
   addCompanyTool,
+  findContactsTool,
+  connectWithTool,
+  sendLinkedinMessageTool,
+  researchPersonTool,
 } from './tools/index.js';
 import { profileResources, jobResources } from './resources/index.js';
 
@@ -27,6 +31,10 @@ const tools = [
   getTopJobsTool,
   getJobsTool,
   addCompanyTool,
+  findContactsTool,
+  connectWithTool,
+  sendLinkedinMessageTool,
+  researchPersonTool,
 ] as const;
 
 for (const tool of tools) {

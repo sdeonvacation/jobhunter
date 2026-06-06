@@ -1,6 +1,6 @@
 // Enums matching Spring Boot backend
 
-export type AtsType = 'GREENHOUSE' | 'LEVER' | 'LEVER_EU' | 'ASHBY' | 'WORKDAY' | 'WORKDAY_PROTECTED' | 'STEPSTONE' | 'UNKNOWN';
+export type AtsType = 'GREENHOUSE' | 'LEVER' | 'LEVER_EU' | 'ASHBY' | 'WORKDAY' | 'WORKDAY_PROTECTED' | 'STEPSTONE' | 'LINKEDIN' | 'INDEED' | 'ARBEITNOW' | 'UNKNOWN';
 export type CompanyStatus = 'DISCOVERED' | 'PENDING_DETECTION' | 'ACTIVE' | 'PROTECTED' | 'UNSUPPORTED' | 'PAUSED';
 export type ApplicationStatus = 'INTERESTED' | 'APPLIED' | 'PHONE_SCREEN' | 'INTERVIEWING' | 'OFFERED' | 'REJECTED' | 'WITHDRAWN';
 export type Recommendation = 'APPLY' | 'MAYBE' | 'SKIP';
@@ -61,6 +61,7 @@ export interface Job {
   opportunityScore: number;
   recommendation?: Recommendation | null;
   source: AtsType;
+  externalLinks?: Record<string, string>;
   createdAt?: string;
 }
 
@@ -152,6 +153,7 @@ export interface JobSearchParams {
   location?: string;
   company?: string;
   minScore?: number;
+  source?: string;
   sort?: string;
   page?: number;
   size?: number;

@@ -71,6 +71,24 @@ public class Company {
     @Column(name = "updated_at", columnDefinition = "TIMESTAMP")
     private LocalDateTime updatedAt;
 
+    @Column(name = "linkedin_url")
+    private String linkedinUrl;
+
+    @Column(name = "industry")
+    private String industry;
+
+    @Column(name = "employee_count")
+    private Integer employeeCount;
+
+    @Column(name = "specialties", columnDefinition = "TEXT")
+    private String specialties;
+
+    @Column(name = "recent_posts_summary", columnDefinition = "TEXT")
+    private String recentPostsSummary;
+
+    @Column(name = "linkedin_enriched_at", columnDefinition = "TIMESTAMP")
+    private LocalDateTime linkedinEnrichedAt;
+
     @OneToMany(mappedBy = "company", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     @ToString.Exclude

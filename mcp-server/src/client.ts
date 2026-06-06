@@ -123,4 +123,34 @@ export class JobHubClient {
   async getProfile(): Promise<unknown> {
     return this.request('/api/profile');
   }
+
+  // LinkedIn networking methods
+  async findLinkedInContacts(companyName: string, titleKeywords: string[], limit: number): Promise<any[]> {
+    return this.request<any[]>('/api/linkedin/contacts/search', {
+      method: 'POST',
+      body: JSON.stringify({ companyName, titleKeywords, limit }),
+    });
+  }
+
+  async connectWithContact(contactId: string, note: string): Promise<{ status: string; message: string }> {
+    return this.request(`/api/linkedin/contacts/${contactId}/connect`, {
+      method: 'POST',
+      body: JSON.stringify({ note }),
+    });
+  }
+
+  async sendLinkedInMessage(contactId: string, message: string): Promise<{ status: string; message: string }> {
+    return this.request(`/api/linkedin/contacts/${contactId}/message`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    });
+  }
+
+  async researchLinkedInProfile(linkedinUrl: string): Promise<any> {
+    return this.request(`/api/linkedin/profile?url=${encodeURIComponent(linkedinUrl)}`);
+  }
+
+  async getConnectionsRemaining(): Promise<{ remaining: number }> {
+    return this.request('/api/linkedin/contacts/remaining');
+  }
 }

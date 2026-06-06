@@ -4,3 +4,7 @@ export { getTopJobsTodayTool } from './getTopJobsToday.js';
 export { getTopJobsTool } from './getTopJobs.js';
 export { getJobsTool } from './getJobs.js';
 export { addCompanyTool } from './addCompany.js';
+export { findContactsTool } from './findContacts.js';
+export { connectWithTool } from './connectWith.js';
+export { sendLinkedinMessageTool } from './sendLinkedinMessage.js';
+export { researchPersonTool } from './researchPerson.js';

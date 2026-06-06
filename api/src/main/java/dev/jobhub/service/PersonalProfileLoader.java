@@ -77,8 +77,10 @@ public class PersonalProfileLoader {
                 (Map<String, Object>) data.getOrDefault("filters", null));
         PersonalProfile.ScoringConfig scoring = parseScoring(
                 (Map<String, Object>) data.getOrDefault("scoring", null));
+        PersonalProfile.LinkedInSearchConfig linkedInSearch = parseLinkedInSearch(
+                (Map<String, Object>) data.getOrDefault("linkedin-search", null));
 
-        return new PersonalProfile(name, title, years, skills, preferences, filters, scoring);
+        return new PersonalProfile(name, title, years, skills, preferences, filters, scoring, linkedInSearch);
     }
 
     @SuppressWarnings("unchecked")
@@ -169,9 +171,18 @@ public class PersonalProfileLoader {
                 primarySkills, primarySkillCap, competingLanguages, competingLanguageCap);
     }
 
+    @SuppressWarnings("unchecked")
+    private PersonalProfile.LinkedInSearchConfig parseLinkedInSearch(Map<String, Object> searchMap) {
+        if (searchMap == null) return null;
+        String query = (String) searchMap.getOrDefault("query", "");
+        List<String> locations = (List<String>) searchMap.getOrDefault("locations", List.of("Germany"));
+        String datePosted = (String) searchMap.getOrDefault("date-posted", "week");
+        return new PersonalProfile.LinkedInSearchConfig(query, locations, datePosted);
+    }
+
     private PersonalProfile emptyProfile() {
         return new PersonalProfile("", "", 0, Collections.emptyList(),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
-                null, null);
+                null, null, null);
     }
 }
