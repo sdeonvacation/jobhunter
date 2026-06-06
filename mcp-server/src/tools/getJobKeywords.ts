@@ -1,42 +1,59 @@
 import { z } from 'zod';
+import { readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { JobHubClient, TechStack } from '../client.js';
 
 const inputSchema = z.object({
   job_id: z.string().describe('Job UUID, short ID (8 chars), or job posting URL'),
 });
 
+// Load patterns from keywords.yaml at startup
+function loadKeywordPatterns(): RegExp[] {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const yamlPath = resolve(__dirname, '../../..', 'keywords.yaml');
+  const content = readFileSync(yamlPath, 'utf8');
+
+  const patterns: RegExp[] = [];
+  const lines = content.split('\n');
+  let currentPatterns: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Skip comments and empty lines
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    // Skip non-pattern keys like "years_of_experience: true"
+    if (trimmed.match(/^\w+:/) && !trimmed.startsWith('- ')) {
+      // Flush previous group
+      if (currentPatterns.length > 0) {
+        patterns.push(new RegExp(`\\b(${currentPatterns.join('|')})\\b`, 'gi'));
+        currentPatterns = [];
+      }
+      continue;
+    }
+    // List item
+    if (trimmed.startsWith('- ')) {
+      currentPatterns.push(trimmed.slice(2));
+    }
+  }
+  // Flush last group
+  if (currentPatterns.length > 0) {
+    patterns.push(new RegExp(`\\b(${currentPatterns.join('|')})\\b`, 'gi'));
+  }
+
+  return patterns;
+}
+
+const keywordPatterns = loadKeywordPatterns();
+
 function extractKeywords(description: string): string[] {
   if (!description) return [];
 
   const text = description.replace(/<[^>]+>/g, ' ');
 
-  const techPatterns = [
-    // Languages
-    /\b(Java|Python|TypeScript|JavaScript|Kotlin|Go|Rust|C\+\+|C#|Ruby|Scala|Swift|PHP|R|JVM)\b/gi,
-    // Frameworks
-    /\b(Spring\s*Boot|React|Angular|Vue|Node\.?js|Django|Flask|FastAPI|Next\.?js|Express|NestJS|Svelte|Flutter|Ktor|Quarkus|Micronaut|Gatling|JUnit|Mockito|Dapr|Liquibase|Harness|Supabase|Vercel)\b/gi,
-    // Cloud/Infra
-    /\b(AWS|Azure|GCP|Kubernetes|Docker|Terraform|Helm|ArgoCD|Jenkins|GitHub\s*Actions|GitLab\s*CI|cloud\w*|multicloud|multi[- ]cloud|S3|Linux|encrypt\w*)\b/gi,
-    // Databases/Storage
-    /\b(PostgreSQL|Postgres\w*|MySQL|MongoDB|Redis|Elasticsearch|Kafka|RabbitMQ|DynamoDB|Cassandra|Neo4j|NoSQL|SQL|HANA)\b/gi,
-    // Architecture/Patterns
-    /\b(microservic\w*|REST\w*|GraphQL|gRPC|CI\/CD|CICD|DevOps|agile|scrum|TDD|DDD|event[- ]driven|serverless|CQRS|hexagonal|architect\w*|domain[- ]events?|asynchronous\w*|messag\w*|distribut\w*|design\w*|concurren\w*|integrat\w*)\b/gi,
-    // AI/ML
-    /\b(machine\s*learning|deep\s*learning|LLM|GenAI|generative\s*AI|RAG|retrieval[- ]augmented|NLP|natural\s*language|computer\s*vision|transformers?|fine[- ]?tuning|embeddings?|vector\s*(?:database|store|search)|prompt\s*engineering|AI\s*agents?|agentic|LangChain|LlamaIndex|OpenAI|Anthropic|Claude|GPT|Hugging\s*Face|MLOps|model\s*(?:training|inference|deployment|serving)|neural\s*network|reinforcement\s*learning|semantic\s*search|tokenization|diffusion|stable\s*diffusion|midjourney|RLHF|MCP|tool\s*use|function\s*calling)\b/gi,
-    // Operations/Quality
-    /\b(monitor\w*|observ\w*|reliab\w*|stabil\w*|deploy\w*|perform\w*|scal\w*|resilien\w*|fault[- ]toleran\w*|high\s*availability|SLA|SLO|load\s*balanc\w*|auto[- ]?scal\w*|incident\w*|regress\w*)\b/gi,
-    // Security
-    /\b(secur\w*|vulnerab\w*|OSS|XSUAA|BlackDuck|static\s*analysis|PPMS)\b/gi,
-    // Practices
-    /\b(clean\s*code|code\s*review|pair\s*programming|mob\s*programming|continuous\s*delivery|continuous\s*deployment|trunk[- ]based|feature\s*flags?|blue[- ]green|canary|test\w*|mentor\w*)\b/gi,
-    // Collaboration/Soft
-    /\b(collaborat\w*|cross[- ]functional|mentor\w*|ownership|autonomous|stakeholder\w*)\b/gi,
-    // Tools
-    /\b(Git\w*|Jira|Confluence|Datadog|Dynatrace|Kibana|Grafana|Prometheus|Splunk|Sonar\w*|IntelliJ|New\s*Relic|PagerDuty|OpenTelemetry)\b/gi,
-  ];
-
   const found = new Set<string>();
-  for (const pattern of techPatterns) {
+  for (const pattern of keywordPatterns) {
+    pattern.lastIndex = 0;
     for (const match of text.matchAll(pattern)) {
       found.add(match[0].trim());
     }
