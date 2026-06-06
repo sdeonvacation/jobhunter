@@ -1,5 +1,8 @@
 # JobHunter
 
+[![npm](https://img.shields.io/npm/v/jobhunter-mcp)](https://www.npmjs.com/package/jobhunter-mcp)
+[![GitHub release](https://img.shields.io/github/v/release/sdeonvacation/jobhunter)](https://github.com/sdeonvacation/jobhunter/releases)
+
 ![JobHunter Dashboard](docs/screenshot.png)
 
 **Autonomous job discovery platform that finds, filters, and scores open positions — so you spend time applying, not searching.**
