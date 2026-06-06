@@ -1,34 +1,41 @@
-export interface SearchJobsParams {
-  query?: string;
-  company?: string;
+export interface PageResponse {
+  content: JobSummary[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+}
+
+export interface JobSummary {
+  id: string;
+  title: string;
+  companyName: string;
   location?: string;
-  min_score?: number;
+  remoteType?: string;
+  opportunityScore?: number;
+  matchScore?: number;
+  recommendation?: string;
+  topSkills?: string[];
+  salaryMin?: number;
+  salaryMax?: number;
+  salaryCurrency?: string;
+  postedDate?: string;
   source?: string;
-  sort?: string;
-  limit?: number;
+  applyUrl?: string;
+  applied?: boolean;
 }
 
-export interface TailorResumeParams {
-  job_id: string;
-  emphasis?: string[];
-  format?: 'json' | 'pdf';
+export interface JobDetail extends JobSummary {
+  description?: string;
 }
 
-export interface GenerateCoverLetterParams {
-  job_id: string;
-  tone?: 'professional' | 'enthusiastic' | 'concise';
-  focus?: string;
-}
-
-export interface MarkAppliedParams {
-  job_id: string;
-  resume_variant?: string;
-  notes?: string;
-}
-
-export interface ListCompaniesParams {
-  status?: 'ACTIVE' | 'DISCOVERED' | 'PAUSED';
-  sort?: 'priority' | 'name' | 'interviewRate';
+export interface TechStack {
+  languages?: string[];
+  frameworks?: string[];
+  databases?: string[];
+  cloud?: string[];
+  tools?: string[];
+  concepts?: string[];
 }
 
 export class JobHubClient {
@@ -56,79 +63,55 @@ export class JobHubClient {
     return response.json() as Promise<T>;
   }
 
-  private buildQuery(params: object): string {
-    const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== null);
-    if (entries.length === 0) return '';
-    const search = new URLSearchParams();
-    for (const [key, value] of entries) {
-      search.set(key, String(value));
+  async searchJobs(params: { query?: string; size?: number; sort?: string; limit?: number }): Promise<PageResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.query) searchParams.set('query', params.query);
+    const size = params.size ?? params.limit;
+    if (size) searchParams.set('size', String(size));
+    if (params.sort) searchParams.set('sort', params.sort);
+    const qs = searchParams.toString();
+    return this.request<PageResponse>(`/api/jobs${qs ? `?${qs}` : ''}`);
+  }
+
+  async getTodayJobs(params: { size?: number; sort?: string }): Promise<PageResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.size) searchParams.set('size', String(params.size));
+    if (params.sort) searchParams.set('sort', params.sort);
+    const qs = searchParams.toString();
+    return this.request<PageResponse>(`/api/jobs/today${qs ? `?${qs}` : ''}`);
+  }
+
+  async resolveJobId(idOrPrefix: string): Promise<string> {
+    if (idOrPrefix.length === 36 && idOrPrefix.includes('-')) {
+      return idOrPrefix;
     }
-    return `?${search.toString()}`;
+    const result = await this.request<{ id: string }>(`/api/jobs/resolve/${idOrPrefix}`);
+    return result.id;
   }
 
-  async searchJobs(params: SearchJobsParams): Promise<unknown> {
-    const apiParams: Record<string, string> = {};
-    if (params.query) apiParams.query = params.query;
-    if (params.company) apiParams.company = params.company;
-    if (params.location) apiParams.location = params.location;
-    if (params.min_score !== undefined) apiParams.minScore = String(params.min_score);
-    if (params.source) apiParams.source = params.source;
-    if (params.sort) apiParams.sort = params.sort;
-    if (params.limit) apiParams.size = String(params.limit);
-    const query = Object.keys(apiParams).length > 0
-      ? '?' + new URLSearchParams(apiParams).toString()
-      : '';
-    return this.request(`/api/jobs${query}`);
+  async getJob(id: string): Promise<JobDetail> {
+    return this.request<JobDetail>(`/api/jobs/${id}`);
   }
 
-  async getJob(id: string): Promise<unknown> {
-    return this.request(`/api/jobs/${id}`);
+  async getTechStack(id: string): Promise<TechStack> {
+    return this.request<TechStack>(`/api/jobs/${id}/tech-stack`);
   }
 
-  async getTechStack(jobId: string): Promise<unknown> {
-    return this.request(`/api/jobs/${jobId}/tech-stack`);
+  async markApplied(id: string): Promise<void> {
+    await this.request(`/api/jobs/${id}/applied`, {
+      method: 'PATCH',
+      body: JSON.stringify({ applied: true }),
+    });
   }
 
-  async scoreJob(id: string): Promise<unknown> {
-    return this.request(`/api/jobs/${id}/score`);
-  }
-
-  async tailorResume(params: TailorResumeParams): Promise<unknown> {
-    const { job_id, ...body } = params;
-    return this.request(`/api/tailor/${job_id}`, {
+  async addCompany(name: string, careersUrl: string): Promise<unknown> {
+    return this.request('/api/companies', {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify({ name, careersUrl }),
     });
   }
 
-  async generateCoverLetter(params: GenerateCoverLetterParams): Promise<unknown> {
-    const { job_id, ...body } = params;
-    return this.request(`/api/cover-letter/${job_id}`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-  }
-
-  async markApplied(params: MarkAppliedParams): Promise<unknown> {
-    const { job_id, ...body } = params;
-    return this.request(`/api/pipeline/${job_id}/apply`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-  }
-
-  async recordOutcome(applicationId: string, outcome: string, notes?: string): Promise<unknown> {
-    return this.request(`/api/pipeline/${applicationId}/outcome`, {
-      method: 'PUT',
-      body: JSON.stringify({ outcome, notes }),
-    });
-  }
-
-  async getPipeline(status?: string): Promise<unknown> {
-    const query = status ? this.buildQuery({ status }) : '';
-    return this.request(`/api/pipeline${query}`);
-  }
-
+  // Resource-compat methods (used by resources/)
   async getDailyDigest(): Promise<unknown> {
     return this.request('/api/jobs/daily-digest');
   }
@@ -137,27 +120,7 @@ export class JobHubClient {
     return this.request('/api/jobs/radar');
   }
 
-  async listCompanies(params?: ListCompaniesParams): Promise<unknown> {
-    const query = params ? this.buildQuery(params) : '';
-    return this.request(`/api/companies${query}`);
-  }
-
   async getProfile(): Promise<unknown> {
     return this.request('/api/profile');
-  }
-
-  async getDiscoveryStats(): Promise<unknown> {
-    return this.request('/api/discovery/stats');
-  }
-
-  async getSourceQuality(): Promise<unknown> {
-    return this.request('/api/discovery/source-quality');
-  }
-
-  async addCompany(careersUrl: string, companyName?: string): Promise<unknown> {
-    return this.request('/api/companies', {
-      method: 'POST',
-      body: JSON.stringify({ careers_url: careersUrl, company_name: companyName }),
-    });
   }
 }

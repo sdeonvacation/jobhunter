@@ -2,23 +2,12 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { JobHubClient } from './client.js';
 import {
-  searchJobsTool,
-  getJobTool,
-  getTechStackTool,
-  scoreJobTool,
-  tailorResumeTool,
-  generateCoverLetterTool,
-  markAppliedTool,
-  recordOutcomeTool,
-  getPipelineTool,
-  getDailyDigestTool,
-  getRadarTool,
-  listCompaniesTool,
-  getProfileTool,
-  getDiscoveryStatsTool,
-  getSourceQualityTool,
+  getJobKeywordsTool,
+  markJobAppliedTool,
+  getTopJobsTodayTool,
+  getTopJobsTool,
+  getJobsTool,
   addCompanyTool,
-  getTopJobsKeywordsTool,
 } from './tools/index.js';
 import { profileResources, jobResources } from './resources/index.js';
 
@@ -31,23 +20,12 @@ const server = new McpServer({
 
 // Register all tools
 const tools = [
-  searchJobsTool,
-  getJobTool,
-  getTechStackTool,
-  scoreJobTool,
-  tailorResumeTool,
-  generateCoverLetterTool,
-  markAppliedTool,
-  recordOutcomeTool,
-  getPipelineTool,
-  getDailyDigestTool,
-  getRadarTool,
-  listCompaniesTool,
-  getProfileTool,
-  getDiscoveryStatsTool,
-  getSourceQualityTool,
+  getJobKeywordsTool,
+  markJobAppliedTool,
+  getTopJobsTodayTool,
+  getTopJobsTool,
+  getJobsTool,
   addCompanyTool,
-  getTopJobsKeywordsTool,
 ] as const;
 
 for (const tool of tools) {

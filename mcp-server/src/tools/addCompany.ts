@@ -2,16 +2,16 @@ import { z } from 'zod';
 import { JobHubClient } from '../client.js';
 
 const inputSchema = z.object({
-  careers_url: z.string().describe('Careers page or ATS board URL'),
-  company_name: z.string().optional().describe('Optional company name override'),
+  name: z.string().describe('Company name'),
+  careers_url: z.string().describe('URL to the company careers page'),
 });
 
 export const addCompanyTool = {
   name: 'add_company',
-  description: 'Manually add company via careers URL (fallback)',
+  description: 'Add a new company to track for job postings',
   inputSchema,
   handler: async (params: z.infer<typeof inputSchema>, client: JobHubClient) => {
-    const result = await client.addCompany(params.careers_url, params.company_name);
-    return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+    const result = await client.addCompany(params.name, params.careers_url);
+    return { content: [{ type: 'text' as const, text: `Company "${params.name}" added. Result: ${JSON.stringify(result)}` }] };
   },
 };

@@ -106,6 +106,27 @@ public class JobController {
         return jobPostingRepository.findDistinctCompanyNamesWithVisibleJobs(FilterDecision.KEEP);
     }
 
+    @GetMapping("/resolve/{prefix}")
+    public ResponseEntity<Map<String, String>> resolveId(@PathVariable String prefix) {
+        if (prefix.length() < 6 || prefix.length() > 36) {
+            return ResponseEntity.badRequest().build();
+        }
+        if (prefix.length() == 36) {
+            try {
+                UUID id = UUID.fromString(prefix);
+                if (jobPostingRepository.existsById(id)) {
+                    return ResponseEntity.ok(Map.of("id", id.toString()));
+                }
+                return ResponseEntity.notFound().build();
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().build();
+            }
+        }
+        Optional<UUID> found = jobPostingRepository.findIdByPrefix(prefix);
+        return found.map(id -> ResponseEntity.ok(Map.of("id", id.toString())))
+                   .orElse(ResponseEntity.notFound().build());
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<JobDetailDto> getJob(@PathVariable UUID id) {
         Optional<JobPosting> jobOpt = jobPostingRepository.findById(id);

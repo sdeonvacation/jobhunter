@@ -3,9 +3,12 @@ package dev.jobhub.controller;
 import dev.jobhub.dto.CompanyDetailDto;
 import dev.jobhub.dto.CompanySummaryDto;
 import dev.jobhub.dto.DtoMapper;
+import dev.jobhub.model.CareerEndpoint;
 import dev.jobhub.model.Company;
 import dev.jobhub.model.JobPosting;
+import dev.jobhub.model.enums.AtsType;
 import dev.jobhub.model.enums.CompanyStatus;
+import dev.jobhub.repository.CareerEndpointRepository;
 import dev.jobhub.repository.CompanyRepository;
 import dev.jobhub.repository.JobPostingRepository;
 import dev.jobhub.service.CompanyService;
@@ -28,13 +31,16 @@ public class CompanyController {
     private final CompanyRepository companyRepository;
     private final CompanyService companyService;
     private final JobPostingRepository jobPostingRepository;
+    private final CareerEndpointRepository careerEndpointRepository;
 
     public CompanyController(CompanyRepository companyRepository,
                              CompanyService companyService,
-                             JobPostingRepository jobPostingRepository) {
+                             JobPostingRepository jobPostingRepository,
+                             CareerEndpointRepository careerEndpointRepository) {
         this.companyRepository = companyRepository;
         this.companyService = companyService;
         this.jobPostingRepository = jobPostingRepository;
+        this.careerEndpointRepository = careerEndpointRepository;
     }
 
     @GetMapping
@@ -88,16 +94,40 @@ public class CompanyController {
             return ResponseEntity.badRequest().build();
         }
 
-        Company company = new Company();
-        company.setId(UUID.randomUUID());
-        company.setName(request.name());
-        company.setDomain(request.domain());
-        company.setCountry(request.country());
-        company.setStatus(CompanyStatus.DISCOVERED);
-        company.setActive(true);
+        // Check if company already exists by normalized name
+        Optional<Company> existing = companyService.findByNormalizedName(request.name());
+        Company company;
+        if (existing.isPresent()) {
+            company = existing.get();
+        } else {
+            company = new Company();
+            company.setId(UUID.randomUUID());
+            company.setName(request.name());
+            company.setDomain(request.domain());
+            company.setCountry(request.country());
+            company.setStatus(CompanyStatus.DISCOVERED);
+            company.setActive(true);
+            company = companyService.save(company);
+        }
 
-        Company saved = companyService.save(company);
-        return ResponseEntity.ok(DtoMapper.toCompanySummary(saved));
+        // Create career endpoint if URL provided and not already registered
+        if (request.careersUrl() != null && !request.careersUrl().isBlank()) {
+            boolean endpointExists = careerEndpointRepository.findByCompanyId(company.getId())
+                    .stream().anyMatch(ep -> ep.getUrl().equalsIgnoreCase(request.careersUrl()));
+            if (!endpointExists) {
+                CareerEndpoint endpoint = CareerEndpoint.builder()
+                        .company(company)
+                        .url(request.careersUrl())
+                        .atsType(AtsType.UNKNOWN)
+                        .verified(false)
+                        .isActive(true)
+                        .source("mcp")
+                        .build();
+                careerEndpointRepository.save(endpoint);
+            }
+        }
+
+        return ResponseEntity.ok(DtoMapper.toCompanySummary(company));
     }
 
     @PatchMapping("/{id}/priority")

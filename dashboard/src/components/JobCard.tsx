@@ -36,7 +36,21 @@ export default function JobCard({ job, index = 0, onMarkApplied, onUndoApplied }
           <h3 className="text-base font-semibold text-text-primary truncate hover:text-accent transition-colors duration-150">
             {job.title}
           </h3>
-          <p className="text-sm text-text-secondary mt-0.5">{job.companyName}</p>
+          <p className="text-sm text-text-secondary mt-0.5">
+            {job.companyName}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                navigator.clipboard.writeText(job.id);
+              }}
+              className="text-xs font-mono text-text-muted hover:text-accent ml-2 px-1.5 py-0.5 rounded bg-surface-700/50 hover:bg-surface-600 transition-colors"
+              title={`Click to copy: ${job.id}`}
+            >
+              {job.id.slice(0, 8)}
+            </button>
+          </p>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             {job.location && (
               <span className="text-xs text-text-muted">{job.location}</span>

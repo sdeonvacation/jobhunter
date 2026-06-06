@@ -69,4 +69,7 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
             FilterDecision filter, java.time.LocalDate discoveredDate, Pageable pageable);
 
     Optional<JobPosting> findFirstByFingerprintAndLanguageFilter(String fingerprint, FilterDecision filter);
+
+    @Query(value = "SELECT id FROM job_posting WHERE CAST(id AS TEXT) LIKE :prefix || '%' LIMIT 1", nativeQuery = true)
+    Optional<UUID> findIdByPrefix(@Param("prefix") String prefix);
 }
