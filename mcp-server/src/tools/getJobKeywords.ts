@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { JobHubClient, TechStack } from '../client.js';
@@ -8,10 +8,29 @@ const inputSchema = z.object({
   job_id: z.string().describe('Job UUID, short ID (8 chars), or job posting URL'),
 });
 
+// Resolve keywords.yaml across install contexts
+function findKeywordsYaml(): string {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+
+  // When installed via npm: keywords.yaml is in package root (2 levels up from dist/tools/)
+  const npmPath = resolve(__dirname, '../..', 'keywords.yaml');
+
+  // When running from monorepo: keywords.yaml is at project root (3 levels up from dist/tools/)
+  const monoRepoPath = resolve(__dirname, '../../..', 'keywords.yaml');
+
+  // Custom path via env var
+  const envPath = process.env.JOBHUNTER_KEYWORDS;
+
+  if (envPath && existsSync(envPath)) return envPath;
+  if (existsSync(npmPath)) return npmPath;
+  if (existsSync(monoRepoPath)) return monoRepoPath;
+
+  throw new Error('keywords.yaml not found. Set JOBHUNTER_KEYWORDS env var to its path.');
+}
+
 // Load patterns from keywords.yaml at startup
 function loadKeywordPatterns(): RegExp[] {
-  const __dirname = dirname(fileURLToPath(import.meta.url));
-  const yamlPath = resolve(__dirname, '../../..', 'keywords.yaml');
+  const yamlPath = findKeywordsYaml();
   const content = readFileSync(yamlPath, 'utf8');
 
   const patterns: RegExp[] = [];

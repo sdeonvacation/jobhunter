@@ -1,0 +1,245 @@
+## Keyword extraction patterns for job descriptions
+## Each entry is a regex pattern (case-insensitive, word-boundary applied automatically)
+## Use \w* for suffix wildcard, \s* for optional spaces, [- ] for dash/space variants
+
+languages:
+  - Java
+  - Python
+  - TypeScript
+  - JavaScript
+  - Kotlin
+  - Go
+  - Rust
+  - C\+\+
+  - C#
+  - Ruby
+  - Scala
+  - Swift
+  - PHP
+  - R
+  - JVM
+  - SQL
+
+frameworks:
+  - Spring\s*Boot
+  - Spring
+  - React\.?js
+  - React
+  - Angular
+  - Vue
+  - Node\.?js
+  - Django
+  - Flask
+  - FastAPI
+  - Next\.?js
+  - Express
+  - NestJS
+  - Svelte
+  - Flutter
+  - Ktor
+  - Quarkus
+  - Micronaut
+  - OSGi
+  - Gatling
+  - JUnit
+  - Mockito
+  - Dapr
+  - Liquibase
+  - Harness
+  - Supabase
+  - Vercel
+
+cloud_infra:
+  - AWS
+  - Azure
+  - GCP
+  - Kubernetes
+  - Docker
+  - Terraform
+  - Helm
+  - ArgoCD
+  - Jenkins
+  - GitHub\s*Actions
+  - GitLab\s*CI
+  - Cloud\s*Foundry
+  - cloud\w*
+  - multicloud
+  - multi[- ]cloud
+  - S3
+  - Linux
+  - encrypt\w*
+
+databases:
+  - PostgreSQL
+  - Postgres\w*
+  - MySQL
+  - MongoDB
+  - Redis
+  - Elasticsearch
+  - Kafka
+  - RabbitMQ
+  - DynamoDB
+  - Cassandra
+  - Neo4j
+  - NoSQL
+  - SQL
+  - HANA
+
+architecture:
+  - microservic\w*
+  - REST\w*
+  - GraphQL
+  - gRPC
+  - CI\/CD
+  - CICD
+  - DevOps
+  - agile
+  - scrum
+  - TDD
+  - DDD
+  - event[- ]driven
+  - serverless
+  - CQRS
+  - hexagonal
+  - architect\w*
+  - domain[- ]events?
+  - asynchronous\w*
+  - messag\w*
+  - distribut\w*
+  - design\s*pattern\w*
+  - design\w*
+  - concurren\w*
+  - integrat\w*
+  - multi[- ]worker
+
+ai_ml:
+  - machine\s*learning
+  - deep\s*learning
+  - LLM
+  - GenAI
+  - generative\s*AI
+  - agentic\s*AI
+  - agentic
+  - RAG
+  - retrieval[- ]augmented
+  - NLP
+  - natural\s*language
+  - computer\s*vision
+  - transformers?
+  - fine[- ]?tuning
+  - embeddings?
+  - vector\s*(?:database|store|search)
+  - prompt\s*engineering
+  - AI\s*agents?
+  - LangChain
+  - LlamaIndex
+  - OpenAI
+  - Anthropic
+  - Claude
+  - GPT
+  - Hugging\s*Face
+  - MLOps
+  - model\s*(?:training|inference|deployment|serving)
+  - inference
+  - neural\s*network
+  - reinforcement\s*learning
+  - semantic\s*search
+  - tokenization
+  - diffusion
+  - stable\s*diffusion
+  - RLHF
+  - MCP
+  - tool\s*use
+  - function\s*calling
+  - local\s*AI
+
+operations:
+  - monitor\w*
+  - observ\w*
+  - reliab\w*
+  - stabil\w*
+  - deploy\w*
+  - perform\w*
+  - scal\w*
+  - resilien\w*
+  - fault[- ]toleran\w*
+  - high\s*availability
+  - SLA
+  - SLO
+  - load\s*balanc\w*
+  - auto[- ]?scal\w*
+  - incident\w*
+  - regress\w*
+  - root\s*cause\s*analysis
+
+security:
+  - secur\w*
+  - vulnerab\w*
+  - OAuth2?
+  - JWT
+  - mTLS
+  - TLS
+  - encrypt\w*
+  - XSUAA
+  - CodeQL
+  - BlackDuck
+  - static\s*analysis
+  - PPMS
+  - OSS
+
+data_schema:
+  - Liquibase
+  - Swagger
+  - OpenAPI
+  - GraphQL
+  - Protobuf
+
+runtime:
+  - JVM
+  - GC\s*tuning
+  - heap\s*siz\w*
+  - garbage\s*collect\w*
+
+practices:
+  - clean\s*code
+  - code\s*review\w*
+  - pair\s*programming
+  - mob\s*programming
+  - continuous\s*delivery
+  - continuous\s*deployment
+  - trunk[- ]based
+  - feature\s*flags?
+  - blue[- ]green
+  - canary
+  - test\w*
+  - mentor\w*
+  - root\s*cause
+
+collaboration:
+  - collaborat\w*
+  - cross[- ]functional
+  - mentor\w*
+  - ownership
+  - autonomous
+  - stakeholder\w*
+
+tools:
+  - Git\w*
+  - GitHub
+  - Jira
+  - Confluence
+  - Datadog
+  - Dynatrace
+  - Kibana
+  - Grafana
+  - Prometheus
+  - Splunk
+  - Sonar\w*
+  - IntelliJ
+  - New\s*Relic
+  - PagerDuty
+  - OpenTelemetry
+
+## Additional matchers (not regex-based)
+years_of_experience: true
+degree_requirements: true

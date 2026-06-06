@@ -1,10 +1,25 @@
 {
-  "name": "jobhub-mcp-server",
+  "name": "jobhunter-mcp",
   "version": "1.0.0",
+  "description": "MCP server for JobHunter - query and manage job postings from any AI assistant",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "jobhunter-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist/",
+    "keywords.yaml"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sdeonvacation/jobhunter"
+  },
+  "keywords": ["mcp", "job-search", "career", "ai-assistant"],
+  "license": "MIT",
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "test": "vitest run",

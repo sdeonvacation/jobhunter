@@ -63,7 +63,61 @@ Greenhouse, Lever, Ashby, Workday, SmartRecruiters, Workable, Personio, Recruite
 - **No account required** — Runs locally. Your profile, preferences, and application history stay on your machine.
 - **Extensible** — Adding a new company takes one database entry. Adding a new hiring platform takes one extractor class.
 
-## Getting Started
+## Quick Start (Docker)
+
+The fastest way to run JobHunter — no Java, Node.js, or build tools needed.
+
+### Prerequisites
+
+- Docker & Docker Compose
+
+### 1. Clone and configure
+
+```bash
+git clone https://github.com/sdeonvacation/jobhunter.git
+cd jobhunter
+```
+
+Edit `profile.yaml` (your skills, filters, scoring) and `keywords.yaml` (keyword extraction patterns). See [Configuration](#configuration) below.
+
+### 2. Start everything
+
+```bash
+docker compose up -d
+```
+
+This launches:
+- **PostgreSQL** on port 5435
+- **API** on http://localhost:8080
+- **Dashboard** on http://localhost:3000
+
+### 3. Add companies and crawl
+
+```bash
+curl -X POST http://localhost:8080/api/admin/crawl
+curl -X POST http://localhost:8080/api/admin/score
+```
+
+Open http://localhost:3000 — your Daily Digest is ready.
+
+### 4. Install the MCP server
+
+```bash
+npm install -g jobhunter-mcp
+```
+
+Or use directly without installing:
+```bash
+npx jobhunter-mcp
+```
+
+See [MCP Server](#mcp-server) below for client configuration.
+
+---
+
+## Development Setup
+
+For contributors or those who want to run services individually.
 
 ### Prerequisites
 
@@ -76,8 +130,6 @@ Greenhouse, Lever, Ashby, Workday, SmartRecruiters, Workable, Personio, Recruite
 ```bash
 docker compose up -d db
 ```
-
-This starts PostgreSQL 16 on port 5435.
 
 ### 2. Configure your profile
 
@@ -104,15 +156,8 @@ Dashboard opens at http://localhost:3000.
 
 ### 5. Add companies and trigger a crawl
 
-Add companies and their career page URLs to the database, then trigger the first crawl:
-
 ```bash
 curl -X POST http://localhost:8080/api/admin/crawl
-```
-
-### 6. Score the results
-
-```bash
 curl -X POST http://localhost:8080/api/admin/score
 ```
 
@@ -122,15 +167,24 @@ Open the dashboard — your Daily Digest is ready.
 
 The MCP server exposes JobHunter tools to any AI assistant that supports the [Model Context Protocol](https://modelcontextprotocol.io) (Claude, OpenCode, etc.).
 
-### Setup
+### Install
 
 ```bash
-cd mcp-server
-npm install
-npm run build
+npm install -g jobhunter-mcp
 ```
 
-Add to your MCP client config:
+Or run without installing:
+```bash
+npx jobhunter-mcp
+```
+
+For development (from repo):
+```bash
+cd mcp-server
+npm install && npm run build
+```
+
+### Client Configuration
 
 For OpenCode (`opencode.json`):
 
@@ -139,7 +193,7 @@ For OpenCode (`opencode.json`):
   "mcp": {
     "jobhunter": {
       "type": "local",
-      "command": ["node", "/path/to/jobhunter/mcp-server/dist/index.js"],
+      "command": ["npx", "jobhunter-mcp"],
       "environment": {
         "JOBHUB_API_URL": "http://localhost:8080"
       },
@@ -155,8 +209,8 @@ For Claude Code (`.claude/settings.json` or project `.mcp.json`):
 {
   "mcpServers": {
     "jobhunter": {
-      "command": "node",
-      "args": ["/path/to/jobhunter/mcp-server/dist/index.js"],
+      "command": "npx",
+      "args": ["jobhunter-mcp"],
       "env": {
         "JOBHUB_API_URL": "http://localhost:8080"
       }
