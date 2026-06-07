@@ -198,13 +198,11 @@ public class MatchScorer {
         }
 
         // Primary language penalty: cap score if no core skill matched (softer than title penalty)
-        if (!primarySkills.isEmpty()) {
-            boolean hasPrimarySkill = matchedSkills.stream()
-                    .anyMatch(s -> primarySkills.stream()
-                            .anyMatch(ps -> ps.equalsIgnoreCase(s)));
-            if (!hasPrimarySkill && overallScore > primarySkillCap) {
-                overallScore = primarySkillCap;
-            }
+        boolean hasPrimarySkill = matchedSkills.stream()
+                .anyMatch(s -> primarySkills.stream()
+                        .anyMatch(ps -> ps.equalsIgnoreCase(s)));
+        if (!hasPrimarySkill && overallScore > primarySkillCap) {
+            overallScore = primarySkillCap;
         }
 
         Recommendation recommendation = computeRecommendation(overallScore, matchedSkills.size());
