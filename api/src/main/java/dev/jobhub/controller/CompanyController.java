@@ -8,6 +8,9 @@ import dev.jobhub.model.Company;
 import dev.jobhub.model.JobPosting;
 import dev.jobhub.model.enums.AtsType;
 import dev.jobhub.model.enums.CompanyStatus;
+import dev.jobhub.model.enums.Confidence;
+import dev.jobhub.model.enums.DiscoverySource;
+import dev.jobhub.model.enums.ExtractionMethod;
 import dev.jobhub.repository.CareerEndpointRepository;
 import dev.jobhub.repository.CompanyRepository;
 import dev.jobhub.repository.JobPostingRepository;
@@ -20,6 +23,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -101,11 +105,12 @@ public class CompanyController {
             company = existing.get();
         } else {
             company = new Company();
-            company.setId(UUID.randomUUID());
             company.setName(request.name());
             company.setDomain(request.domain());
             company.setCountry(request.country());
             company.setStatus(CompanyStatus.DISCOVERED);
+            company.setDiscoveredVia(DiscoverySource.MANUAL);
+            company.setDiscoveredAt(LocalDateTime.now());
             company.setActive(true);
             company = companyService.save(company);
         }
@@ -115,10 +120,13 @@ public class CompanyController {
             boolean endpointExists = careerEndpointRepository.findByCompanyId(company.getId())
                     .stream().anyMatch(ep -> ep.getUrl().equalsIgnoreCase(request.careersUrl()));
             if (!endpointExists) {
+                AtsType atsType = request.atsType() != null ? request.atsType() : AtsType.UNKNOWN;
                 CareerEndpoint endpoint = CareerEndpoint.builder()
                         .company(company)
                         .url(request.careersUrl())
-                        .atsType(AtsType.UNKNOWN)
+                        .atsType(atsType)
+                        .extractionMethod(ExtractionMethod.CUSTOM)
+                        .confidence(Confidence.MEDIUM)
                         .verified(false)
                         .isActive(true)
                         .source("mcp")
@@ -146,7 +154,7 @@ public class CompanyController {
         return ResponseEntity.ok().build();
     }
 
-    public record AddCompanyRequest(String name, String domain, String country, String careersUrl) {}
+    public record AddCompanyRequest(String name, String domain, String country, String careersUrl, AtsType atsType) {}
 
     public record PriorityRequest(int priority) {}
 }
