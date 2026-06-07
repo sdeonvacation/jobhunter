@@ -45,8 +45,8 @@ services:
       DB_PORT: 5432
       DB_USER: jobhub
       DB_PASSWORD: jobhub
-      AI_API_KEY: ${AI_API_KEY:-}
-      AI_PROVIDER: ${AI_PROVIDER:-anthropic}
+      JOBHUNTER_AI_API_KEY: ${JOBHUNTER_AI_API_KEY:-}
+      JOBHUNTER_AI_PROVIDER: ${JOBHUNTER_AI_PROVIDER:-anthropic}
       LINKEDIN_MCP_ENABLED: ${LINKEDIN_MCP_ENABLED:-true}
       LINKEDIN_MCP_URL: http://linkedin-mcp:8000
     volumes:

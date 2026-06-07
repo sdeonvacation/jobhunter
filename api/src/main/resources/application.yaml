@@ -16,11 +16,11 @@ spring:
     change-log: classpath:db/changelog/master.xml
 
 ai:
-  provider: ${AI_PROVIDER:anthropic}
-  api-key: ${AI_API_KEY:}
-  base-url: ${AI_BASE_URL:}
-  extraction-model: ${AI_EXTRACTION_MODEL:claude-haiku-4-5}
-  tailoring-model: ${AI_TAILORING_MODEL:claude-sonnet-4-5}
+  provider: ${JOBHUNTER_AI_PROVIDER:anthropic}
+  api-key: ${JOBHUNTER_AI_API_KEY:}
+  base-url: ${JOBHUNTER_AI_BASE_URL:}
+  extraction-model: ${JOBHUNTER_AI_EXTRACTION_MODEL:claude-haiku-4-5}
+  tailoring-model: ${JOBHUNTER_AI_TAILORING_MODEL:claude-sonnet-4-5}
 
 ai-crawl:
   schedule: "0 0 3 * * ?"

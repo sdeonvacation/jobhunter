@@ -172,5 +172,5 @@ All filter and scoring logic is externalized to `profile.yaml`:
 - Dashboard uses launchd plist at `/tmp/dev.jobhub.dashboard.plist`.
 - Testcontainers need Colima default profile Docker socket (currently incompatible with Docker 29 API).
 - `JAVA_HOME` must point to Temurin 21, not the system Java 25.
-- AI config (provider, api-key, base-url, models) in `application.yaml`, overridable via env vars (`AI_PROVIDER`, `AI_API_KEY`, `AI_BASE_URL`).
+- AI config (provider, api-key, base-url, models) in `application.yaml`, overridable via env vars (`JOBHUNTER_AI_PROVIDER`, `JOBHUNTER_AI_API_KEY`, `JOBHUNTER_AI_BASE_URL`).
 - AtsType enum: GREENHOUSE, LEVER, LEVER_EU, ASHBY, SMARTRECRUITERS, WORKABLE, WORKDAY, WORKDAY_PROTECTED, PERSONIO, BREEZY, RECRUITEE, JOIN, BAMBOOHR, TEAMTAILOR, SUCCESSFACTORS, ICIMS, JOBVITE, STEPSTONE, ARBEITNOW, INDEED, LINKEDIN, CUSTOM, UNKNOWN.
