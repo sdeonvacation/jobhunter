@@ -31,6 +31,7 @@ public class SuccessFactorsStrategy implements FetchStrategy {
     private static final int MAX_DESCRIPTION_LENGTH = 10_000;
     private static final Pattern TOTAL_COUNT_PATTERN = Pattern.compile("Results\\s+\\d+\\s*[–-]\\s*\\d+\\s+of\\s+(\\d+)");
     private static final Pattern ARIA_TOTAL_PATTERN = Pattern.compile("Results\\s+\\d+\\s+to\\s+\\d+\\s+of\\s+(\\d+)");
+    private static final Pattern SHOWING_TOTAL_PATTERN = Pattern.compile("Showing\\s+\\d+\\s+to\\s+\\d+\\s+of\\s+(\\d+)");
 
     private final WebClient webClient;
 
@@ -164,6 +165,15 @@ public class SuccessFactorsStrategy implements FetchStrategy {
         if (ariaMatcher.find()) {
             try {
                 return Integer.parseInt(ariaMatcher.group(1));
+            } catch (NumberFormatException e) {
+                // fall through
+            }
+        }
+        // Try jobs2web/TalentBrew pattern: 'Showing 1 to 25 of 303'
+        Matcher showingMatcher = SHOWING_TOTAL_PATTERN.matcher(html);
+        if (showingMatcher.find()) {
+            try {
+                return Integer.parseInt(showingMatcher.group(1));
             } catch (NumberFormatException e) {
                 // fall through
             }
