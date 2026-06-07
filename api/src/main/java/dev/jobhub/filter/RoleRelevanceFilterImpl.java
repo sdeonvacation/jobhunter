@@ -18,18 +18,18 @@ public class RoleRelevanceFilterImpl implements RoleRelevanceFilter {
     private static final List<String> DEFAULT_INCLUDE_PATTERNS = List.of(
             "engineer", "developer", "programmer", "\\bsre\\b", "devops",
             "dev\\s*ops", "software", "backend", "back[\\s-]end", "fullstack",
-            "full[\\s-]stack", "platform", "infrastructure", "\\bcloud\\b",
-            "\\bml\\b", "machine\\s+learning", "\\bsde\\b", "\\bcto\\b",
-            "\\bsdet\\b", "site\\s+reliability", "\\bdevsecops\\b",
-            "\\bsys\\s*admin\\b", "\\bkubernetes\\b", "\\bk8s\\b"
+            "full[\\s-]stack", "frontend", "front[\\s-]end", "platform",
+            "infrastructure", "\\bcloud\\b", "\\bml\\b", "machine\\s+learning",
+            "\\bsde\\b", "\\bcto\\b", "\\bsdet\\b", "site\\s+reliability",
+            "\\bdevsecops\\b", "\\bsys\\s*admin\\b", "\\bkubernetes\\b",
+            "\\bk8s\\b", "\\blead\\b", "\\bqa\\b"
     );
 
     // Default exclude keywords (used when config section is absent)
     private static final List<String> DEFAULT_EXCLUDE_KEYWORDS = List.of(
             "manager", "architect", "analyst", "director", "principal",
             "counsel", "legal", "recruiter", "designer", "marketing",
-            "sales", "finance", "accountant", "hr", "frontend",
-            "front[\\s-]end", "lead", "qa", "devops", "mlops"
+            "finance", "accountant", "hr"
     );
 
     public RoleRelevanceFilterImpl(PersonalProfileLoader profileLoader) {
