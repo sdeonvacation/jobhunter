@@ -66,3 +66,4 @@ failsafe-reports/
 # Package manager locks (keep)
 # package-lock.json
 # gradle.lockfile
+/.opencode/
