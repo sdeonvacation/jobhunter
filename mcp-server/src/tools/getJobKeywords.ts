@@ -1,94 +1,93 @@
 import { z } from 'zod';
-import { existsSync, readFileSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { JobHunterClient, TechStack } from '../client.js';
+import { JobHunterClient } from '../client.js';
 
 const inputSchema = z.object({
   job_id: z.string().describe('Job UUID, short ID (8 chars), or job posting URL'),
 });
 
-// Resolve keywords.yaml across install contexts
-function findKeywordsYaml(): string {
-  const __dirname = dirname(fileURLToPath(import.meta.url));
+const SYSTEM_PROMPT = `Extract technical skills, tools, frameworks, programming languages, platforms, and methodologies from this job posting.
 
-  // When installed via npm: keywords.yaml is in package root (2 levels up from dist/tools/)
-  const npmPath = resolve(__dirname, '../..', 'keywords.yaml');
+Rules:
+- ONLY extract keywords that are explicitly mentioned as job requirements or qualifications
+- Ignore navigation, page chrome, HTML/JS boilerplate, iframe attributes, URL patterns, and cookie/tracking scripts
+- Do NOT include single letters, generic words (e.g. "scale", "ownership", "collaboration"), or partial matches from URLs
+- Each keyword must be a recognizable technology, tool, language, framework, platform, methodology, or certification
+- DO NOT hallucinate
+- Return as a JSON object with a "keywords" array of strings`;
 
-  // When running from monorepo: keywords.yaml is at project root (3 levels up from dist/tools/)
-  const monoRepoPath = resolve(__dirname, '../../..', 'keywords.yaml');
-
-  // Custom path via env var
-  const envPath = process.env.JOBHUNTER_KEYWORDS;
-
-  if (envPath && existsSync(envPath)) return envPath;
-  if (existsSync(npmPath)) return npmPath;
-  if (existsSync(monoRepoPath)) return monoRepoPath;
-
-  throw new Error('keywords.yaml not found. Set JOBHUNTER_KEYWORDS env var to its path.');
+interface LLMResponse {
+  choices: Array<{
+    message: { content: string };
+  }>;
 }
 
-// Load patterns from keywords.yaml at startup
-function loadKeywordPatterns(): RegExp[] {
-  const yamlPath = findKeywordsYaml();
-  const content = readFileSync(yamlPath, 'utf8');
+/**
+ * Call LLM (OpenAI-compatible endpoint) to extract keywords from text.
+ * Falls back to empty array on any failure.
+ */
+export async function extractKeywordsViaLLM(text: string): Promise<string[]> {
+  const baseUrl = process.env.JOBHUNTER_AI_BASE_URL;
+  const apiKey = process.env.JOBHUNTER_AI_API_KEY;
+  const model = process.env.JOBHUNTER_AI_EXTRACTION_MODEL || 'gemini-3.1-flash-lite';
 
-  const patterns: RegExp[] = [];
-  const lines = content.split('\n');
-  let currentPatterns: string[] = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    // Skip comments and empty lines
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    // Skip non-pattern keys like "years_of_experience: true"
-    if (trimmed.match(/^\w+:/) && !trimmed.startsWith('- ')) {
-      // Flush previous group
-      if (currentPatterns.length > 0) {
-        patterns.push(new RegExp(`\\b(${currentPatterns.join('|')})\\b`, 'gi'));
-        currentPatterns = [];
-      }
-      continue;
-    }
-    // List item
-    if (trimmed.startsWith('- ')) {
-      currentPatterns.push(trimmed.slice(2));
-    }
-  }
-  // Flush last group
-  if (currentPatterns.length > 0) {
-    patterns.push(new RegExp(`\\b(${currentPatterns.join('|')})\\b`, 'gi'));
+  if (!apiKey || !baseUrl) {
+    console.warn('[getJobKeywords] Missing JOBHUNTER_AI_BASE_URL or JOBHUNTER_AI_API_KEY — skipping LLM extraction');
+    return [];
   }
 
-  return patterns;
+  try {
+    const response = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: text.slice(0, 30000) },
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'keywords_extraction',
+            strict: true,
+            schema: {
+              type: 'object',
+              properties: {
+                keywords: { type: 'array', items: { type: 'string' } },
+              },
+              required: ['keywords'],
+              additionalProperties: false,
+            },
+          },
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn(`[getJobKeywords] LLM API returned ${response.status}: ${response.statusText}`);
+      return [];
+    }
+
+    const data = (await response.json()) as LLMResponse;
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) {
+      console.warn('[getJobKeywords] LLM response missing content');
+      return [];
+    }
+
+    const parsed = JSON.parse(content) as { keywords: string[] };
+    return Array.isArray(parsed.keywords) ? parsed.keywords : [];
+  } catch (err) {
+    console.warn('[getJobKeywords] LLM extraction failed:', err instanceof Error ? err.message : err);
+    return [];
+  }
 }
 
-const keywordPatterns = loadKeywordPatterns();
-
-function extractKeywords(description: string): string[] {
-  if (!description) return [];
-
-  const text = description.replace(/<[^>]+>/g, ' ');
-
-  const found = new Set<string>();
-  for (const pattern of keywordPatterns) {
-    pattern.lastIndex = 0;
-    for (const match of text.matchAll(pattern)) {
-      found.add(match[0].trim());
-    }
-  }
-
-  // Years of experience
-  for (const m of text.matchAll(/(\d+)\+?\s*(?:years?|Jahre)\s*(?:of\s*)?(?:experience|Erfahrung|Berufserfahrung)/gi)) {
-    found.add(`${m[1]}+ years experience`);
-  }
-
-  // Degree requirements
-  for (const m of text.matchAll(/\b(Bachelor|Master|PhD|Diploma|Informatik|Computer Science)\b/gi)) {
-    found.add(m[1]);
-  }
-
-  return [...found].slice(0, 50);
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function isUrl(input: string): boolean {
@@ -112,9 +111,9 @@ export const getJobKeywordsTool = {
   inputSchema,
   handler: async (params: z.infer<typeof inputSchema>, client: JobHunterClient) => {
     if (isUrl(params.job_id)) {
-      // Fetch external job page and extract keywords
       const html = await fetchPageText(params.job_id);
-      const keywords = extractKeywords(html);
+      const text = stripHtml(html);
+      const keywords = await extractKeywordsViaLLM(text);
       const output = [
         `URL: ${params.job_id}`,
         `Keywords: ${keywords.join(', ') || 'none extracted'}`,
@@ -124,27 +123,14 @@ export const getJobKeywordsTool = {
 
     // UUID or short ID path
     const fullId = await client.resolveJobId(params.job_id);
-    const [detail, techStack] = await Promise.all([
-      client.getJob(fullId),
-      client.getTechStack(fullId).catch(() => null) as Promise<TechStack | null>,
-    ]);
+    const detail = await client.getJob(fullId);
 
-    const jdKeywords = detail.description ? extractKeywords(detail.description) : [];
-
-    const techKeywords: string[] = [];
-    if (techStack) {
-      for (const category of Object.values(techStack)) {
-        if (Array.isArray(category)) {
-          techKeywords.push(...category);
-        }
-      }
-    }
-
-    const allKeywords = [...new Set([...techKeywords, ...jdKeywords])];
+    const description = detail.description ? stripHtml(detail.description) : '';
+    const keywords = description ? await extractKeywordsViaLLM(description) : [];
 
     const output = [
       `${detail.title} @ ${detail.companyName}`,
-      `Keywords: ${allKeywords.join(', ') || 'none extracted'}`,
+      `Keywords: ${keywords.join(', ') || 'none extracted'}`,
     ].join('\n');
 
     return { content: [{ type: 'text' as const, text: output }] };

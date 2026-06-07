@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { JobHunterClient } from '../client.js';
 import {
   getJobKeywordsTool,
@@ -56,6 +56,23 @@ describe('Tool definitions', () => {
 
 describe('Tool handlers', () => {
   let client: JobHunterClient;
+  const savedEnv: Record<string, string | undefined> = {};
+
+  beforeAll(() => {
+    savedEnv.JOBHUNTER_AI_BASE_URL = process.env.JOBHUNTER_AI_BASE_URL;
+    savedEnv.JOBHUNTER_AI_API_KEY = process.env.JOBHUNTER_AI_API_KEY;
+    savedEnv.JOBHUNTER_AI_EXTRACTION_MODEL = process.env.JOBHUNTER_AI_EXTRACTION_MODEL;
+    process.env.JOBHUNTER_AI_BASE_URL = 'https://ai.test/v1/chat/completions';
+    process.env.JOBHUNTER_AI_API_KEY = 'test-key';
+    process.env.JOBHUNTER_AI_EXTRACTION_MODEL = 'test-model';
+  });
+
+  afterAll(() => {
+    for (const [key, val] of Object.entries(savedEnv)) {
+      if (val === undefined) delete process.env[key];
+      else process.env[key] = val;
+    }
+  });
 
   beforeEach(() => {
     client = new JobHunterClient('http://test:8080');
@@ -87,71 +104,86 @@ describe('Tool handlers', () => {
   }
 
   describe('get_job_keywords', () => {
-    it('extracts keywords from job detail and tech stack', async () => {
+    it('extracts keywords from job detail via LLM', async () => {
       const jobDetail = {
-        id: 'abc12345-6789',
+        id: 'abc12345-6789-0000-0000-000000000000',
         title: 'Senior Java Developer',
         companyName: 'ACME Corp',
         description: '<p>We need 5+ years experience with Java, Spring Boot, and Kubernetes.</p>',
       };
-      const techStack = {
-        languages: ['Java', 'Kotlin'],
-        frameworks: ['Spring Boot'],
-        databases: ['PostgreSQL'],
-        cloud: ['AWS'],
-        tools: [],
-        concepts: ['microservices'],
-      };
+      const llmResponse = { keywords: ['Java', 'Spring Boot', 'Kubernetes'] };
 
-      mockFetchSequence([jobDetail, techStack]);
+      const mock = vi.spyOn(globalThis, 'fetch');
+      // First call: getJob (full UUID skips resolve)
+      mock.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(jobDetail),
+        text: () => Promise.resolve(JSON.stringify(jobDetail)),
+      } as Response);
+      // Second call: LLM API
+      mock.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ choices: [{ message: { content: JSON.stringify(llmResponse) } }] }),
+        text: () => Promise.resolve(JSON.stringify({ choices: [{ message: { content: JSON.stringify(llmResponse) } }] })),
+      } as Response);
 
-      const result = await getJobKeywordsTool.handler({ job_id: 'abc12345-6789' }, client);
+      const result = await getJobKeywordsTool.handler({ job_id: 'abc12345-6789-0000-0000-000000000000' }, client);
 
       expect(result.content[0].text).toContain('Senior Java Developer @ ACME Corp');
       expect(result.content[0].text).toContain('Java');
       expect(result.content[0].text).toContain('Spring Boot');
-      expect(result.content[0].text).toContain('PostgreSQL');
-      expect(result.content[0].text).toContain('5+ years experience');
+      expect(result.content[0].text).toContain('Kubernetes');
     });
 
-    it('handles missing tech stack gracefully', async () => {
+    it('handles LLM failure gracefully', async () => {
       const jobDetail = {
-        id: 'abc12345-6789',
+        id: 'abc12345-6789-0000-0000-000000000000',
         title: 'Engineer',
         companyName: 'Co',
         description: '<p>Work with React and TypeScript</p>',
       };
 
       const mock = vi.spyOn(globalThis, 'fetch');
+      // getJob
       mock.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(jobDetail),
         text: () => Promise.resolve(JSON.stringify(jobDetail)),
       } as Response);
+      // LLM call fails
       mock.mockResolvedValueOnce({
         ok: false,
-        status: 404,
-        statusText: 'Not Found',
-        text: () => Promise.resolve(''),
+        status: 500,
+        statusText: 'Internal Server Error',
       } as Response);
 
-      const result = await getJobKeywordsTool.handler({ job_id: 'abc12345-6789' }, client);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = await getJobKeywordsTool.handler({ job_id: 'abc12345-6789-0000-0000-000000000000' }, client);
+      warnSpy.mockRestore();
 
       expect(result.content[0].text).toContain('Engineer @ Co');
-      expect(result.content[0].text).toContain('React');
-      expect(result.content[0].text).toContain('TypeScript');
+      expect(result.content[0].text).toContain('none extracted');
     });
 
     it('handles empty description', async () => {
-      mockFetchSequence([
-        { id: 'x', title: 'Role', companyName: 'Co', description: '' },
-        { languages: ['Go'], frameworks: [], databases: [], cloud: [], tools: [], concepts: [] },
-      ]);
+      const mock = vi.spyOn(globalThis, 'fetch');
+      // resolve short ID
+      mock.mockResolvedValueOnce({
+        ok: true, status: 200, statusText: 'OK',
+        json: () => Promise.resolve({ id: 'x0000000-0000-0000-0000-000000000000' }),
+        text: () => Promise.resolve(JSON.stringify({ id: 'x0000000-0000-0000-0000-000000000000' })),
+      } as Response);
+      // getJob
+      mock.mockResolvedValueOnce({
+        ok: true, status: 200, statusText: 'OK',
+        json: () => Promise.resolve({ id: 'x0000000-0000-0000-0000-000000000000', title: 'Role', companyName: 'Co', description: '' }),
+        text: () => Promise.resolve(JSON.stringify({ id: 'x0000000-0000-0000-0000-000000000000', title: 'Role', companyName: 'Co', description: '' })),
+      } as Response);
 
       const result = await getJobKeywordsTool.handler({ job_id: 'x' }, client);
 
       expect(result.content[0].text).toContain('Role @ Co');
-      expect(result.content[0].text).toContain('Go');
+      expect(result.content[0].text).toContain('none extracted');
     });
   });
 
@@ -161,16 +193,19 @@ describe('Tool handlers', () => {
 
       const result = await markJobAppliedTool.handler({ job_id: 'a3f2c8d1-0000-0000-0000-000000000000' }, client);
 
-      expect(result.content[0].text).toBe('Job a3f2c8d1 marked as applied.');
+      expect(result.content[0].text).toBe('Job a3f2c8d1-0000-0000-0000-000000000000 marked as applied.');
     });
 
     it('sends PATCH request with correct body', async () => {
-      const fetchSpy = mockFetch({});
+      const fetchSpy = mockFetchSequence([
+        { id: 'test-id-full-0000-0000-000000000000' }, // resolve
+        {}, // markApplied PATCH
+      ]);
 
       await markJobAppliedTool.handler({ job_id: 'test-id' }, client);
 
       expect(fetchSpy).toHaveBeenCalledWith(
-        'http://test:8080/api/jobs/test-id/applied',
+        'http://test:8080/api/jobs/test-id-full-0000-0000-000000000000/applied',
         expect.objectContaining({
           method: 'PATCH',
           body: JSON.stringify({ applied: true }),

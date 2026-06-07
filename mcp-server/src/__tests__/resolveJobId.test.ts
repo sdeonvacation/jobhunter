@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { JobHunterClient } from '../client.js';
 import { getJobKeywordsTool } from '../tools/getJobKeywords.js';
 import { markJobAppliedTool } from '../tools/markJobApplied.js';
@@ -73,6 +73,23 @@ describe('JobHunterClient.resolveJobId', () => {
 
 describe('getJobKeywordsTool resolves prefix', () => {
   let client: JobHunterClient;
+  const savedEnv: Record<string, string | undefined> = {};
+
+  beforeAll(() => {
+    savedEnv.JOBHUNTER_AI_BASE_URL = process.env.JOBHUNTER_AI_BASE_URL;
+    savedEnv.JOBHUNTER_AI_API_KEY = process.env.JOBHUNTER_AI_API_KEY;
+    savedEnv.JOBHUNTER_AI_EXTRACTION_MODEL = process.env.JOBHUNTER_AI_EXTRACTION_MODEL;
+    process.env.JOBHUNTER_AI_BASE_URL = 'https://ai.test/v1/chat/completions';
+    process.env.JOBHUNTER_AI_API_KEY = 'test-key';
+    process.env.JOBHUNTER_AI_EXTRACTION_MODEL = 'test-model';
+  });
+
+  afterAll(() => {
+    for (const [key, val] of Object.entries(savedEnv)) {
+      if (val === undefined) delete process.env[key];
+      else process.env[key] = val;
+    }
+  });
 
   beforeEach(() => {
     client = new JobHunterClient('http://test-api:8080');
@@ -81,6 +98,7 @@ describe('getJobKeywordsTool resolves prefix', () => {
 
   it('resolves short ID before fetching job details', async () => {
     const fullId = 'a3f2c8d1-1234-5678-9abc-def012345678';
+    const llmResponse = { keywords: ['Java', 'Spring Boot'] };
 
     vi.spyOn(client, 'resolveJobId').mockResolvedValue(fullId);
     vi.spyOn(client, 'getJob').mockResolvedValue({
@@ -89,16 +107,16 @@ describe('getJobKeywordsTool resolves prefix', () => {
       companyName: 'Acme',
       description: '<p>We need Java and Spring Boot experience</p>',
     });
-    vi.spyOn(client, 'getTechStack').mockResolvedValue({
-      languages: ['Java'],
-      frameworks: ['Spring Boot'],
-    });
+    // Mock fetch for LLM call
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ choices: [{ message: { content: JSON.stringify(llmResponse) } }] }),
+    } as Response);
 
     const result = await getJobKeywordsTool.handler({ job_id: 'a3f2c8d1' }, client);
 
     expect(client.resolveJobId).toHaveBeenCalledWith('a3f2c8d1');
     expect(client.getJob).toHaveBeenCalledWith(fullId);
-    expect(client.getTechStack).toHaveBeenCalledWith(fullId);
     expect(result.content[0].text).toContain('Backend Dev @ Acme');
     expect(result.content[0].text).toContain('Java');
   });
