@@ -5,5 +5,6 @@ public enum ExtractionStatus {
     PARTIAL,
     EMPTY,
     ERROR,
+    RATE_LIMITED,
     PROTECTED
 }

@@ -24,7 +24,7 @@ public class WebClientConfig {
                 .build();
 
         ExchangeStrategies strategies = ExchangeStrategies.builder()
-                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024)) // 10MB
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(50 * 1024 * 1024)) // 50MB - Greenhouse boards with content can exceed 30MB
                 .build();
 
         return builder

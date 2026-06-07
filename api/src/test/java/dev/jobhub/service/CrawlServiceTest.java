@@ -287,7 +287,7 @@ class CrawlServiceTest {
                 .company(company)
                 .build();
 
-        when(endpointRepository.findDueForCrawl(any(LocalDateTime.class), eq(50)))
+        when(endpointRepository.findAllDueForCrawl(any(LocalDateTime.class)))
                 .thenReturn(List.of(endpoint1, endpoint2));
 
         // First endpoint succeeds
@@ -310,5 +310,45 @@ class CrawlServiceTest {
         assertThat(stats[2]).isEqualTo(1); // errors
         // Both endpoints should have been attempted
         assertThat(endpoint2.getLastCrawlStatus()).isEqualTo(CrawlStatus.ERROR);
+    }
+
+    @Test
+    void crawlEndpoint_noExtractor_setsSkippedAndUpdatesLastCrawledAt() {
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("testco")
+                .build();
+
+        when(extractorRegistry.getExtractor(AtsType.GREENHOUSE)).thenReturn(Optional.empty());
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+
+        int result = crawlService.crawlEndpoint(endpoint);
+
+        assertThat(result).isZero();
+        assertThat(endpoint.getLastCrawlStatus()).isEqualTo(CrawlStatus.SKIPPED);
+        assertThat(endpoint.getLastCrawledAt()).isNotNull();
+        verify(endpointRepository).save(endpoint);
+    }
+
+    @Test
+    void crawlEndpoint_canExtractFalse_setsSkippedAndUpdatesLastCrawledAt() {
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("testco")
+                .build();
+
+        when(extractorRegistry.getExtractor(AtsType.GREENHOUSE)).thenReturn(Optional.of(jobExtractor));
+        when(jobExtractor.canExtract(endpoint)).thenReturn(false);
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+
+        int result = crawlService.crawlEndpoint(endpoint);
+
+        assertThat(result).isZero();
+        assertThat(endpoint.getLastCrawlStatus()).isEqualTo(CrawlStatus.SKIPPED);
+        assertThat(endpoint.getLastCrawledAt()).isNotNull();
+        verify(endpointRepository).save(endpoint);
+        verify(jobExtractor, never()).extract(any());
     }
 }

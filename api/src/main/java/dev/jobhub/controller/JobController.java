@@ -63,14 +63,29 @@ public class JobController {
 
         // Source tab filtering: "ats" excludes LINKEDIN/INDEED, "linkedin"/"indeed" filters to that source
         if ("linkedin".equalsIgnoreCase(source)) {
-            jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSource(
-                    FilterDecision.KEEP, AtsType.LINKEDIN, pageable);
+            if (company != null && !company.isBlank()) {
+                jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceAndCompanyName(
+                        FilterDecision.KEEP, AtsType.LINKEDIN, company, pageable);
+            } else {
+                jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSource(
+                        FilterDecision.KEEP, AtsType.LINKEDIN, pageable);
+            }
         } else if ("indeed".equalsIgnoreCase(source)) {
-            jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSource(
-                    FilterDecision.KEEP, AtsType.INDEED, pageable);
+            if (company != null && !company.isBlank()) {
+                jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceAndCompanyName(
+                        FilterDecision.KEEP, AtsType.INDEED, company, pageable);
+            } else {
+                jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSource(
+                        FilterDecision.KEEP, AtsType.INDEED, pageable);
+            }
         } else if ("ats".equalsIgnoreCase(source) || source == null || source.isBlank()) {
-            jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceNotIn(
-                    FilterDecision.KEEP, List.of(AtsType.LINKEDIN, AtsType.INDEED), pageable);
+            if (company != null && !company.isBlank()) {
+                jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceNotInAndCompanyName(
+                        FilterDecision.KEEP, List.of(AtsType.LINKEDIN, AtsType.INDEED), company, pageable);
+            } else {
+                jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceNotIn(
+                        FilterDecision.KEEP, List.of(AtsType.LINKEDIN, AtsType.INDEED), pageable);
+            }
         } else {
             jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilter(
                     FilterDecision.KEEP, pageable);

@@ -239,6 +239,23 @@ class PersonioExtractorTest {
     }
 
     @Test
+    void extract_rateLimited429_returnsRateLimited() {
+        stubFor(get(urlPathEqualTo("/limited-de/search.json"))
+                .willReturn(aResponse().withStatus(429).withBody("too many requests")));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.PERSONIO)
+                .atsSlug("limited")
+                .build();
+
+        var result = extractor.extract(endpoint);
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.RATE_LIMITED);
+        assertThat(result.errorMessage()).contains("Rate limited");
+        assertThat(result.jobs()).isEmpty();
+    }
+
+    @Test
     void extract_zonedDateTimeFallback_parsesCorrectly() {
         String json = """
                 [

@@ -62,6 +62,10 @@ public class GreenhouseExtractor implements JobExtractor {
                 return ExtractionResult.empty(elapsed(start));
             }
 
+            if (responseBody.length() > 10_000_000) {
+                log.warn("Greenhouse [{}]: large response ({} MB)", slug, responseBody.length() / 1_048_576);
+            }
+
             JsonNode root = objectMapper.readTree(responseBody);
 
             // Some Greenhouse slugs return 200 OK with error JSON body instead of HTTP 404

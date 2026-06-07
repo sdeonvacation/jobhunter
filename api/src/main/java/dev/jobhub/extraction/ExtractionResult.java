@@ -25,6 +25,10 @@ public record ExtractionResult(
         return new ExtractionResult(List.of(), 0, ExtractionStatus.ERROR, message, elapsed);
     }
 
+    public static ExtractionResult rateLimited(Duration elapsed) {
+        return new ExtractionResult(List.of(), 0, ExtractionStatus.RATE_LIMITED, "Rate limited (429) - will retry next cycle", elapsed);
+    }
+
     public static ExtractionResult protectedEndpoint(Duration elapsed) {
         return new ExtractionResult(List.of(), 0, ExtractionStatus.PROTECTED, "Protected endpoint - requires authentication", elapsed);
     }

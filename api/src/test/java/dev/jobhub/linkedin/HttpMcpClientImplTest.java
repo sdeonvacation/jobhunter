@@ -150,7 +150,7 @@ class HttpMcpClientImplTest {
         client.callTool("tool1", Map.of());
         client.callTool("tool2", Map.of());
 
-        verify(2, postRequestedFor(urlEqualTo("/mcp")));
+        verify(3, postRequestedFor(urlEqualTo("/mcp")));
     }
 
     @Test

@@ -88,4 +88,10 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceNotIn(
             FilterDecision languageFilter, List<AtsType> source, Pageable pageable);
+
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceAndCompanyName(
+            FilterDecision languageFilter, AtsType source, String companyName, Pageable pageable);
+
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceNotInAndCompanyName(
+            FilterDecision languageFilter, List<AtsType> source, String companyName, Pageable pageable);
 }

@@ -33,6 +33,7 @@ public class HttpMcpClientImpl implements HttpMcpClient {
     private final LinkedInRateLimiter rateLimiter;
     private final String path;
     private final AtomicBoolean sessionValid = new AtomicBoolean(true);
+    private final AtomicBoolean initAttempted = new AtomicBoolean(false);
     private final AtomicInteger requestIdCounter = new AtomicInteger(0);
     private volatile String mcpSessionId;
 
@@ -94,7 +95,7 @@ public class HttpMcpClientImpl implements HttpMcpClient {
     }
 
     private Mono<Void> ensureInitialized() {
-        if (mcpSessionId != null) {
+        if (mcpSessionId != null || initAttempted.get()) {
             return Mono.empty();
         }
         return initialize();
@@ -129,6 +130,7 @@ public class HttpMcpClientImpl implements HttpMcpClient {
                     return response.bodyToMono(String.class);
                 })
                 .doOnError(ex -> log.error("MCP initialization failed: {}", ex.getMessage()))
+                .doFinally(signal -> initAttempted.set(true))
                 .then();
     }
 
@@ -173,8 +175,9 @@ public class HttpMcpClientImpl implements HttpMcpClient {
         if (throwable instanceof WebClientRequestException) {
             return false;
         }
-        if (throwable instanceof McpClientException mce) {
-            return mce.getErrorCode() != SESSION_EXPIRED_ERROR_CODE;
+        if (throwable instanceof McpClientException) {
+            // JSON-RPC application errors are not retryable (server understood the request)
+            return false;
         }
         if (throwable instanceof WebClientResponseException wcre) {
             return wcre.getStatusCode().is5xxServerError();

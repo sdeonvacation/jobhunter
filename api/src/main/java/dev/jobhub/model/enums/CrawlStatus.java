@@ -4,5 +4,7 @@ public enum CrawlStatus {
     SUCCESS,
     EMPTY,
     ERROR,
-    PROTECTED
+    RATE_LIMITED,
+    PROTECTED,
+    SKIPPED
 }

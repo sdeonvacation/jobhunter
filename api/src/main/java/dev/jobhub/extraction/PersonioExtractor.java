@@ -89,6 +89,10 @@ public class PersonioExtractor implements JobExtractor {
             log.warn("Personio [{}]: board not found (404) on both domains", slug);
             return ExtractionResult.empty(elapsed(start));
         } catch (WebClientResponseException e) {
+            if (e.getStatusCode().value() == 429) {
+                log.warn("Personio [{}]: rate limited (429) after retries exhausted", slug);
+                return ExtractionResult.rateLimited(elapsed(start));
+            }
             log.error("Personio [{}]: HTTP {} - {}", slug, e.getStatusCode(), e.getMessage());
             return ExtractionResult.error("HTTP " + e.getStatusCode(), elapsed(start));
         } catch (Exception e) {

@@ -126,12 +126,18 @@ public class CrawlService {
         Optional<JobExtractor> extractorOpt = extractorRegistry.getExtractor(endpoint.getAtsType());
         if (extractorOpt.isEmpty()) {
             log.warn("No extractor for ATS type: {} (endpoint: {})", endpoint.getAtsType(), endpoint.getId());
+            endpoint.setLastCrawlStatus(CrawlStatus.SKIPPED);
+            endpoint.setLastCrawledAt(LocalDateTime.now());
+            endpointRepository.save(endpoint);
             return 0;
         }
 
         JobExtractor extractor = extractorOpt.get();
         if (!extractor.canExtract(endpoint)) {
             log.warn("Extractor cannot handle endpoint [{}]: missing slug or misconfigured", endpoint.getId());
+            endpoint.setLastCrawlStatus(CrawlStatus.SKIPPED);
+            endpoint.setLastCrawledAt(LocalDateTime.now());
+            endpointRepository.save(endpoint);
             return 0;
         }
 
@@ -140,6 +146,18 @@ public class CrawlService {
     }
 
     private int processExtractionResult(CareerEndpoint endpoint, ExtractionResult result) {
+        if (result.status() == ExtractionStatus.RATE_LIMITED) {
+            endpoint.setLastCrawlStatus(CrawlStatus.RATE_LIMITED);
+            endpoint.setLastCrawledAt(LocalDateTime.now());
+            endpoint.setLastErrorMessage(result.errorMessage());
+            // Don't increment consecutiveErrors — transient rate limit, not a permanent failure
+            endpointRepository.save(endpoint);
+            log.warn("Rate limited for endpoint [{}] (company: {}), will retry next cycle",
+                    endpoint.getId(),
+                    endpoint.getCompany() != null ? endpoint.getCompany().getName() : "unknown");
+            return 0;
+        }
+
         if (result.status() == ExtractionStatus.ERROR) {
             endpoint.setLastCrawlStatus(CrawlStatus.ERROR);
             endpoint.setLastCrawledAt(LocalDateTime.now());
