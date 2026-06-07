@@ -8,11 +8,12 @@ const inputSchema = z.object({
 const SYSTEM_PROMPT = `Extract technical skills, tools, frameworks, programming languages, platforms, and methodologies from this job posting.
 
 Rules:
-- ONLY extract keywords that are explicitly mentioned as job requirements or qualifications
+- ONLY extract keywords explicitly mentioned as requirements, qualifications, or tech stack
+- Include version-specific mentions (e.g. "Java 8", "Python 3")
+- Include cloud providers, databases, messaging systems, CI/CD tools, testing frameworks, and architectural patterns (e.g. "microservice architecture", "event-driven", "TDD")
 - Ignore navigation, page chrome, HTML/JS boilerplate, iframe attributes, URL patterns, and cookie/tracking scripts
-- Do NOT include single letters, generic words (e.g. "scale", "ownership", "collaboration"), or partial matches from URLs
-- Each keyword must be a recognizable technology, tool, language, framework, platform, methodology, or certification
-- DO NOT hallucinate
+- Do NOT include single letters, generic business terms (e.g. "collaboration", "ownership"), or partial matches from URLs
+- Each keyword must be a recognizable technology, tool, language, framework, platform, database, methodology, or certification
 - Return as a JSON object with a "keywords" array of strings`;
 
 interface LLMResponse {
@@ -87,7 +88,30 @@ export async function extractKeywordsViaLLM(text: string): Promise<string[]> {
 }
 
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return html
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Extract job description from LD+JSON JobPosting schema if present.
+ * This gives much cleaner text than the full page HTML.
+ */
+function extractJobDescriptionFromHtml(html: string): string {
+  const ldJsonMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g);
+  if (ldJsonMatch) {
+    for (const block of ldJsonMatch) {
+      try {
+        const content = block.replace(/<\/?script[^>]*>/g, '');
+        const data = JSON.parse(content);
+        if (data['@type'] === 'JobPosting' && data.description) {
+          return stripHtml(data.description);
+        }
+      } catch { /* ignore parse errors */ }
+    }
+  }
+  // Fallback: strip full page HTML
+  return stripHtml(html);
 }
 
 function isUrl(input: string): boolean {
@@ -112,7 +136,7 @@ export const getJobKeywordsTool = {
   handler: async (params: z.infer<typeof inputSchema>, client: JobHunterClient) => {
     if (isUrl(params.job_id)) {
       const html = await fetchPageText(params.job_id);
-      const text = stripHtml(html);
+      const text = extractJobDescriptionFromHtml(html);
       const keywords = await extractKeywordsViaLLM(text);
       const output = [
         `URL: ${params.job_id}`,
