@@ -3,13 +3,13 @@
   "mcp": {
     "reactive-resume": {
       "type": "remote",
-      "url": "http://localhost:3000/mcp",
+      "url": "http://localhost:3001/mcp",
       "headers": {
         "x-api-key": "peGdnDQMCtxEcENhYcsakNBPzfnWYaHvxEZuBYBfViGXnwNFvKsbanvTTloDBZYO"
       },
       "enabled": true
     },
-    "jobhub": {
+    "jobhunter": {
       "type": "local",
       "command": [
         "node",
