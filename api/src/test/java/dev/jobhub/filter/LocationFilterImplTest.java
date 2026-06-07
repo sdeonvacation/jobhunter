@@ -78,69 +78,81 @@ class LocationFilterImplTest {
     void netherlandsLocations_skip(String location) {
         var result = filter.filter(location);
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
+        assertThat(result.reason()).isEqualTo("location: not Germany");
     }
 
-    // --- KEEP: Generic remote / flexible ---
+    // --- KEEP: Whitelisted remote patterns ---
 
     @ParameterizedTest
     @ValueSource(strings = {
             "Remote",
             "remote",
-            "Flexible",
-            "Anywhere",
             "Remote - Europe",
             "Remote - EMEA",
-            "Hybrid - Berlin"
+            "Remote - EU",
+            "Remote - Global",
+            "Remote - Worldwide",
+            "Remote - DACH",
+            "Remote - Germany",
+            "Remote-EU"
     })
-    void genericRemote_keep(String location) {
+    void whitelistedRemote_keep(String location) {
         var result = filter.filter(location);
         assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
     }
 
-    // --- KEEP: EMEA / Europe ---
+    // --- KEEP: Germany city in compound location ---
 
     @ParameterizedTest
     @ValueSource(strings = {
+            "Hybrid - Berlin",
+            "Berlin or Remote",
+            "Munich, Germany (Hybrid)"
+    })
+    void germanyCityInCompound_keep(String location) {
+        var result = filter.filter(location);
+        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+    }
+
+    // --- SKIP: Generic/vague locations (whitelist rejects unknowns) ---
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Flexible",
+            "Anywhere",
             "EMEA",
             "Europe",
             "EU",
-            "Remote, EMEA"
-    })
-    void emeaEurope_keep(String location) {
-        var result = filter.filter(location);
-        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
-    }
-
-    // --- KEEP: Multi-location ---
-
-    @ParameterizedTest
-    @ValueSource(strings = {
+            "Remote, EMEA",
             "2 Locations",
             "3 Locations",
             "5 locations",
             "12 Locations"
     })
-    void multiLocation_skip(String location) {
+    void vagueOrNonWhitelisted_skip(String location) {
         var result = filter.filter(location);
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
+        assertThat(result.reason()).isEqualTo("location: not Germany");
     }
 
-    // --- KEEP: null/blank ---
+    // --- SKIP: null/blank (empty location) ---
 
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {"   ", "\t"})
-    void nullOrBlank_keep(String location) {
+    void nullOrBlank_skip(String location) {
         var result = filter.filter(location);
-        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+        assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
+        assertThat(result.reason()).isEqualTo("location: empty");
     }
 
-    // --- KEEP: Unknown location (permissive default) ---
+    // --- SKIP: Unknown location ---
 
     @Test
-    void unknownLocation_keep() {
+    void unknownLocation_skip() {
         var result = filter.filter("Mars Colony");
-        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+        assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
+        assertThat(result.reason()).isEqualTo("location: not Germany");
     }
 
     // --- SKIP: US locations ---
@@ -172,7 +184,7 @@ class LocationFilterImplTest {
     void usLocations_skip(String location) {
         var result = filter.filter(location);
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        assertThat(result.reason()).isEqualTo("location: US");
+        assertThat(result.reason()).isEqualTo("location: not Germany");
     }
 
     // --- SKIP: India locations ---
@@ -192,10 +204,10 @@ class LocationFilterImplTest {
     void indiaLocations_skip(String location) {
         var result = filter.filter(location);
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        assertThat(result.reason()).isEqualTo("location: India");
+        assertThat(result.reason()).isEqualTo("location: not Germany");
     }
 
-    // --- SKIP: Restricted remote ---
+    // --- SKIP: Non-whitelisted remote (region not in pattern) ---
 
     @ParameterizedTest
     @ValueSource(strings = {
@@ -208,13 +220,13 @@ class LocationFilterImplTest {
             "Remote - Americas",
             "Remote - Australia"
     })
-    void restrictedRemote_skip(String location) {
+    void nonWhitelistedRemote_skip(String location) {
         var result = filter.filter(location);
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        assertThat(result.reason()).isEqualTo("location: restricted remote");
+        assertThat(result.reason()).isEqualTo("location: not Germany");
     }
 
-    // --- SKIP: UK-only ---
+    // --- SKIP: UK locations ---
 
     @ParameterizedTest
     @ValueSource(strings = {
@@ -230,7 +242,7 @@ class LocationFilterImplTest {
     void ukLocations_skip(String location) {
         var result = filter.filter(location);
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        assertThat(result.reason()).isEqualTo("location: UK");
+        assertThat(result.reason()).isEqualTo("location: not Germany");
     }
 
     // --- SKIP: Other non-target countries ---
@@ -253,27 +265,21 @@ class LocationFilterImplTest {
     void otherNonTargetCountries_skip(String location) {
         var result = filter.filter(location);
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        assertThat(result.reason()).isEqualTo("location: non-target country");
+        assertThat(result.reason()).isEqualTo("location: not Germany");
     }
 
-    // --- Edge cases: target location takes precedence ---
-
-    @Test
-    void berlinWithRemote_keep() {
-        // Germany pattern matches first
-        var result = filter.filter("Berlin or Remote");
-        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
-    }
+    // --- Edge cases ---
 
     @Test
     void amsterdamHybrid_skip() {
         var result = filter.filter("Amsterdam, Hybrid");
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
+        assertThat(result.reason()).isEqualTo("location: not Germany");
     }
 
     @Test
     void remoteEurope_keep() {
-        // "Remote - Europe" contains "Remote" and the restricted pattern won't match "Europe"
+        // Matches anchored pattern: ^remote\s*-\s*europe$
         var result = filter.filter("Remote - Europe");
         assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
     }

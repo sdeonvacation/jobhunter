@@ -38,11 +38,13 @@ class MatchScorerConfigTest {
                 Map.of("java", 10.0),
                 Map.of("java", List.of("\\bjava\\b")),
                 10.0, List.of(), 0.0,
-                new PersonalProfile.ScoringThresholds(80, 1, 50, 1)
+                new PersonalProfile.ScoringThresholds(80, 1, 50, 1),
+                List.of("java")
         );
         MatchScorer scorer = new MatchScorer(loader);
 
         // Java weight=10, benchmark=10 → score=100, matches=1, threshold apply needs score>=80 and matches>=1
+        // Primary skill "java" matched so primary-skill cap (70) does not apply
         MatchScorer.MatchResult result = scorer.scoreFromDescription(
                 "Java Developer", "We need a java developer");
 
@@ -72,7 +74,8 @@ class MatchScorerConfigTest {
                 Map.of("java", 5.0),
                 Map.of("java", List.of("\\bjava\\b")),
                 10.0, List.of("blockchain", "web3"), 3.0,
-                new PersonalProfile.ScoringThresholds(40, 1, 25, 1)
+                new PersonalProfile.ScoringThresholds(40, 1, 25, 1),
+                List.of("java")
         );
         MatchScorer scorer = new MatchScorer(loader);
 
@@ -81,6 +84,7 @@ class MatchScorerConfigTest {
                 "Java Blockchain Dev", "java blockchain developer");
 
         // earned = 5 (java) + 3 (bonus) = 8, benchmark = 10 → 80%
+        // Primary skill "java" matched so primary-skill cap (70) does not apply
         assertThat(result.overallScore()).isEqualTo(80);
         assertThat(result.matchedSkills()).contains("AI/ML"); // bonus label
     }
@@ -161,6 +165,18 @@ class MatchScorerConfigTest {
             List<String> bonusSignals,
             double bonusWeight,
             PersonalProfile.ScoringThresholds thresholds) {
+        return loaderWithScoringConfig(skillWeights, skillVariants, benchmarkWeight,
+                bonusSignals, bonusWeight, thresholds, List.of());
+    }
+
+    private PersonalProfileLoader loaderWithScoringConfig(
+            Map<String, Double> skillWeights,
+            Map<String, List<String>> skillVariants,
+            double benchmarkWeight,
+            List<String> bonusSignals,
+            double bonusWeight,
+            PersonalProfile.ScoringThresholds thresholds,
+            List<String> primarySkills) {
 
         PersonalProfileLoader loader = mock(PersonalProfileLoader.class);
         List<PersonalProfile.ProfileSkill> skills = skillWeights.keySet().stream()
@@ -174,7 +190,7 @@ class MatchScorerConfigTest {
                 null,
                 new PersonalProfile.ScoringConfig(
                         benchmarkWeight, thresholds, bonusSignals, bonusWeight,
-                        skillWeights, skillVariants, List.of(), 70, List.of(), 50),
+                        skillWeights, skillVariants, primarySkills, 70, List.of(), 50),
                 null
         , null));
         return loader;

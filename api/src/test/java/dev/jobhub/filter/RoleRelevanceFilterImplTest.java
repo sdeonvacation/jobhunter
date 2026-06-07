@@ -32,30 +32,23 @@ class RoleRelevanceFilterImplTest {
     @ValueSource(strings = {
             "Senior Backend Engineer",
             "Staff Platform Engineer",
-            "DevOps Engineer",
             "Data Engineer",
             "Software Developer",
             "SRE",
-            "Frontend Developer",
             "Machine Learning Engineer",
             "Cloud Infrastructure Engineer",
             "Full-Stack Developer",
             "Full Stack Engineer",
             "Fullstack Engineer",
             "Back-End Developer",
-            "Front-End Engineer",
             "Security Engineer",
-            "QA Engineer",
             "SDET",
             "Site Reliability Engineer",
-            "Tech Lead",
             "SDE II",
             "CTO",
-            "Sales Engineer",
             "DevSecOps Engineer",
             "Platform Engineer",
             "Kubernetes Engineer",
-            "K8s Platform Lead",
             "ML Engineer",
             "Senior Software Engineer - Backend",
             "Staff Engineer, Infrastructure"
@@ -65,6 +58,23 @@ class RoleRelevanceFilterImplTest {
 
         assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
         assertThat(result.reason()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "DevOps Engineer",
+            "Frontend Developer",
+            "Front-End Engineer",
+            "QA Engineer",
+            "Tech Lead",
+            "Sales Engineer",
+            "K8s Platform Lead"
+    })
+    void excludeKeywordTakesPriority_skip(String title) {
+        FilterResult result = filter.filter(title);
+
+        assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
+        assertThat(result.reason()).isEqualTo("non-engineering role");
     }
 
     @ParameterizedTest
@@ -127,6 +137,11 @@ class RoleRelevanceFilterImplTest {
     void caseInsensitive_keep() {
         assertThat(filter.filter("SENIOR SOFTWARE ENGINEER").decision()).isEqualTo(FilterDecision.KEEP);
         assertThat(filter.filter("backend developer").decision()).isEqualTo(FilterDecision.KEEP);
-        assertThat(filter.filter("DevOps ENGINEER").decision()).isEqualTo(FilterDecision.KEEP);
+    }
+
+    @Test
+    void caseInsensitive_excludeKeyword_skip() {
+        // "devops" exclude keyword matches case-insensitively
+        assertThat(filter.filter("DevOps ENGINEER").decision()).isEqualTo(FilterDecision.SKIP);
     }
 }
