@@ -26,6 +26,12 @@ public interface CareerEndpointRepository extends JpaRepository<CareerEndpoint, 
             "ORDER BY e.lastCrawledAt ASC NULLS FIRST")
     List<CareerEndpoint> findEndpointsDueForCrawl(@Param("cutoff") LocalDateTime cutoff, Pageable pageable);
 
+    @Query("SELECT e FROM CareerEndpoint e JOIN FETCH e.company WHERE e.isActive = true " +
+            "AND e.atsType != 'CUSTOM' " +
+            "AND (e.lastCrawledAt IS NULL OR e.lastCrawledAt < :cutoff) " +
+            "ORDER BY e.lastCrawledAt ASC NULLS FIRST")
+    List<CareerEndpoint> findAllDueForCrawl(@Param("cutoff") LocalDateTime cutoff);
+
     default List<CareerEndpoint> findDueForCrawl(LocalDateTime cutoff, int limit) {
         return findEndpointsDueForCrawl(cutoff, PageRequest.of(0, limit));
     }

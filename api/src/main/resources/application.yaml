@@ -32,7 +32,6 @@ ai-crawl:
 crawl:
   default-frequency-hours: 12
   high-priority-frequency-hours: 6
-  batch-size: 50
   timeout-seconds: 30
 
 discovery:
