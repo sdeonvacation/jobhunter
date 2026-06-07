@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5435}/jobhub
-    username: ${DB_USER:jobhub}
-    password: ${DB_PASSWORD:jobhub}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5435}/jobhunter
+    username: ${DB_USER:jobhunter}
+    password: ${DB_PASSWORD:jobhunter}
   jpa:
     hibernate:
       ddl-auto: none
@@ -98,5 +98,5 @@ server:
 
 logging:
   level:
-    dev.jobhub: DEBUG
+    dev.jobhunter: DEBUG
     org.springframework.web.reactive: INFO

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { JobHubClient } from './client.js';
+import { JobHunterClient } from './client.js';
 import {
   getJobKeywordsTool,
   markJobAppliedTool,
@@ -16,10 +16,10 @@ import {
 } from './tools/index.js';
 import { profileResources, jobResources } from './resources/index.js';
 
-const client = new JobHubClient();
+const client = new JobHunterClient();
 
 const server = new McpServer({
-  name: 'jobhub',
+  name: 'jobhunter',
   version: '1.0.0',
 });
 
@@ -45,7 +45,7 @@ for (const tool of tools) {
     async (params: Record<string, unknown>) => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return await (tool.handler as (params: any, client: JobHubClient) => Promise<any>)(params, client);
+        return await (tool.handler as (params: any, client: JobHunterClient) => Promise<any>)(params, client);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return {

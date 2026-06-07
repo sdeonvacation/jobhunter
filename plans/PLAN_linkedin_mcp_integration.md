@@ -20,7 +20,7 @@ Integrate the [linkedin-mcp-server](https://github.com/stickerdaniel/linkedin-mc
 - Unit: Mock `HttpMcpClient` responses, test provider logic, test DTO mapping
 - Integration: Testcontainers with WireMock simulating LinkedIn MCP HTTP responses
 - E2E: Manual verification with real LinkedIn MCP container (browser-dependent)
-- Done when: LinkedIn jobs appear in dashboard, company enrichment populates, outreach commands work via JobHub MCP tools
+- Done when: LinkedIn jobs appear in dashboard, company enrichment populates, outreach commands work via JobHunter MCP tools
 
 ## Phases
 
@@ -55,14 +55,14 @@ Integrate the [linkedin-mcp-server](https://github.com/stickerdaniel/linkedin-mc
 - Step 1: Create `LinkedInNetworkingService` (wraps `get_company_employees`, `connect_with_person`, `send_message`)
 - Step 2: Add `search_people` integration (find recruiters/hiring managers at target companies, filtered by title keywords: "recruiter", "hiring manager", "engineering manager", "head of engineering")
 - Step 3: Add `OutreachContact` entity (personId, name, title, company, connectionStatus, lastContactedAt, notes)
-- Step 4: Expose 3 new MCP tools in jobhub-mcp: `find_contacts` (search people at company), `connect_with` (send connection request with note), `send_linkedin_message`
+- Step 4: Expose 3 new MCP tools in jobhunter-mcp: `find_contacts` (search people at company), `connect_with` (send connection request with note), `send_linkedin_message`
 - Step 5: Add safety guards: daily connection request limit (configurable, default: 5), message cooldown per person (7 days), confirmation prompts
 - Step 6: Liquibase migration for OutreachContact table
 
 ### Phase 5: Profile Intelligence
 
 - Step 1: Create `LinkedInProfileService` (wraps `get_person_profile` with sections: experience, skills, posts)
-- Step 2: Expose `research_person` MCP tool in jobhub-mcp (input: LinkedIn URL or name + company, output: structured profile summary)
+- Step 2: Expose `research_person` MCP tool in jobhunter-mcp (input: LinkedIn URL or name + company, output: structured profile summary)
 - Step 3: Add `get_sidebar_profiles` integration for discovering related people (e.g., "People also viewed" on hiring manager profile)
 - Step 4: Cache profile lookups in DB (avoid re-scraping same person within 7 days)
 - Step 5: Add `ProfileCache` entity (linkedinUrl, profileData JSONB, fetchedAt, expiresAt)
@@ -75,7 +75,7 @@ Integrate the [linkedin-mcp-server](https://github.com/stickerdaniel/linkedin-mc
 - Step 3: Add "Connect" button on job poster (confirmation dialog → calls POST /api/linkedin/contacts/{id}/connect, checks daily limit)
 - Step 4: Add "Message" button on job poster (only if CONNECTED status, confirmation dialog with message textarea → calls POST /api/linkedin/contacts/{id}/message)
 - Step 5: Add Company detail page section: LinkedIn insights (industry, size, recent activity, contacts found)
-- Step 6: Update jobhub-mcp tool list: add `find_contacts`, `connect_with`, `send_linkedin_message`, `research_person`
+- Step 6: Update jobhunter-mcp tool list: add `find_contacts`, `connect_with`, `send_linkedin_message`, `research_person`
 - Step 7: Add LinkedIn connection status indicator on company cards (shows if you have contacts there)
 - Step 8: Update README with LinkedIn MCP setup instructions
 

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { existsSync, readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { JobHubClient, TechStack } from '../client.js';
+import { JobHunterClient, TechStack } from '../client.js';
 
 const inputSchema = z.object({
   job_id: z.string().describe('Job UUID, short ID (8 chars), or job posting URL'),
@@ -97,7 +97,7 @@ function isUrl(input: string): boolean {
 
 async function fetchPageText(url: string): Promise<string> {
   const response = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; JobHubBot/1.0)' },
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; JobHunterBot/1.0)' },
     redirect: 'follow',
   });
   if (!response.ok) {
@@ -110,7 +110,7 @@ export const getJobKeywordsTool = {
   name: 'get_job_keywords',
   description: 'Extract tech keywords from a job — accepts UUID, short ID (8 chars), or a job posting URL',
   inputSchema,
-  handler: async (params: z.infer<typeof inputSchema>, client: JobHubClient) => {
+  handler: async (params: z.infer<typeof inputSchema>, client: JobHunterClient) => {
     if (isUrl(params.job_id)) {
       // Fetch external job page and extract keywords
       const html = await fetchPageText(params.job_id);

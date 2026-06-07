@@ -2,15 +2,15 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: jobhub
-      POSTGRES_USER: jobhub
-      POSTGRES_PASSWORD: jobhub
+      POSTGRES_DB: jobhunter
+      POSTGRES_USER: jobhunter
+      POSTGRES_PASSWORD: jobhunter
     ports:
       - "5435:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U jobhub -d jobhub"]
+      test: ["CMD-SHELL", "pg_isready -U jobhunter -d jobhunter"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -43,8 +43,8 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 5432
-      DB_USER: jobhub
-      DB_PASSWORD: jobhub
+      DB_USER: jobhunter
+      DB_PASSWORD: jobhunter
       JOBHUNTER_AI_API_KEY: ${JOBHUNTER_AI_API_KEY:-}
       JOBHUNTER_AI_PROVIDER: ${JOBHUNTER_AI_PROVIDER:-anthropic}
       LINKEDIN_MCP_ENABLED: ${LINKEDIN_MCP_ENABLED:-true}

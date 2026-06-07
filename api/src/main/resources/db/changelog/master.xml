@@ -9,5 +9,6 @@
     <include file="db/changelog/002-seed-companies.sql"/>
     <include file="db/changelog/003-linkedin-integration.sql"/>
     <include file="db/changelog/004-fix-migrated-endpoints.sql"/>
+    <include file="db/changelog/005-job-source-migration.sql"/>
 
 </databaseChangeLog>

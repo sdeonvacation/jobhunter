@@ -198,7 +198,7 @@ For OpenCode (`opencode.json`):
       "type": "local",
       "command": ["npx", "jobhunter-mcp"],
       "environment": {
-        "JOBHUB_API_URL": "http://localhost:8080"
+        "JOBHUNTER_API_URL": "http://localhost:8080"
       },
       "enabled": true
     }
@@ -215,7 +215,7 @@ For Claude Code (`.claude/settings.json` or project `.mcp.json`):
       "command": "npx",
       "args": ["jobhunter-mcp"],
       "env": {
-        "JOBHUB_API_URL": "http://localhost:8080"
+        "JOBHUNTER_API_URL": "http://localhost:8080"
       }
     }
   }
@@ -277,24 +277,74 @@ Keyword extraction is configured in `keywords.yaml`. See [Configuration](#config
 
 All behavior is controlled by two YAML files at the project root. No code changes needed.
 
-### `profile.yaml` — Your Job Search Profile
+### Quick Setup for Your Role
 
-Controls filtering, scoring, and recommendations. The API reads this on startup.
+Get running in 3 steps. Edit `profile.yaml` at the project root:
 
-| Section | What it configures |
-|---------|-------------------|
-| `name`, `title`, `years-of-experience` | Your identity for cover letters and resume tailoring |
-| `skills[]` | Each skill with proficiency level and category |
-| `preferences` | Locations, salary, seniority, remote preference |
-| `filters.role` | Include/exclude patterns for job titles |
-| `filters.location` | Allowed cities and remote patterns |
-| `filters.yoe` | Maximum years of experience to consider |
-| `scoring.skill-weights` | Per-skill weight for match scoring |
-| `scoring.skill-variants` | Regex patterns for recognizing each skill in JDs |
-| `scoring.primary-skills` | Core skills — score capped if none match |
-| `scoring.thresholds` | Score cutoffs for APPLY/MAYBE/SKIP recommendations |
+**Step 1: Set your identity**
+```yaml
+name: Your Name
+title: Your Job Title
+years-of-experience: 4
+```
 
-Example (software engineer):
+**Step 2: Define your role filters**
+
+The role filter is whitelist-based. A job title must contain at least one of your `include-patterns` to be kept. Everything else is discarded. Then `exclude-keywords` removes unwanted matches.
+
+```yaml
+filters:
+  role:
+    include-patterns:
+      - "developer"        # plain word match (case-insensitive)
+      - "software"
+      - "backend"
+      - "back[\\s-]end"    # matches "back end" and "back-end"
+      - "fullstack"
+      - "full[\\s-]stack"
+      - "\\bjava\\b"       # word boundary prevents matching "javascript"
+      - "\\bai\\b"         # word boundary prevents matching "email"
+      - "\\bcloud\\b"
+      - "cloud[\\s-]native"
+      - "entwickler"       # German for developer
+    exclude-keywords:
+      - "manager"
+      - "director"
+      - "intern"
+      - "student"
+```
+
+Patterns are regex (case-insensitive). Use `\\b` for word boundaries on short terms, `[\\s-]` to match space or hyphen variants.
+
+**Step 3: Set your locations**
+
+```yaml
+  location:
+    target-cities:
+      - "berlin"
+      - "munich"
+      - "remote"
+    remote-patterns:
+      - "remote"
+      - "remote.*germany"
+  language:
+    target: "en"
+    exclude-patterns:
+      - "german\\s+c[12]"
+      - "fluent\\s+german"
+  yoe:
+    max-years: 5
+```
+
+Restart the API after editing. That's it, the system will now filter jobs to your exact role and location preferences.
+
+---
+
+### Role Examples
+
+<details>
+<summary><strong>Backend Engineer (Java/Spring)</strong></summary>
+
 ```yaml
 name: Sam
 title: Backend Engineer
@@ -310,9 +360,25 @@ skills:
 
 filters:
   role:
-    exclude-keywords: ["manager", "designer", "devops", "frontend"]
+    include-patterns:
+      - "\\bjava\\b"
+      - "developer"
+      - "software"
+      - "backend"
+      - "back[\\s-]end"
+      - "fullstack"
+      - "full[\\s-]stack"
+      - "\\bcloud\\b"
+      - "cloud[\\s-]native"
+      - "engineer"
+    exclude-keywords:
+      - "manager"
+      - "frontend"
+      - "designer"
+      - "devops"
+      - "intern"
   location:
-    germany-cities: ["berlin", "munich", "hamburg", "remote"]
+    target-cities: ["berlin", "munich", "hamburg", "remote"]
   yoe:
     max-years: 5
 
@@ -324,8 +390,11 @@ scoring:
     spring boot: 4.5
     kubernetes: 3.0
 ```
+</details>
 
-Example (product designer):
+<details>
+<summary><strong>Product Designer</strong></summary>
+
 ```yaml
 name: Alex
 title: Product Designer
@@ -341,10 +410,20 @@ skills:
 
 filters:
   role:
-    include-patterns: ["designer", "ux", "ui", "product design"]
-    exclude-keywords: ["engineer", "developer", "manager", "intern"]
+    include-patterns:
+      - "designer"
+      - "\\bux\\b"
+      - "\\bui\\b"
+      - "product\\s+design"
+      - "interaction\\s+design"
+      - "visual\\s+design"
+    exclude-keywords:
+      - "engineer"
+      - "developer"
+      - "manager"
+      - "intern"
   location:
-    germany-cities: ["berlin", "munich", "remote"]
+    target-cities: ["berlin", "munich", "remote"]
   yoe:
     max-years: 5
 
@@ -356,6 +435,126 @@ scoring:
     user research: 4.5
     design systems: 4.0
 ```
+</details>
+
+<details>
+<summary><strong>Data Scientist (Python/ML)</strong></summary>
+
+```yaml
+name: Jordan
+title: Data Scientist
+years-of-experience: 3
+
+skills:
+  - name: Python
+    proficiency: expert
+  - name: PyTorch
+    proficiency: advanced
+  - name: SQL
+    proficiency: expert
+
+filters:
+  role:
+    include-patterns:
+      - "data\\s+scientist"
+      - "machine\\s+learning"
+      - "\\bml\\b"
+      - "\\bai\\b"
+      - "artificial\\s+intelligence"
+      - "deep\\s+learning"
+      - "\\bnlp\\b"
+      - "research\\s+engineer"
+    exclude-keywords:
+      - "manager"
+      - "director"
+      - "intern"
+      - "analyst"
+  location:
+    target-cities: ["san francisco", "new york", "remote"]
+    remote-patterns: ["remote", "remote.*us"]
+  language:
+    target: "en"
+  yoe:
+    max-years: 5
+
+scoring:
+  primary-skills: ["python", "pytorch", "machine learning"]
+  primary-skill-cap: 70
+  skill-weights:
+    python: 5.0
+    pytorch: 4.5
+    sql: 3.0
+```
+</details>
+
+<details>
+<summary><strong>DevOps / Platform Engineer</strong></summary>
+
+```yaml
+name: Riley
+title: Platform Engineer
+years-of-experience: 5
+
+skills:
+  - name: Kubernetes
+    proficiency: expert
+  - name: Terraform
+    proficiency: expert
+  - name: AWS
+    proficiency: advanced
+
+filters:
+  role:
+    include-patterns:
+      - "devops"
+      - "dev\\s*ops"
+      - "platform"
+      - "infrastructure"
+      - "\\bsre\\b"
+      - "site\\s+reliability"
+      - "\\bcloud\\b"
+      - "kubernetes"
+    exclude-keywords:
+      - "manager"
+      - "director"
+      - "intern"
+      - "frontend"
+  location:
+    target-cities: ["london", "amsterdam", "remote"]
+    remote-patterns: ["remote", "remote.*eu"]
+  yoe:
+    max-years: 7
+
+scoring:
+  primary-skills: ["kubernetes", "terraform", "aws"]
+  primary-skill-cap: 70
+  skill-weights:
+    kubernetes: 5.0
+    terraform: 4.5
+    aws: 4.0
+```
+</details>
+
+---
+
+### `profile.yaml` — Full Reference
+
+| Section | What it configures |
+|---------|-------------------|
+| `name`, `title`, `years-of-experience` | Your identity for cover letters and resume tailoring |
+| `skills[]` | Each skill with proficiency level and category |
+| `preferences` | Locations, salary, seniority, remote preference |
+| `filters.role.include-patterns` | Whitelist: job title must match at least one (regex, case-insensitive) |
+| `filters.role.exclude-keywords` | Blacklist: title matching any of these is rejected (takes priority) |
+| `filters.location.target-cities` | Allowed city names (case-insensitive substring match) |
+| `filters.location.remote-patterns` | Regex patterns that identify remote positions |
+| `filters.language.target` | ISO language code (e.g., "en") |
+| `filters.language.exclude-patterns` | Regex patterns indicating non-target language requirement |
+| `filters.yoe.max-years` | Maximum years of experience to consider |
+| `scoring.skill-weights` | Per-skill weight for match scoring |
+| `scoring.skill-variants` | Regex patterns for recognizing each skill in JDs |
+| `scoring.primary-skills` | Core skills — score capped if none match |
+| `scoring.thresholds` | Score cutoffs for APPLY/MAYBE/SKIP recommendations |
 
 Restart the API after editing.
 

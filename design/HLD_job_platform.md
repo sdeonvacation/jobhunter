@@ -1,4 +1,4 @@
-# HLD: JobHub — Autonomous Job Discovery & Resume Tailoring Platform
+# HLD: JobHunter — Autonomous Job Discovery & Resume Tailoring Platform
 
 ## Tech Stack
 
@@ -48,7 +48,7 @@
 └─────────────────────────────────────┼───────────────────────────────────────────┘
                                       │
                     ┌─────────────────┴─────────────────┐
-                    │     jobhub-mcp-server (TypeScript) │
+                    │     jobhunter-mcp-server (TypeScript) │
                     │     Tools: search_jobs, tailor_    │
                     │     resume, get_radar, etc.        │
                     └─────────────────┬─────────────────┘
@@ -105,10 +105,10 @@ External APIs (HTTPS outbound):
 ## Package Structure
 
 ```
-jobhub/
+jobhunter/
 ├── api/                                    # Spring Boot application
-│   └── src/main/java/dev/jobhub/
-│       ├── JobHubApplication.java
+│   └── src/main/java/dev/jobhunter/
+│       ├── JobHunterApplication.java
 │       ├── config/
 │       │   ├── AppConfig.java              # General beans
 │       │   ├── QuartzConfig.java           # Scheduler setup
@@ -1077,9 +1077,9 @@ services:
       dockerfile: Dockerfile
     ports: ["8080:8080"]
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/jobhub
-      SPRING_DATASOURCE_USERNAME: jobhub
-      SPRING_DATASOURCE_PASSWORD: jobhub
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/jobhunter
+      SPRING_DATASOURCE_USERNAME: jobhunter
+      SPRING_DATASOURCE_PASSWORD: jobhunter
       AI_PROVIDER: anthropic
       AI_API_KEY: ${ANTHROPIC_API_KEY}
       AI_EXTRACTION_MODEL: claude-haiku-4-5
@@ -1099,13 +1099,13 @@ services:
     image: postgres:16-alpine
     ports: ["5432:5432"]
     environment:
-      POSTGRES_DB: jobhub
-      POSTGRES_USER: jobhub
-      POSTGRES_PASSWORD: jobhub
+      POSTGRES_DB: jobhunter
+      POSTGRES_USER: jobhunter
+      POSTGRES_PASSWORD: jobhunter
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U jobhub"]
+      test: ["CMD-SHELL", "pg_isready -U jobhunter"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -1132,7 +1132,7 @@ dashboard ──depends──> api ──depends──> db
                         ├──spawns──> jobspy-mcp (stdio process)
                         └──spawns──> mcp-stepstone (stdio process)
 
-jobhub-mcp-server (separate, stdio to Claude Desktop)
+jobhunter-mcp-server (separate, stdio to Claude Desktop)
         │
         └──HTTP──> api (localhost:8080)
 ```
@@ -1225,9 +1225,9 @@ Claude Desktop      MCP Server (TS)        Spring Boot API         AiProvider   
 ```yaml
 spring:
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:5432/jobhub
-    username: ${DB_USER:jobhub}
-    password: ${DB_PASSWORD:jobhub}
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/jobhunter
+    username: ${DB_USER:jobhunter}
+    password: ${DB_PASSWORD:jobhunter}
   jpa:
     hibernate:
       ddl-auto: validate  # Liquibase handles schema

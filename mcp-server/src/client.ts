@@ -38,11 +38,11 @@ export interface TechStack {
   concepts?: string[];
 }
 
-export class JobHubClient {
+export class JobHunterClient {
   private baseUrl: string;
 
   constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || process.env.JOBHUB_API_URL || 'http://localhost:8080';
+    this.baseUrl = baseUrl || process.env.JOBHUNTER_API_URL || 'http://localhost:8080';
   }
 
   private async request<T>(path: string, options?: RequestInit): Promise<T> {

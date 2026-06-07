@@ -1,0 +1,6 @@
+package dev.jobhunter.filter;
+
+public interface LocationFilter {
+
+    FilterResult filter(String location);
+}

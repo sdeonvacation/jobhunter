@@ -31,7 +31,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         JobHub Platform                               │
+│                         JobHunter Platform                               │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                       │
 │  ┌──────────────┐   ┌──────────────┐   ┌───────────────────┐        │
@@ -402,7 +402,7 @@ API service gains:
 ### Changeset 1: outreach_contact table
 
 ```xml
-<changeSet id="20240601-1-create-outreach-contact" author="jobhub">
+<changeSet id="20240601-1-create-outreach-contact" author="jobhunter">
     <createTable tableName="outreach_contact">
         <column name="id" type="uuid" defaultValueComputed="gen_random_uuid()">
             <constraints primaryKey="true"/>
@@ -440,7 +440,7 @@ API service gains:
 ### Changeset 2: profile_cache table
 
 ```xml
-<changeSet id="20240601-2-create-profile-cache" author="jobhub">
+<changeSet id="20240601-2-create-profile-cache" author="jobhunter">
     <createTable tableName="profile_cache">
         <column name="id" type="uuid" defaultValueComputed="gen_random_uuid()">
             <constraints primaryKey="true"/>
@@ -473,7 +473,7 @@ API service gains:
 ### Changeset 3: Company LinkedIn columns
 
 ```xml
-<changeSet id="20240601-3-company-linkedin-columns" author="jobhub">
+<changeSet id="20240601-3-company-linkedin-columns" author="jobhunter">
     <addColumn tableName="company">
         <column name="linkedin_url" type="varchar(500)"/>
         <column name="industry" type="varchar(255)"/>
@@ -488,7 +488,7 @@ API service gains:
 ### Changeset 4: JobPosting poster columns
 
 ```xml
-<changeSet id="20240601-4-job-posting-poster-columns" author="jobhub">
+<changeSet id="20240601-4-job-posting-poster-columns" author="jobhunter">
     <addColumn tableName="job_posting">
         <column name="poster_name" type="varchar(255)"/>
         <column name="poster_title" type="varchar(500)"/>
@@ -546,7 +546,7 @@ API service gains:
 
 **Randomized delay**: After each successful request, sleep random(2000, 5000)ms before releasing for next request. Simulates human browsing pattern.
 
-## New MCP Tools (jobhub-mcp)
+## New MCP Tools (jobhunter-mcp)
 
 ### find_contacts
 
@@ -601,7 +601,7 @@ const inputSchema = z.object({
 // Output: Structured profile: name, title, company, experience[], skills[], recent_posts[]
 ```
 
-All 4 tools call the JobHub API backend (`/api/linkedin/*` endpoints), which delegates to the respective services.
+All 4 tools call the JobHunter API backend (`/api/linkedin/*` endpoints), which delegates to the respective services.
 
 ## Dashboard UI Changes
 
@@ -681,7 +681,7 @@ On detection:
 ### HttpMcpClient
 
 ```java
-package dev.jobhub.linkedin;
+package dev.jobhunter.linkedin;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import reactor.core.publisher.Mono;
@@ -700,7 +700,7 @@ public interface HttpMcpClient {
 ### LinkedInRateLimiter
 
 ```java
-package dev.jobhub.linkedin;
+package dev.jobhunter.linkedin;
 
 import java.time.Duration;
 
@@ -721,9 +721,9 @@ public interface LinkedInRateLimiter {
 ### LinkedInCompanyEnricher
 
 ```java
-package dev.jobhub.linkedin;
+package dev.jobhunter.linkedin;
 
-import dev.jobhub.model.Company;
+import dev.jobhunter.model.Company;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -741,7 +741,7 @@ public interface LinkedInCompanyEnricher {
 ### LinkedInNetworkingService
 
 ```java
-package dev.jobhub.linkedin;
+package dev.jobhunter.linkedin;
 
 import java.util.List;
 import java.util.UUID;
@@ -769,7 +769,7 @@ public interface LinkedInNetworkingService {
 ### LinkedInProfileService
 
 ```java
-package dev.jobhub.linkedin;
+package dev.jobhunter.linkedin;
 
 import java.util.List;
 
@@ -796,7 +796,7 @@ public interface LinkedInProfileService {
 ### LinkedIn REST Controller (new endpoints for MCP tools)
 
 ```java
-package dev.jobhub.controller;
+package dev.jobhunter.controller;
 
 // POST /api/linkedin/contacts/search     → findContacts
 // POST /api/linkedin/contacts/{id}/connect → connect

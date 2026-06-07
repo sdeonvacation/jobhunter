@@ -1,4 +1,4 @@
-# JobHub - Project AGENTS.md
+# JobHunter - Project AGENTS.md
 
 ## Commands
 
@@ -12,7 +12,7 @@ JAVA_HOME=/Users/i570749/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.
 JAVA_HOME=/Users/i570749/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew bootRun
 
 # Run JAR directly (faster restart)
-$JAVA_HOME/bin/java -jar build/libs/jobhub-api-0.0.1-SNAPSHOT.jar --spring.liquibase.enabled=false --spring.quartz.auto-startup=false
+$JAVA_HOME/bin/java -jar build/libs/jobhunter-api-0.0.1-SNAPSHOT.jar --spring.liquibase.enabled=false --spring.quartz.auto-startup=false
 
 # Build fat JAR
 JAVA_HOME=/Users/i570749/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew bootJar
@@ -21,7 +21,7 @@ JAVA_HOME=/Users/i570749/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.
 JAVA_HOME=/Users/i570749/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew test
 
 # Run single test class
-JAVA_HOME=/Users/i570749/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew test --tests "dev.jobhub.filter.LanguageFilterImplTest"
+JAVA_HOME=/Users/i570749/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew test --tests "dev.jobhunter.filter.LanguageFilterImplTest"
 
 # Run integration tests (needs Docker/Testcontainers)
 JAVA_HOME=/Users/i570749/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew integrationTest
@@ -67,7 +67,7 @@ curl http://localhost:8080/api/admin/health                           # endpoint
 ```
 jobhunt/
 ├── api/                         # Spring Boot 3.3.5 backend (Java 21)
-│   └── src/main/java/dev/jobhub/
+│   └── src/main/java/dev/jobhunter/
 │       ├── ai/                  # AI providers (Anthropic, OpenAI) - cover letters, resume tailoring
 │       ├── config/              # Spring config, CORS, Quartz, WebClient, RetryFilter
 │       ├── controller/          # REST controllers (/api/*)
@@ -82,7 +82,7 @@ jobhunt/
 │       ├── scheduler/           # Quartz schedulers (Crawl, Scoring, Digest, Discovery, GDPR)
 │       ├── scoring/             # Match/Opportunity/CompanyPriority scorers
 │       └── service/             # Business logic (CrawlService, PersonalProfileLoader, etc.)
-│   └── src/test/java/dev/jobhub/  # Unit tests (JUnit 5 + WireMock)
+│   └── src/test/java/dev/jobhunter/  # Unit tests (JUnit 5 + WireMock)
 │   └── src/main/resources/
 │       ├── application.yaml     # Main config (DB, AI, crawl, scoring schedules)
 │       └── db/changelog/        # Liquibase migrations
@@ -141,7 +141,7 @@ All filter and scoring logic is externalized to `profile.yaml`:
 
 ### Java (API)
 
-- **Imports**: project imports first (`dev.jobhub.*`), then framework (`org.springframework.*`), then stdlib (`java.*`). Star imports OK for `jakarta.persistence.*`, `lombok.*`.
+- **Imports**: project imports first (`dev.jobhunter.*`), then framework (`org.springframework.*`), then stdlib (`java.*`). Star imports OK for `jakarta.persistence.*`, `lombok.*`.
 - **Models**: JPA entities with Lombok (`@Data`, `@Builder`, `@NoArgsConstructor`, `@AllArgsConstructor`). UUID primary keys.
 - **DTOs**: Java records. Flat structure for list endpoints, nested for detail.
 - **Mapping**: Static methods in `DtoMapper` class (not MapStruct).
@@ -149,7 +149,7 @@ All filter and scoring logic is externalized to `profile.yaml`:
 - **Extractors**: Implement `JobExtractor` interface. Return `ExtractionResult` with `List<RawJobData>`. Auto-registered via Spring component scan into `JobExtractorRegistry`.
 - **Filters**: Read config from `PersonalProfileLoader.getProfile()` at construction time. Compile patterns once, not per-call.
 - **Scoring**: All weights/thresholds/variants from profile.yaml. No hardcoded skill lists in scorer code.
-- **Naming**: `camelCase` methods/vars, `PascalCase` classes, package-per-feature under `dev.jobhub`.
+- **Naming**: `camelCase` methods/vars, `PascalCase` classes, package-per-feature under `dev.jobhunter`.
 - **Tests**: Mirror source package structure. `@Tag("integration")` for Testcontainers tests. Unit tests use mocks and WireMock.
 
 ### TypeScript (Dashboard + MCP)
@@ -167,9 +167,9 @@ All filter and scoring logic is externalized to `profile.yaml`:
 
 - PostgreSQL runs in Colima (`colima-jobhunt` profile) on port **5435**.
 - Start DB: `cd /Users/i570749/projects/jobhunt && docker -c colima-jobhunt compose up -d db`
-- DB credentials: `jobhub/jobhub` database `jobhub`.
-- API uses launchd plist at `/tmp/dev.jobhub.api.plist` to stay alive across shell sessions.
-- Dashboard uses launchd plist at `/tmp/dev.jobhub.dashboard.plist`.
+- DB credentials: `jobhunter/jobhunter` database `jobhunter`.
+- API uses launchd plist at `/tmp/dev.jobhunter.api.plist` to stay alive across shell sessions.
+- Dashboard uses launchd plist at `/tmp/dev.jobhunter.dashboard.plist`.
 - Testcontainers need Colima default profile Docker socket (currently incompatible with Docker 29 API).
 - `JAVA_HOME` must point to Temurin 21, not the system Java 25.
 - AI config (provider, api-key, base-url, models) in `application.yaml`, overridable via env vars (`JOBHUNTER_AI_PROVIDER`, `JOBHUNTER_AI_API_KEY`, `JOBHUNTER_AI_BASE_URL`).

@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { JobHubClient } from '../client.js';
+import { JobHunterClient } from '../client.js';
 import { getJobKeywordsTool } from '../tools/getJobKeywords.js';
 import { markJobAppliedTool } from '../tools/markJobApplied.js';
 
-describe('JobHubClient.resolveJobId', () => {
-  let client: JobHubClient;
+describe('JobHunterClient.resolveJobId', () => {
+  let client: JobHunterClient;
 
   beforeEach(() => {
-    client = new JobHubClient('http://test-api:8080');
+    client = new JobHunterClient('http://test-api:8080');
     vi.restoreAllMocks();
   });
 
@@ -72,10 +72,10 @@ describe('JobHubClient.resolveJobId', () => {
 });
 
 describe('getJobKeywordsTool resolves prefix', () => {
-  let client: JobHubClient;
+  let client: JobHunterClient;
 
   beforeEach(() => {
-    client = new JobHubClient('http://test-api:8080');
+    client = new JobHunterClient('http://test-api:8080');
     vi.restoreAllMocks();
   });
 
@@ -105,10 +105,10 @@ describe('getJobKeywordsTool resolves prefix', () => {
 });
 
 describe('markJobAppliedTool resolves prefix', () => {
-  let client: JobHubClient;
+  let client: JobHunterClient;
 
   beforeEach(() => {
-    client = new JobHubClient('http://test-api:8080');
+    client = new JobHunterClient('http://test-api:8080');
     vi.restoreAllMocks();
   });
 
@@ -140,10 +140,10 @@ describe('markJobAppliedTool resolves prefix', () => {
 });
 
 describe('addCompany field names', () => {
-  let client: JobHubClient;
+  let client: JobHunterClient;
 
   beforeEach(() => {
-    client = new JobHubClient('http://test-api:8080');
+    client = new JobHunterClient('http://test-api:8080');
     vi.restoreAllMocks();
   });
 

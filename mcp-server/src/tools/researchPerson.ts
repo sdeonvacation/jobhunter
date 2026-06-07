@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { JobHubClient } from '../client.js';
+import { JobHunterClient } from '../client.js';
 
 const inputSchema = z.object({
   linkedin_url: z.string().optional().describe('LinkedIn profile URL'),
@@ -11,7 +11,7 @@ export const researchPersonTool = {
   name: 'research_person',
   description: 'Research a person\'s LinkedIn profile. Provide either a LinkedIn URL directly, or a name + company to search. Returns structured profile with experience, skills, and recent posts. Results are cached for 7 days.',
   inputSchema,
-  handler: async (params: z.infer<typeof inputSchema>, client: JobHubClient) => {
+  handler: async (params: z.infer<typeof inputSchema>, client: JobHunterClient) => {
     const url = params.linkedin_url || `search:${params.name}@${params.company}`;
     const profile = await client.researchLinkedInProfile(url);
     if (!profile) {

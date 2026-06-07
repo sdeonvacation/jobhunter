@@ -1,4 +1,4 @@
-# Plan: JobHub — Autonomous Job Discovery & Resume Tailoring Platform
+# Plan: JobHunter — Autonomous Job Discovery & Resume Tailoring Platform
 
 ## Overview
 
@@ -602,7 +602,7 @@ colima start && docker compose up
 |   +-- Discovery provider
 +-- mcp-stepstone (sidecar)
 |   +-- Discovery provider + StepStone extraction
-+-- jobhub-mcp-server (TypeScript, stdio)
++-- jobhunter-mcp-server (TypeScript, stdio)
 |   +-- Exposes tools to Claude Desktop
 +-- dashboard (port 3000, optional)
     +-- React frontend
@@ -628,7 +628,7 @@ services:
     build: ./api
     ports: ["8080:8080"]
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/jobhub
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/jobhunter
       - AI_PROVIDER=anthropic
       - AI_API_KEY=${ANTHROPIC_API_KEY}
     depends_on: [db]
@@ -637,9 +637,9 @@ services:
     image: postgres:16
     ports: ["5432:5432"]
     environment:
-      - POSTGRES_DB=jobhub
-      - POSTGRES_USER=jobhub
-      - POSTGRES_PASSWORD=jobhub
+      - POSTGRES_DB=jobhunter
+      - POSTGRES_USER=jobhunter
+      - POSTGRES_PASSWORD=jobhunter
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -658,11 +658,11 @@ volumes:
 ```json
 {
   "mcpServers": {
-    "jobhub": {
+    "jobhunter": {
       "command": "node",
       "args": ["./mcp-server/dist/index.js"],
       "env": {
-        "JOBHUB_API_URL": "http://localhost:8080"
+        "JOBHUNTER_API_URL": "http://localhost:8080"
       }
     }
   }

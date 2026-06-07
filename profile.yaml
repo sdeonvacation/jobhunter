@@ -92,7 +92,7 @@ preferences:
 filters:
   role:
     include-patterns:
-      - "engineer"
+      - "\\bjava\\b"
       - "developer"
       - "programmer"
       - "\\bsre\\b"
@@ -110,6 +110,11 @@ filters:
       - "machine\\s+learning"
       - "\\bsde\\b"
       - "site\\s+reliability"
+      - "forward"
+      - "\\bai\\b"
+      - "artificial\\s+intelligence"
+      - "entwickler"
+      - "cloud[\\s-]native"
     exclude-keywords:
       - "manager"
       - "architect"
@@ -137,7 +142,7 @@ filters:
       - "android"
       - "ios"
   location:
-    germany-cities:
+    target-cities:
       - "germany"
       - "deutschland"
       - "berlin"
@@ -176,6 +181,17 @@ filters:
       - "bielefeld"
     remote-patterns:
       - "^(remote|remote\\s*-\\s*(eu|europe|emea|global|worldwide|dach|ger(many)?))$"
+  language:
+    target: "en"
+    exclude-patterns:
+      - "german\\s+c[12]"
+      - "deutsch\\s+c[12]"
+      - "flie[ßs]end\\s+deutsch"
+      - "fluent\\s+german"
+      - "muttersprache"
+      - "native\\s+german"
+      - "german\\s+native"
+      - "verhandlungssicher"
   yoe:
     max-years: 5
 

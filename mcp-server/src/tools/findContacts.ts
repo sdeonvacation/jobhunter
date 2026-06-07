@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { JobHubClient } from '../client.js';
+import { JobHunterClient } from '../client.js';
 
 const inputSchema = z.object({
   company_name: z.string().describe('Company name to search contacts at'),
@@ -13,7 +13,7 @@ export const findContactsTool = {
   name: 'find_contacts',
   description: 'Find recruiters and hiring managers at a company on LinkedIn. Returns contacts with name, title, LinkedIn URL, and connection status.',
   inputSchema,
-  handler: async (params: z.infer<typeof inputSchema>, client: JobHubClient) => {
+  handler: async (params: z.infer<typeof inputSchema>, client: JobHunterClient) => {
     const contacts = await client.findLinkedInContacts(
       params.company_name,
       params.title_keywords || ['recruiter', 'hiring manager', 'engineering manager'],

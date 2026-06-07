@@ -17,4 +17,4 @@ crawl:
 
 logging:
   level:
-    dev.jobhub: DEBUG
+    dev.jobhunter: DEBUG

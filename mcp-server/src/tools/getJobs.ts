@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { JobHubClient } from '../client.js';
+import { JobHunterClient } from '../client.js';
 import { formatJobList } from './getTopJobsToday.js';
 
 const inputSchema = z.object({
@@ -11,7 +11,7 @@ export const getJobsTool = {
   name: 'get_jobs',
   description: 'Search jobs by skill/keyword sorted by match score',
   inputSchema,
-  handler: async (params: z.infer<typeof inputSchema>, client: JobHubClient) => {
+  handler: async (params: z.infer<typeof inputSchema>, client: JobHunterClient) => {
     const page = await client.searchJobs({ query: params.skill, size: params.n, sort: 'matchScore' });
     const text = formatJobList(page.content);
     return { content: [{ type: 'text' as const, text }] };

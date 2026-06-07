@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5435}/jobhub
-    username: ${DB_USER:jobhub}
-    password: ${DB_PASSWORD:jobhub}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5435}/jobhunter
+    username: ${DB_USER:jobhunter}
+    password: ${DB_PASSWORD:jobhunter}
   jpa:
     hibernate:
       ddl-auto: none
@@ -93,10 +93,27 @@ gdpr:
   recruiter-ttl-days: 90
   purge-schedule: "0 0 2 * * ?"
 
+aggregator:
+  sources:
+    - name: berlinstartupjobs
+      strategy: ai
+      job-source: BERLIN_STARTUP_JOBS
+      discovery-source: BERLIN_STARTUP_JOBS
+      url: "https://berlinstartupjobs.com/engineering/"
+      frequency-hours: 12
+      max-results: 30
+    - name: arbeitnow
+      strategy: rest-api
+      job-source: ARBEITNOW
+      discovery-source: ARBEITNOW
+      url: "https://www.arbeitnow.com/api/job-board-api"
+      frequency-hours: 6
+      max-results: 50
+
 server:
   port: 8080
 
 logging:
   level:
-    dev.jobhub: DEBUG
+    dev.jobhunter: DEBUG
     org.springframework.web.reactive: INFO

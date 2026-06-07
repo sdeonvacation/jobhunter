@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { JobHubClient } from '../client.js';
+import { JobHunterClient } from '../client.js';
 import { profileResources, jobResources } from '../resources/index.js';
 
 describe('Resources', () => {
-  let client: JobHubClient;
+  let client: JobHunterClient;
 
   beforeEach(() => {
-    client = new JobHubClient('http://test:8080');
+    client = new JobHunterClient('http://test:8080');
     vi.restoreAllMocks();
   });
 

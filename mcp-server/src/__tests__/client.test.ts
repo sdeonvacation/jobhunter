@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { JobHubClient } from '../client.js';
+import { JobHunterClient } from '../client.js';
 
-describe('JobHubClient', () => {
-  let client: JobHubClient;
+describe('JobHunterClient', () => {
+  let client: JobHunterClient;
 
   beforeEach(() => {
-    client = new JobHubClient('http://test-api:8080');
+    client = new JobHunterClient('http://test-api:8080');
     vi.restoreAllMocks();
   });
 
@@ -21,24 +21,24 @@ describe('JobHubClient', () => {
 
   describe('constructor', () => {
     it('uses provided baseUrl', () => {
-      const c = new JobHubClient('http://custom:9090');
+      const c = new JobHunterClient('http://custom:9090');
       expect((c as any).baseUrl).toBe('http://custom:9090');
     });
 
     it('defaults to env variable', () => {
-      const original = process.env.JOBHUB_API_URL;
-      process.env.JOBHUB_API_URL = 'http://env-url:3000';
-      const c = new JobHubClient();
+      const original = process.env.JOBHUNTER_API_URL;
+      process.env.JOBHUNTER_API_URL = 'http://env-url:3000';
+      const c = new JobHunterClient();
       expect((c as any).baseUrl).toBe('http://env-url:3000');
-      process.env.JOBHUB_API_URL = original;
+      process.env.JOBHUNTER_API_URL = original;
     });
 
     it('defaults to localhost:8080', () => {
-      const original = process.env.JOBHUB_API_URL;
-      delete process.env.JOBHUB_API_URL;
-      const c = new JobHubClient();
+      const original = process.env.JOBHUNTER_API_URL;
+      delete process.env.JOBHUNTER_API_URL;
+      const c = new JobHunterClient();
       expect((c as any).baseUrl).toBe('http://localhost:8080');
-      process.env.JOBHUB_API_URL = original;
+      process.env.JOBHUNTER_API_URL = original;
     });
   });
 

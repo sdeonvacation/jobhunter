@@ -1,4 +1,4 @@
-import { JobHubClient } from '../client.js';
+import { JobHunterClient } from '../client.js';
 import { ResourceDefinition } from './profile.js';
 
 export const jobResources: ResourceDefinition[] = [
@@ -7,7 +7,7 @@ export const jobResources: ResourceDefinition[] = [
     name: 'Top Opportunities',
     description: 'Top 10 jobs by OpportunityScore',
     mimeType: 'application/json',
-    handler: async (client: JobHubClient) => {
+    handler: async (client: JobHunterClient) => {
       const result = await client.searchJobs({ limit: 10 });
       return JSON.stringify(result, null, 2);
     },
@@ -17,7 +17,7 @@ export const jobResources: ResourceDefinition[] = [
     name: 'Daily Digest',
     description: 'Latest daily digest with new jobs, top opportunity, trends',
     mimeType: 'application/json',
-    handler: async (client: JobHubClient) => {
+    handler: async (client: JobHunterClient) => {
       const result = await client.getDailyDigest();
       return JSON.stringify(result, null, 2);
     },
@@ -27,7 +27,7 @@ export const jobResources: ResourceDefinition[] = [
     name: 'Job Radar',
     description: 'Current radar view: top opportunities, new this week, company trends',
     mimeType: 'application/json',
-    handler: async (client: JobHubClient) => {
+    handler: async (client: JobHunterClient) => {
       const result = await client.getRadar();
       return JSON.stringify(result, null, 2);
     },

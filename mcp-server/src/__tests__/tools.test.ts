@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { JobHubClient } from '../client.js';
+import { JobHunterClient } from '../client.js';
 import { searchJobsTool } from '../tools/searchJobs.js';
 import { getJobTool } from '../tools/getJob.js';
 import { getTechStackTool } from '../tools/getTechStack.js';
@@ -71,10 +71,10 @@ describe('Tool definitions', () => {
 });
 
 describe('Tool handlers', () => {
-  let client: JobHubClient;
+  let client: JobHunterClient;
 
   beforeEach(() => {
-    client = new JobHubClient('http://test:8080');
+    client = new JobHunterClient('http://test:8080');
     vi.restoreAllMocks();
   });
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { JobHubClient, JobSummary } from '../client.js';
+import { JobHunterClient, JobSummary } from '../client.js';
 
 const inputSchema = z.object({
   n: z.number().default(10).describe('Number of jobs to return (default: 10)'),
@@ -21,7 +21,7 @@ export const getTopJobsTodayTool = {
   name: 'get_top_jobs_today',
   description: "Today's top jobs sorted by match score — quick daily overview",
   inputSchema,
-  handler: async (params: z.infer<typeof inputSchema>, client: JobHubClient) => {
+  handler: async (params: z.infer<typeof inputSchema>, client: JobHunterClient) => {
     const page = await client.getTodayJobs({ size: params.n, sort: 'matchScore' });
     const text = formatJobList(page.content);
     return { content: [{ type: 'text' as const, text }] };
