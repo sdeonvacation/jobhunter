@@ -22,10 +22,16 @@ ai:
   extraction-model: ${AI_EXTRACTION_MODEL:claude-haiku-4-5}
   tailoring-model: ${AI_TAILORING_MODEL:claude-sonnet-4-5}
 
+ai-crawl:
+  schedule: "0 0 3 * * ?"
+  frequency-hours: 24
+  batch-size: 5
+  max-content-chars: 8000
+  enabled: ${AI_CRAWL_ENABLED:true}
+
 crawl:
   default-frequency-hours: 12
   high-priority-frequency-hours: 6
-  batch-size: 50
   timeout-seconds: 30
 
 discovery:
