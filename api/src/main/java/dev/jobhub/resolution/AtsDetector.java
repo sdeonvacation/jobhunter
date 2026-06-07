@@ -4,26 +4,30 @@ import dev.jobhub.model.enums.AtsType;
 import dev.jobhub.model.enums.Confidence;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
  * Detects ATS type from URL using pattern matching and (optionally) HTML inspection.
+ * Patterns are ordered: specific patterns first, generic ones last to avoid wrong slug extraction.
  */
 @Component
 public class AtsDetector {
 
-    private static final Map<Pattern, AtsType> URL_PATTERNS = Map.ofEntries(
-            Map.entry(Pattern.compile("https?://([\\w-]+)\\.greenhouse\\.io.*"), AtsType.GREENHOUSE),
-            Map.entry(Pattern.compile("https?://boards\\.greenhouse\\.io/([\\w-]+).*"), AtsType.GREENHOUSE),
-            Map.entry(Pattern.compile("https?://jobs\\.lever\\.co/([\\w-]+).*"), AtsType.LEVER),
-            Map.entry(Pattern.compile("https?://jobs\\.eu\\.lever\\.co/([\\w-]+).*"), AtsType.LEVER_EU),
-            Map.entry(Pattern.compile("https?://jobs\\.ashbyhq\\.com/([\\w-]+).*"), AtsType.ASHBY),
-            Map.entry(Pattern.compile("https?://[\\w-]+\\.wd\\d+\\.myworkdayjobs\\.com.*"), AtsType.WORKDAY),
-            Map.entry(Pattern.compile("https?://www\\.stepstone\\.(de|at|nl|be)/.*"), AtsType.STEPSTONE)
-    );
+    // LinkedHashMap preserves insertion order — specific patterns MUST come before generic ones
+    private static final LinkedHashMap<Pattern, AtsType> URL_PATTERNS = new LinkedHashMap<>();
+    static {
+        // Specific subdomain patterns first (extract slug from path)
+        URL_PATTERNS.put(Pattern.compile("https?://boards(?:-api)?\\.greenhouse\\.io/(?:v1/boards/)?([\\w-]+).*"), AtsType.GREENHOUSE);
+        URL_PATTERNS.put(Pattern.compile("https?://jobs\\.eu\\.lever\\.co/([\\w-]+).*"), AtsType.LEVER_EU);
+        URL_PATTERNS.put(Pattern.compile("https?://jobs\\.lever\\.co/([\\w-]+).*"), AtsType.LEVER);
+        URL_PATTERNS.put(Pattern.compile("https?://jobs\\.ashbyhq\\.com/([\\w-]+).*"), AtsType.ASHBY);
+        URL_PATTERNS.put(Pattern.compile("https?://[\\w-]+\\.wd\\d+\\.myworkdayjobs\\.com.*"), AtsType.WORKDAY);
+        URL_PATTERNS.put(Pattern.compile("https?://www\\.stepstone\\.(de|at|nl|be)/.*"), AtsType.STEPSTONE);
+        // Generic greenhouse subdomain pattern last (extract slug from subdomain)
+        URL_PATTERNS.put(Pattern.compile("https?://(?!boards)([\\w-]+)\\.greenhouse\\.io.*"), AtsType.GREENHOUSE);
+    }
 
     public record DetectionResult(AtsType atsType, Confidence confidence, String slug) {}
 

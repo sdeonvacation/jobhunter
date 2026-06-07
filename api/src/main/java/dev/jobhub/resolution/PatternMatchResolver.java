@@ -5,29 +5,32 @@ import dev.jobhub.model.enums.Confidence;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
  * Resolves career endpoint by checking known ATS URL patterns.
  * Instant, free, HIGH confidence when matched.
+ * Patterns are ordered: specific patterns first, generic ones last.
  */
 @Slf4j
 @Component
 public class PatternMatchResolver implements EndpointResolver {
 
-    private static final Map<Pattern, AtsType> PATTERNS = Map.ofEntries(
-            Map.entry(Pattern.compile("https?://([\\w-]+)\\.greenhouse\\.io/?.*"), AtsType.GREENHOUSE),
-            Map.entry(Pattern.compile("https?://boards\\.greenhouse\\.io/([\\w-]+)/?.*"), AtsType.GREENHOUSE),
-            Map.entry(Pattern.compile("https?://jobs\\.lever\\.co/([\\w-]+)/?.*"), AtsType.LEVER),
-            Map.entry(Pattern.compile("https?://jobs\\.eu\\.lever\\.co/([\\w-]+)/?.*"), AtsType.LEVER_EU),
-            Map.entry(Pattern.compile("https?://jobs\\.ashbyhq\\.com/([\\w-]+)/?.*"), AtsType.ASHBY),
-            Map.entry(Pattern.compile("https?://([\\w-]+)\\.wd(\\d+)\\.myworkdayjobs\\.com/?.*"), AtsType.WORKDAY),
-            Map.entry(Pattern.compile("https?://wd(\\d+)\\.myworkdayjobs\\.com/([\\w-]+)/?.*"), AtsType.WORKDAY)
-    );
+    // LinkedHashMap preserves insertion order — specific patterns MUST come before generic ones
+    private static final LinkedHashMap<Pattern, AtsType> PATTERNS = new LinkedHashMap<>();
+    static {
+        // Specific subdomain patterns first (extract slug from path)
+        PATTERNS.put(Pattern.compile("https?://boards(?:-api)?\\.greenhouse\\.io/(?:v1/boards/)?([\\w-]+)/?.*"), AtsType.GREENHOUSE);
+        PATTERNS.put(Pattern.compile("https?://jobs\\.eu\\.lever\\.co/([\\w-]+)/?.*"), AtsType.LEVER_EU);
+        PATTERNS.put(Pattern.compile("https?://jobs\\.lever\\.co/([\\w-]+)/?.*"), AtsType.LEVER);
+        PATTERNS.put(Pattern.compile("https?://jobs\\.ashbyhq\\.com/([\\w-]+)/?.*"), AtsType.ASHBY);
+        PATTERNS.put(Pattern.compile("https?://([\\w-]+)\\.wd(\\d+)\\.myworkdayjobs\\.com/?.*"), AtsType.WORKDAY);
+        PATTERNS.put(Pattern.compile("https?://wd(\\d+)\\.myworkdayjobs\\.com/([\\w-]+)/?.*"), AtsType.WORKDAY);
+        // Generic greenhouse subdomain pattern last (extract slug from subdomain)
+        PATTERNS.put(Pattern.compile("https?://(?!boards)([\\w-]+)\\.greenhouse\\.io/?.*"), AtsType.GREENHOUSE);
+    }
 
     // Common URL patterns constructed from company name
     private static final List<String> URL_TEMPLATES = List.of(
