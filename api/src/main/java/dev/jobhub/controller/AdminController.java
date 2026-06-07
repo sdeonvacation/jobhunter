@@ -1,6 +1,7 @@
 package dev.jobhub.controller;
 
 import dev.jobhub.discovery.DiscoveryService;
+import dev.jobhub.indeed.IndeedJobSearchService;
 import dev.jobhub.linkedin.LinkedInJobSearchService;
 import dev.jobhub.model.CareerEndpoint;
 import dev.jobhub.model.enums.CrawlStatus;
@@ -26,6 +27,9 @@ public class AdminController {
 
     @Autowired(required = false)
     private LinkedInJobSearchService linkedInJobSearchService;
+
+    @Autowired(required = false)
+    private IndeedJobSearchService indeedJobSearchService;
 
     public AdminController(CrawlService crawlService, CareerEndpointRepository careerEndpointRepository,
                            ScoringScheduler scoringScheduler, DiscoveryService discoveryService) {
@@ -85,6 +89,15 @@ public class AdminController {
         return ResponseEntity.ok(new LinkedInSearchResult(stats[0], stats[1], stats[2]));
     }
 
+    @PostMapping("/indeed-search")
+    public ResponseEntity<?> triggerIndeedSearch() {
+        if (indeedJobSearchService == null) {
+            return ResponseEntity.badRequest().body("Indeed search is not enabled (discovery.providers.jobspy.enabled=false)");
+        }
+        int[] stats = indeedJobSearchService.searchAndCreate();
+        return ResponseEntity.ok(new IndeedSearchResult(stats[0], stats[1], stats[2]));
+    }
+
     @GetMapping("/health")
     public ResponseEntity<HealthReport> getHealth() {
         List<CareerEndpoint> errorEndpoints = careerEndpointRepository
@@ -132,6 +145,7 @@ public class AdminController {
     public record ResolveResult(int total, int resolved, int failed, int skipped) {}
     public record DiscoverResult(int providersQueried, int companiesFound, int newCompanies) {}
     public record LinkedInSearchResult(int enriched, int created, int searches) {}
+    public record IndeedSearchResult(int created, int filtered, int searches) {}
 
     public record EndpointHealth(
             UUID id, String companyName, String atsType, String atsSlug,

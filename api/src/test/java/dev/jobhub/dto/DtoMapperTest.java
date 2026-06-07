@@ -183,7 +183,7 @@ class DtoMapperTest {
                         List.of("senior"), List.of("en", "de"), List.of("finance")
                 ),
                 null, null, null
-        );
+        , null);
 
         ProfileDto dto = DtoMapper.toProfile(profile);
 

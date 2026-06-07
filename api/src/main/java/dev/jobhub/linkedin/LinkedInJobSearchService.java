@@ -1,7 +1,10 @@
 package dev.jobhub.linkedin;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import dev.jobhub.filter.DeduplicationFilter;
 import dev.jobhub.filter.LanguageFilter;
+import dev.jobhub.filter.LocationFilter;
+import dev.jobhub.filter.RoleRelevanceFilter;
 import dev.jobhub.filter.YoeFilter;
 import dev.jobhub.model.Company;
 import dev.jobhub.model.JobPosting;
@@ -37,7 +40,10 @@ public class LinkedInJobSearchService {
     private final CompanyRepository companyRepository;
     private final PersonalProfileLoader profileLoader;
     private final LanguageFilter languageFilter;
+    private final RoleRelevanceFilter roleRelevanceFilter;
+    private final LocationFilter locationFilter;
     private final YoeFilter yoeFilter;
+    private final DeduplicationFilter deduplicationFilter;
 
     public LinkedInJobSearchService(HttpMcpClient httpMcpClient,
                                     LinkedInRateLimiter rateLimiter,
@@ -45,14 +51,20 @@ public class LinkedInJobSearchService {
                                     CompanyRepository companyRepository,
                                     PersonalProfileLoader profileLoader,
                                     LanguageFilter languageFilter,
-                                    YoeFilter yoeFilter) {
+                                    RoleRelevanceFilter roleRelevanceFilter,
+                                    LocationFilter locationFilter,
+                                    YoeFilter yoeFilter,
+                                    DeduplicationFilter deduplicationFilter) {
         this.httpMcpClient = httpMcpClient;
         this.rateLimiter = rateLimiter;
         this.jobPostingRepository = jobPostingRepository;
         this.companyRepository = companyRepository;
         this.profileLoader = profileLoader;
         this.languageFilter = languageFilter;
+        this.roleRelevanceFilter = roleRelevanceFilter;
+        this.locationFilter = locationFilter;
         this.yoeFilter = yoeFilter;
+        this.deduplicationFilter = deduplicationFilter;
     }
 
     /**
@@ -162,22 +174,49 @@ public class LinkedInJobSearchService {
                 FilterDecision langDecision = FilterDecision.KEEP;
                 String filterReason = null;
                 Integer requiredYoe = null;
+                String fingerprint = deduplicationFilter.generateFingerprint(
+                        pj.title(), pj.company(), pj.location());
 
+                // Full filter cascade: language → role → location → yoe → dedup
                 if (description != null && !description.isBlank()) {
-                    // Language filter
                     var filterResult = languageFilter.filter(pj.title(), description);
                     if (filterResult.decision() != FilterDecision.KEEP) {
                         langDecision = FilterDecision.SKIP;
                         filterReason = filterResult.reason();
                     }
-                    // YOE filter (only if language passed)
-                    if (langDecision == FilterDecision.KEEP) {
-                        requiredYoe = yoeFilter.extractYoe(description);
-                        var yoeResult = yoeFilter.filter(requiredYoe);
-                        if (yoeResult.decision() != FilterDecision.KEEP) {
-                            langDecision = FilterDecision.SKIP;
-                            filterReason = yoeResult.reason();
-                        }
+                }
+
+                if (langDecision == FilterDecision.KEEP) {
+                    var roleResult = roleRelevanceFilter.filter(pj.title());
+                    if (roleResult.decision() != FilterDecision.KEEP) {
+                        langDecision = FilterDecision.SKIP;
+                        filterReason = roleResult.reason();
+                    }
+                }
+
+                if (langDecision == FilterDecision.KEEP && pj.location() != null) {
+                    var locResult = locationFilter.filter(pj.location());
+                    if (locResult.decision() != FilterDecision.KEEP) {
+                        langDecision = FilterDecision.SKIP;
+                        filterReason = locResult.reason();
+                    }
+                }
+
+                if (langDecision == FilterDecision.KEEP && description != null && !description.isBlank()) {
+                    requiredYoe = yoeFilter.extractYoe(description);
+                    var yoeResult = yoeFilter.filter(requiredYoe);
+                    if (yoeResult.decision() != FilterDecision.KEEP) {
+                        langDecision = FilterDecision.SKIP;
+                        filterReason = yoeResult.reason();
+                    }
+                }
+
+                if (langDecision == FilterDecision.KEEP) {
+                    var duplicate = jobPostingRepository
+                            .findFirstByFingerprintAndLanguageFilter(fingerprint, FilterDecision.KEEP);
+                    if (duplicate.isPresent()) {
+                        langDecision = FilterDecision.SKIP;
+                        filterReason = "duplicate of " + duplicate.get().getSource();
                     }
                 }
 
@@ -194,6 +233,7 @@ public class LinkedInJobSearchService {
                         .languageFilter(langDecision)
                         .filterReason(filterReason)
                         .requiredYoe(requiredYoe)
+                        .fingerprint(fingerprint)
                         .externalLinks(Map.of("linkedin", linkedinUrl))
                         .build();
                 jobPostingRepository.save(newJob);

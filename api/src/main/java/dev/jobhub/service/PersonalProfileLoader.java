@@ -79,8 +79,10 @@ public class PersonalProfileLoader {
                 (Map<String, Object>) data.getOrDefault("scoring", null));
         PersonalProfile.LinkedInSearchConfig linkedInSearch = parseLinkedInSearch(
                 (Map<String, Object>) data.getOrDefault("linkedin-search", null));
+        PersonalProfile.IndeedSearchConfig indeedSearch = parseIndeedSearch(
+                (Map<String, Object>) data.getOrDefault("indeed-search", null));
 
-        return new PersonalProfile(name, title, years, skills, preferences, filters, scoring, linkedInSearch);
+        return new PersonalProfile(name, title, years, skills, preferences, filters, scoring, linkedInSearch, indeedSearch);
     }
 
     @SuppressWarnings("unchecked")
@@ -180,9 +182,21 @@ public class PersonalProfileLoader {
         return new PersonalProfile.LinkedInSearchConfig(query, locations, datePosted);
     }
 
+    @SuppressWarnings("unchecked")
+    private PersonalProfile.IndeedSearchConfig parseIndeedSearch(Map<String, Object> searchMap) {
+        if (searchMap == null) return null;
+        List<String> keywords = (List<String>) searchMap.getOrDefault("keywords", List.of());
+        List<String> locations = (List<String>) searchMap.getOrDefault("locations", List.of("Germany"));
+        int resultsWanted = searchMap.containsKey("results-wanted")
+                ? ((Number) searchMap.get("results-wanted")).intValue() : 25;
+        int hoursOld = searchMap.containsKey("hours-old")
+                ? ((Number) searchMap.get("hours-old")).intValue() : 24;
+        return new PersonalProfile.IndeedSearchConfig(keywords, locations, resultsWanted, hoursOld);
+    }
+
     private PersonalProfile emptyProfile() {
         return new PersonalProfile("", "", 0, Collections.emptyList(),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
-                null, null, null);
+                null, null, null, null);
     }
 }

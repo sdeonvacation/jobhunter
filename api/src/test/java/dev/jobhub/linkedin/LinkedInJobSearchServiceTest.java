@@ -11,7 +11,11 @@ import dev.jobhub.model.enums.CompanyStatus;
 import dev.jobhub.model.enums.DiscoverySource;
 import dev.jobhub.repository.CompanyRepository;
 import dev.jobhub.repository.JobPostingRepository;
+import dev.jobhub.filter.DeduplicationFilter;
+import dev.jobhub.filter.FilterResult;
 import dev.jobhub.filter.LanguageFilter;
+import dev.jobhub.filter.LocationFilter;
+import dev.jobhub.filter.RoleRelevanceFilter;
 import dev.jobhub.filter.YoeFilter;
 import dev.jobhub.service.PersonalProfile;
 import dev.jobhub.service.PersonalProfileLoader;
@@ -37,7 +41,10 @@ class LinkedInJobSearchServiceTest {
     private CompanyRepository companyRepository;
     private PersonalProfileLoader profileLoader;
     private LanguageFilter languageFilter;
+    private RoleRelevanceFilter roleRelevanceFilter;
+    private LocationFilter locationFilter;
     private YoeFilter yoeFilter;
+    private DeduplicationFilter deduplicationFilter;
     private LinkedInJobSearchService service;
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -49,9 +56,13 @@ class LinkedInJobSearchServiceTest {
         companyRepository = mock(CompanyRepository.class);
         profileLoader = mock(PersonalProfileLoader.class);
         languageFilter = mock(LanguageFilter.class);
+        roleRelevanceFilter = mock(RoleRelevanceFilter.class);
+        locationFilter = mock(LocationFilter.class);
         yoeFilter = mock(YoeFilter.class);
+        deduplicationFilter = mock(DeduplicationFilter.class);
         service = new LinkedInJobSearchService(httpMcpClient, rateLimiter,
-                jobPostingRepository, companyRepository, profileLoader, languageFilter, yoeFilter);
+                jobPostingRepository, companyRepository, profileLoader, languageFilter,
+                roleRelevanceFilter, locationFilter, yoeFilter, deduplicationFilter);
     }
 
     private PersonalProfile buildProfile(List<String> primarySkills, List<String> locations) {
@@ -64,7 +75,7 @@ class LinkedInJobSearchServiceTest {
         );
         return new PersonalProfile("Test", "Dev", 5,
                 List.of(new PersonalProfile.ProfileSkill("Java", "expert", "LANGUAGE")),
-                prefs, null, scoring, null);
+                prefs, null, scoring, null, null);
     }
 
     private JsonNode buildSearchResponse(String searchText, List<String> jobIds) {
@@ -84,15 +95,21 @@ class LinkedInJobSearchServiceTest {
         @Test
         @DisplayName("Should search using profile primary skills and locations")
         void shouldUseProfileKeywordsAndLocations() {
-            PersonalProfile profile = buildProfile(List.of("java", "kotlin"), List.of("Berlin"));
+            // Provide linkedInSearch with a query so extractSearchKeywords returns it
+            PersonalProfile profile = new PersonalProfile("Test", "Dev", 5,
+                    List.of(new PersonalProfile.ProfileSkill("Java", "expert", "LANGUAGE")),
+                    new PersonalProfile.Preferences(List.of("Berlin"), "FULL_TIME", 80000, List.of("senior"), List.of("en"), List.of()),
+                    null, new PersonalProfile.ScoringConfig(22, null, List.of(), 2, Map.of(), Map.of(),
+                    List.of("java", "kotlin"), 70, List.of(), 50),
+                    new PersonalProfile.LinkedInSearchConfig("java kotlin", List.of("Berlin"), null), null);
             when(profileLoader.getProfile()).thenReturn(profile);
             when(rateLimiter.acquire(ToolCategory.SEARCH)).thenReturn(true);
             when(httpMcpClient.callTool(eq("search_jobs"), any())).thenReturn(buildSearchResponse("", List.of()));
 
             int[] result = service.searchAndMatch();
 
-            assertThat(result[2]).isEqualTo(2); // 2 keywords x 1 location = 2 searches
-            verify(httpMcpClient, times(2)).callTool(eq("search_jobs"), any());
+            assertThat(result[2]).isEqualTo(1); // 1 keyword x 1 location = 1 search
+            verify(httpMcpClient, times(1)).callTool(eq("search_jobs"), any());
         }
 
         @Test
@@ -129,6 +146,17 @@ class LinkedInJobSearchServiceTest {
     @Nested
     @DisplayName("processSearchResults")
     class ProcessSearchResultsTests {
+
+        @BeforeEach
+        void setUpFilters() {
+            when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
+            when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
+            when(yoeFilter.extractYoe(anyString())).thenReturn(null);
+            when(yoeFilter.filter(any())).thenReturn(FilterResult.keep());
+            when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("test-fp");
+            when(jobPostingRepository.findFirstByFingerprintAndLanguageFilter(anyString(), any())).thenReturn(Optional.empty());
+            when(jobPostingRepository.existsBySourceAndExternalId(any(), anyString())).thenReturn(false);
+        }
 
         @Test
         @DisplayName("Should enrich existing job with LinkedIn link")
@@ -380,8 +408,13 @@ class LinkedInJobSearchServiceTest {
         @Test
         @DisplayName("Should use primary skills from scoring config")
         void shouldUsePrimarySkills() {
-            PersonalProfile profile = buildProfile(List.of("java", "spring boot"), List.of("Berlin"));
-            assertThat(service.extractSearchKeywords(profile)).containsExactly("java", "spring boot");
+            PersonalProfile profile = new PersonalProfile("Test", "Dev", 5,
+                    List.of(new PersonalProfile.ProfileSkill("Java", "expert", "LANGUAGE")),
+                    new PersonalProfile.Preferences(List.of("Berlin"), "FULL_TIME", 80000, List.of("senior"), List.of("en"), List.of()),
+                    null, new PersonalProfile.ScoringConfig(22, null, List.of(), 2, Map.of(), Map.of(),
+                    List.of("java", "spring boot"), 70, List.of(), 50),
+                    new PersonalProfile.LinkedInSearchConfig("java spring boot", List.of("Berlin"), null), null);
+            assertThat(service.extractSearchKeywords(profile)).containsExactly("java spring boot");
         }
 
         @Test
@@ -395,8 +428,10 @@ class LinkedInJobSearchServiceTest {
                     ),
                     new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
                     null, new PersonalProfile.ScoringConfig(22, null, List.of(), 2, Map.of(), Map.of(),
-                    List.of(), 70, List.of(), 50), null);
-            assertThat(service.extractSearchKeywords(profile)).containsExactly("Java", "Kotlin");
+                    List.of(), 70, List.of(), 50), null, null);
+            // No linkedInSearch config and no primary skills → returns hardcoded fallback boolean query
+            assertThat(service.extractSearchKeywords(profile)).hasSize(1);
+            assertThat(service.extractSearchKeywords(profile).get(0)).contains("software OR java OR backend");
         }
     }
 

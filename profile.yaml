@@ -263,3 +263,10 @@ linkedin-search:
   query: '(software OR java OR backend) AND (developer OR engineer OR associate) NOT graduate NOT lead NOT junior NOT staff NOT principal'
   locations: ["Germany", "Remote"]
   date-posted: week
+
+# Indeed job search configuration
+indeed-search:
+  keywords: ["backend engineer", "Java developer", "Spring Boot"]
+  locations: ["Germany", "Netherlands"]
+  results-wanted: 25
+  hours-old: 24

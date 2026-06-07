@@ -102,7 +102,7 @@ class MatchScorerTest {
                         List.of("gambling", "defense")
                 ),
                 null, null, null
-        );
+        , null);
     }
 
     private JobSkill skill(String name, SkillCategory category, boolean required) {

@@ -14,7 +14,8 @@ public record PersonalProfile(
         Preferences preferences,
         FilterConfig filters,
         ScoringConfig scoring,
-        LinkedInSearchConfig linkedInSearch
+        LinkedInSearchConfig linkedInSearch,
+        IndeedSearchConfig indeedSearch
 ) {
 
     public record ProfileSkill(String name, String proficiency, String category) {
@@ -78,6 +79,14 @@ public record PersonalProfile(
             String query,
             List<String> locations,
             String datePosted
+    ) {
+    }
+
+    public record IndeedSearchConfig(
+            List<String> keywords,
+            List<String> locations,
+            int resultsWanted,
+            int hoursOld
     ) {
     }
 }

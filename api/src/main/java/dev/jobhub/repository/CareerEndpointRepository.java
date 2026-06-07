@@ -2,6 +2,8 @@ package dev.jobhub.repository;
 
 import dev.jobhub.model.CareerEndpoint;
 import dev.jobhub.model.enums.AtsType;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,13 +21,20 @@ public interface CareerEndpointRepository extends JpaRepository<CareerEndpoint, 
     List<CareerEndpoint> findByIsActiveTrueAndAtsType(AtsType atsType);
 
     @Query("SELECT e FROM CareerEndpoint e JOIN FETCH e.company WHERE e.isActive = true " +
+            "AND e.atsType != 'CUSTOM' " +
             "AND (e.lastCrawledAt IS NULL OR e.lastCrawledAt < :cutoff) " +
             "ORDER BY e.lastCrawledAt ASC NULLS FIRST")
-    List<CareerEndpoint> findEndpointsDueForCrawl(@Param("cutoff") LocalDateTime cutoff, org.springframework.data.domain.Pageable pageable);
+    List<CareerEndpoint> findEndpointsDueForCrawl(@Param("cutoff") LocalDateTime cutoff, Pageable pageable);
 
     default List<CareerEndpoint> findDueForCrawl(LocalDateTime cutoff, int limit) {
-        return findEndpointsDueForCrawl(cutoff, org.springframework.data.domain.PageRequest.of(0, limit));
+        return findEndpointsDueForCrawl(cutoff, PageRequest.of(0, limit));
     }
+
+    @Query("SELECT e FROM CareerEndpoint e JOIN FETCH e.company WHERE e.isActive = true " +
+            "AND e.atsType = 'CUSTOM' " +
+            "AND (e.lastCrawledAt IS NULL OR e.lastCrawledAt < :cutoff) " +
+            "ORDER BY e.lastCrawledAt ASC NULLS FIRST")
+    List<CareerEndpoint> findCustomEndpointsDueForCrawl(@Param("cutoff") LocalDateTime cutoff, Pageable pageable);
 
     @Query("SELECT e FROM CareerEndpoint e JOIN FETCH e.company WHERE e.isActive = true AND e.lastCrawlStatus = :status")
     List<CareerEndpoint> findByIsActiveTrueAndLastCrawlStatus(@Param("status") dev.jobhub.model.enums.CrawlStatus status);

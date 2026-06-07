@@ -76,7 +76,7 @@ class CoverLetterServiceTest {
                         List.of("Berlin"), "FULL_TIME", 90000, List.of("senior"), List.of("en"), List.of()
                 ),
                 null, null, null
-        );
+        , null);
 
         String generatedLetter = "Dear Hiring Manager,\n\nI am writing to express my interest...";
 
@@ -108,7 +108,7 @@ class CoverLetterServiceTest {
                 "Bob", "Dev", 3, List.of(),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
                 null, null, null
-        );
+        , null);
 
         when(aiProvider.isAvailable()).thenReturn(true);
         when(jobPostingRepository.findById(jobId)).thenReturn(Optional.of(job));
@@ -133,7 +133,7 @@ class CoverLetterServiceTest {
                 "C", "D", 1, List.of(),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
                 null, null, null
-        );
+        , null);
 
         when(aiProvider.isAvailable()).thenReturn(true);
         when(jobPostingRepository.findById(jobId)).thenReturn(Optional.of(job));

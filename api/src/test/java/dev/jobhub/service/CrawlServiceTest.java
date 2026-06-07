@@ -38,6 +38,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -91,6 +92,10 @@ class CrawlServiceTest {
         when(languageFilter.filter("Engineer", "Java dev role")).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter("Engineer")).thenReturn(FilterResult.keep());
         when(locationFilter.filter("Berlin")).thenReturn(FilterResult.keep());
+        when(yoeFilter.extractYoe(anyString())).thenReturn(null);
+        when(yoeFilter.filter(any())).thenReturn(FilterResult.keep());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("test-fingerprint");
+        when(jobPostingRepository.findFirstByFingerprintAndLanguageFilter(anyString(), any(FilterDecision.class))).thenReturn(Optional.empty());
         when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
         when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -174,6 +179,10 @@ class CrawlServiceTest {
         when(languageFilter.filter(any(), any())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(any())).thenReturn(FilterResult.keep());
         when(locationFilter.filter(any())).thenReturn(FilterResult.keep());
+        when(yoeFilter.extractYoe(anyString())).thenReturn(null);
+        when(yoeFilter.filter(any())).thenReturn(FilterResult.keep());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("test-fingerprint");
+        when(jobPostingRepository.findFirstByFingerprintAndLanguageFilter(anyString(), any(FilterDecision.class))).thenReturn(Optional.empty());
         when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
         when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
 

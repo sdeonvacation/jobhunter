@@ -1,5 +1,6 @@
 package dev.jobhub.scheduler;
 
+import dev.jobhub.indeed.IndeedJobSearchService;
 import dev.jobhub.linkedin.LinkedInJobSearchService;
 import dev.jobhub.service.CrawlService;
 import lombok.extern.slf4j.Slf4j;
@@ -14,7 +15,7 @@ import java.time.Duration;
 import java.time.Instant;
 
 /**
- * Unified pipeline scheduler: crawl → linkedin search → scoring (match + opportunity).
+ * Unified pipeline scheduler: crawl → linkedin search → indeed search → scoring (match + opportunity).
  * Runs as a single sequential job so UI always has complete data.
  */
 @Slf4j
@@ -28,6 +29,9 @@ public class PipelineScheduler implements Job {
     @Autowired(required = false)
     private LinkedInJobSearchService linkedInJobSearchService;
 
+    @Autowired(required = false)
+    private IndeedJobSearchService indeedJobSearchService;
+
     public PipelineScheduler(CrawlService crawlService, ScoringScheduler scoringScheduler) {
         this.crawlService = crawlService;
         this.scoringScheduler = scoringScheduler;
@@ -35,40 +39,54 @@ public class PipelineScheduler implements Job {
 
     @Override
     public void execute(JobExecutionContext context) throws JobExecutionException {
-        log.info("Pipeline starting: crawl → linkedin → scoring");
+        log.info("Pipeline starting: crawl → linkedin → indeed → scoring");
         Instant start = Instant.now();
 
         // Step 1: Crawl all ATS endpoints
         try {
-            log.info("[Pipeline 1/3] Crawling ATS endpoints");
+            log.info("[Pipeline 1/4] Crawling ATS endpoints");
             int[] crawlStats = crawlService.crawlAllDueEndpoints();
-            log.info("[Pipeline 1/3] Crawl complete: endpoints={}, jobs={}, errors={}",
+            log.info("[Pipeline 1/4] Crawl complete: endpoints={}, jobs={}, errors={}",
                     crawlStats[0], crawlStats[1], crawlStats[2]);
         } catch (Exception e) {
-            log.error("[Pipeline 1/3] Crawl failed, continuing pipeline", e);
+            log.error("[Pipeline 1/4] Crawl failed, continuing pipeline", e);
         }
 
         // Step 2: LinkedIn job search + matching
         if (linkedInJobSearchService != null) {
             try {
-                log.info("[Pipeline 2/3] LinkedIn job search");
+                log.info("[Pipeline 2/4] LinkedIn job search");
                 int[] linkedInStats = linkedInJobSearchService.searchAndMatch();
-                log.info("[Pipeline 2/3] LinkedIn complete: enriched={}, created={}, searches={}",
+                log.info("[Pipeline 2/4] LinkedIn complete: enriched={}, created={}, searches={}",
                         linkedInStats[0], linkedInStats[1], linkedInStats[2]);
             } catch (Exception e) {
-                log.error("[Pipeline 2/3] LinkedIn search failed, continuing pipeline", e);
+                log.error("[Pipeline 2/4] LinkedIn search failed, continuing pipeline", e);
             }
         } else {
-            log.info("[Pipeline 2/3] LinkedIn search skipped (not enabled)");
+            log.info("[Pipeline 2/4] LinkedIn search skipped (not enabled)");
         }
 
-        // Step 3: Score all unscored jobs (match + opportunity)
+        // Step 3: Indeed job search
+        if (indeedJobSearchService != null) {
+            try {
+                log.info("[Pipeline 3/4] Indeed job search");
+                int[] indeedStats = indeedJobSearchService.searchAndCreate();
+                log.info("[Pipeline 3/4] Indeed complete: created={}, filtered={}, searches={}",
+                        indeedStats[0], indeedStats[1], indeedStats[2]);
+            } catch (Exception e) {
+                log.error("[Pipeline 3/4] Indeed search failed, continuing pipeline", e);
+            }
+        } else {
+            log.info("[Pipeline 3/4] Indeed search skipped (not enabled)");
+        }
+
+        // Step 4: Score all unscored jobs (match + opportunity)
         try {
-            log.info("[Pipeline 3/3] Scoring unscored jobs");
+            log.info("[Pipeline 4/4] Scoring unscored jobs");
             scoringScheduler.scoreAllUnscored();
-            log.info("[Pipeline 3/3] Scoring complete");
+            log.info("[Pipeline 4/4] Scoring complete");
         } catch (Exception e) {
-            log.error("[Pipeline 3/3] Scoring failed", e);
+            log.error("[Pipeline 4/4] Scoring failed", e);
         }
 
         Duration elapsed = Duration.between(start, Instant.now());

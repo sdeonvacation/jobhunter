@@ -204,6 +204,6 @@ class OpportunityScorerTest {
                         List.of()
                 ),
                 null, null, null
-        );
+        , null);
     }
 }

@@ -57,7 +57,7 @@ class RoleRelevanceFilterConfigTest {
                 "", "", 0, List.of(),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
                 new PersonalProfile.FilterConfig(null, null, null),
-                null, null));
+                null, null, null));
         RoleRelevanceFilterImpl filter = new RoleRelevanceFilterImpl(loader);
 
         assertThat(filter.filter("Software Developer").decision()).isEqualTo(FilterDecision.KEEP);
@@ -72,7 +72,7 @@ class RoleRelevanceFilterConfigTest {
                 new PersonalProfile.FilterConfig(
                         new PersonalProfile.RoleFilterConfig(include, exclude),
                         null, null),
-                null, null));
+                null, null, null));
         return loader;
     }
 
@@ -81,7 +81,7 @@ class RoleRelevanceFilterConfigTest {
         when(loader.getProfile()).thenReturn(new PersonalProfile(
                 "", "", 0, List.of(),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
-                null, null, null));
+                null, null, null, null));
         return loader;
     }
 }

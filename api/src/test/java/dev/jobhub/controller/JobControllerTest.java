@@ -32,6 +32,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
@@ -73,7 +74,7 @@ class JobControllerTest {
                 .build();
 
         Page<JobPosting> page = new PageImpl<>(List.of(job));
-        when(jobPostingRepository.findByIsActiveTrueAndLanguageFilter(eq(FilterDecision.KEEP), any(Pageable.class)))
+        when(jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceNotIn(eq(FilterDecision.KEEP), anyList(), any(Pageable.class)))
                 .thenReturn(page);
 
         var result = controller.searchJobs(null, null, null, null, null, "matchScore", 0, 20);

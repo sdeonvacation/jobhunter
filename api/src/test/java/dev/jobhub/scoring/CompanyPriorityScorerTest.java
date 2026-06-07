@@ -177,6 +177,6 @@ class CompanyPriorityScorerTest {
                         List.of()
                 ),
                 null, null, null
-        );
+        , null);
     }
 }

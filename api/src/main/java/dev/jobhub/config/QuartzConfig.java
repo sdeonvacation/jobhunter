@@ -1,5 +1,6 @@
 package dev.jobhub.config;
 
+import dev.jobhub.scheduler.AiCrawlScheduler;
 import dev.jobhub.scheduler.DigestScheduler;
 import dev.jobhub.scheduler.DiscoveryScheduler;
 import dev.jobhub.scheduler.GdprPurgeScheduler;
@@ -122,6 +123,32 @@ public class QuartzConfig {
         return TriggerBuilder.newTrigger()
                 .forJob(gdprPurgeJobDetail)
                 .withIdentity("gdprPurgeTrigger", "gdpr")
+                .withSchedule(
+                        CronScheduleBuilder.cronSchedule(cronExpression)
+                                .withMisfireHandlingInstructionFireAndProceed()
+                )
+                .build();
+    }
+
+    // --- AI Crawl (CUSTOM endpoints) ---
+
+    @Bean
+    public JobDetail aiCrawlJobDetail() {
+        return JobBuilder.newJob(AiCrawlScheduler.class)
+                .withIdentity("aiCrawlJob", "ai-crawl")
+                .storeDurably()
+                .requestRecovery(true)
+                .build();
+    }
+
+    @Bean
+    public Trigger aiCrawlTrigger(
+            JobDetail aiCrawlJobDetail,
+            @Value("${ai-crawl.schedule:0 0 3 * * ?}") String cronExpression
+    ) {
+        return TriggerBuilder.newTrigger()
+                .forJob(aiCrawlJobDetail)
+                .withIdentity("aiCrawlTrigger", "ai-crawl")
                 .withSchedule(
                         CronScheduleBuilder.cronSchedule(cronExpression)
                                 .withMisfireHandlingInstructionFireAndProceed()
