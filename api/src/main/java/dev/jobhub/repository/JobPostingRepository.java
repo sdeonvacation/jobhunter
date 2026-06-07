@@ -67,6 +67,11 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     Optional<JobPosting> findFirstByFingerprintAndLanguageFilter(String fingerprint, FilterDecision filter);
 
+    @Query("SELECT jp FROM JobPosting jp WHERE jp.fingerprint = :fingerprint " +
+           "AND jp.isActive = true " +
+           "AND jp.source NOT IN (dev.jobhub.model.enums.AtsType.LINKEDIN, dev.jobhub.model.enums.AtsType.INDEED)")
+    Optional<JobPosting> findAtsJobByFingerprint(@Param("fingerprint") String fingerprint);
+
     @Query(value = "SELECT id FROM job_posting WHERE CAST(id AS TEXT) LIKE :prefix || '%' LIMIT 1", nativeQuery = true)
     Optional<UUID> findIdByPrefix(@Param("prefix") String prefix);
 

@@ -122,6 +122,7 @@ class IndeedJobSearchServiceTest {
             when(companyRepository.findByNormalizedName(anyString())).thenReturn(Optional.empty());
             when(companyRepository.save(any(Company.class))).thenAnswer(inv -> inv.getArgument(0));
             when(jobPostingRepository.existsBySourceAndExternalId(any(), anyString())).thenReturn(false);
+            when(jobPostingRepository.findAtsJobByFingerprint(anyString())).thenReturn(Optional.empty());
             when(jobPostingRepository.findFirstByFingerprintAndLanguageFilter(anyString(), any())).thenReturn(Optional.empty());
             when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(inv -> inv.getArgument(0));
         }
@@ -283,8 +284,8 @@ class IndeedJobSearchServiceTest {
         @Test
         @DisplayName("Should handle null/empty job list")
         void shouldHandleEmptyList() {
-            assertThat(service.processJobs(null)).containsExactly(0, 0);
-            assertThat(service.processJobs(List.of())).containsExactly(0, 0);
+            assertThat(service.processJobs(null)).containsExactly(0, 0, 0);
+            assertThat(service.processJobs(List.of())).containsExactly(0, 0, 0);
         }
 
         @Test

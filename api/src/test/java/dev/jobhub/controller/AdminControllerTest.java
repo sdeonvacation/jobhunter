@@ -29,7 +29,7 @@ class AdminControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new AdminController(crawlService, careerEndpointRepository, scoringScheduler, discoveryService);
+        controller = new AdminController(crawlService, careerEndpointRepository, scoringScheduler, discoveryService, null);
     }
 
     @Test

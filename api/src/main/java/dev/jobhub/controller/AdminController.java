@@ -6,6 +6,7 @@ import dev.jobhub.linkedin.LinkedInJobSearchService;
 import dev.jobhub.model.CareerEndpoint;
 import dev.jobhub.model.enums.CrawlStatus;
 import dev.jobhub.repository.CareerEndpointRepository;
+import dev.jobhub.scheduler.PipelineScheduler;
 import dev.jobhub.scheduler.ScoringScheduler;
 import dev.jobhub.service.CrawlService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +25,7 @@ public class AdminController {
     private final CareerEndpointRepository careerEndpointRepository;
     private final ScoringScheduler scoringScheduler;
     private final DiscoveryService discoveryService;
+    private final PipelineScheduler pipelineScheduler;
 
     @Autowired(required = false)
     private LinkedInJobSearchService linkedInJobSearchService;
@@ -32,11 +34,19 @@ public class AdminController {
     private IndeedJobSearchService indeedJobSearchService;
 
     public AdminController(CrawlService crawlService, CareerEndpointRepository careerEndpointRepository,
-                           ScoringScheduler scoringScheduler, DiscoveryService discoveryService) {
+                           ScoringScheduler scoringScheduler, DiscoveryService discoveryService,
+                           PipelineScheduler pipelineScheduler) {
         this.crawlService = crawlService;
         this.careerEndpointRepository = careerEndpointRepository;
         this.scoringScheduler = scoringScheduler;
         this.discoveryService = discoveryService;
+        this.pipelineScheduler = pipelineScheduler;
+    }
+
+    @PostMapping("/pipeline")
+    public ResponseEntity<String> triggerPipeline() {
+        pipelineScheduler.runPipeline();
+        return ResponseEntity.ok("Pipeline complete");
     }
 
     @PostMapping("/crawl")

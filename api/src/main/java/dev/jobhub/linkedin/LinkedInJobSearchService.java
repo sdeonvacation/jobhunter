@@ -145,37 +145,42 @@ public class LinkedInJobSearchService {
                 continue;
             }
 
-            // Try matching with ATS jobs: normalize company name (spaces AND dashes)
-            String normalizedCompany = pj.company().toLowerCase().trim();
-            String normalizedCompanyDashed = normalizedCompany.replace(" ", "-");
-            String titleKeyword = extractTitleKeyword(pj.title());
+            // Try enrichment: fingerprint-based matching (most reliable)
+            String fingerprint = deduplicationFilter.generateFingerprint(
+                    pj.title(), pj.company(), pj.location());
+            Optional<JobPosting> atsMatch = jobPostingRepository.findAtsJobByFingerprint(fingerprint);
 
-            List<JobPosting> existingJobs = jobPostingRepository
-                    .findByCompanyNormalizedNameAndTitleContaining(normalizedCompany, titleKeyword);
-            if (existingJobs.isEmpty()) {
-                // Also try dashed variant (ATS slugs use dashes)
-                existingJobs = jobPostingRepository
-                        .findByCompanyNormalizedNameAndTitleContaining(normalizedCompanyDashed, titleKeyword);
+            if (atsMatch.isEmpty()) {
+                // Fallback: company name + title keyword matching
+                String normalizedCompany = pj.company().toLowerCase().trim();
+                String normalizedCompanyDashed = normalizedCompany.replace(" ", "-");
+                String titleKeyword = extractTitleKeyword(pj.title());
+
+                List<JobPosting> existingJobs = jobPostingRepository
+                        .findByCompanyNormalizedNameAndTitleContaining(normalizedCompany, titleKeyword);
+                if (existingJobs.isEmpty()) {
+                    existingJobs = jobPostingRepository
+                            .findByCompanyNormalizedNameAndTitleContaining(normalizedCompanyDashed, titleKeyword);
+                }
+                if (!existingJobs.isEmpty()) {
+                    atsMatch = Optional.ofNullable(findBestTitleMatch(existingJobs, pj.title()));
+                }
             }
 
-            if (!existingJobs.isEmpty()) {
-                JobPosting best = findBestTitleMatch(existingJobs, pj.title());
-                if (best != null) {
-                    Map<String, String> links = best.getExternalLinks() != null
-                            ? new HashMap<>(best.getExternalLinks()) : new HashMap<>();
-                    links.put("linkedin", linkedinUrl);
-                    best.setExternalLinks(links);
-                    jobPostingRepository.save(best);
-                    enriched++;
-                }
+            if (atsMatch.isPresent()) {
+                JobPosting best = atsMatch.get();
+                Map<String, String> links = best.getExternalLinks() != null
+                        ? new HashMap<>(best.getExternalLinks()) : new HashMap<>();
+                links.put("linkedin", linkedinUrl);
+                best.setExternalLinks(links);
+                jobPostingRepository.save(best);
+                enriched++;
             } else {
                 // Fetch job description from LinkedIn for language filtering + scoring
                 String description = fetchJobDescription(jobId);
                 FilterDecision langDecision = FilterDecision.KEEP;
                 String filterReason = null;
                 Integer requiredYoe = null;
-                String fingerprint = deduplicationFilter.generateFingerprint(
-                        pj.title(), pj.company(), pj.location());
 
                 // Full filter cascade: language → role → location → yoe → dedup
                 if (description != null && !description.isBlank()) {

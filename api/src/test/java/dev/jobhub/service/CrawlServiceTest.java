@@ -62,7 +62,7 @@ class CrawlServiceTest {
 
     @BeforeEach
     void setUp() {
-        properties = new CrawlProperties(4, 2, 50, 30);
+        properties = new CrawlProperties(4, 2, 30);
         crawlService = new CrawlService(
                 endpointRepository, jobPostingRepository,
                 extractorRegistry, smartRecruitersExtractor, languageFilter, roleRelevanceFilter,

@@ -74,7 +74,7 @@ public class CrawlService {
      */
     public int[] crawlAllDueEndpoints() {
         LocalDateTime cutoff = LocalDateTime.now().minusHours(crawlProperties.defaultFrequencyHours());
-        List<CareerEndpoint> dueEndpoints = endpointRepository.findDueForCrawl(cutoff, crawlProperties.batchSize());
+        List<CareerEndpoint> dueEndpoints = endpointRepository.findAllDueForCrawl(cutoff);
 
         log.info("Crawl cycle: {} endpoints due", dueEndpoints.size());
 

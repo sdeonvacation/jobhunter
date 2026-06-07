@@ -108,7 +108,7 @@ public class IndeedJobSearchService {
 
         log.info("Indeed search starting: keywords={}, locations={}", keywords, locations);
 
-        int created = 0, filtered = 0, searched = 0;
+        int created = 0, filtered = 0, enriched = 0, searched = 0;
 
         for (String keyword : keywords) {
             for (String location : locations) {
@@ -118,13 +118,14 @@ public class IndeedJobSearchService {
                     int[] stats = processJobs(jobs);
                     created += stats[0];
                     filtered += stats[1];
+                    enriched += stats[2];
                 } catch (Exception e) {
                     log.error("Indeed search failed for '{}' in '{}': {}", keyword, location, e.getMessage());
                 }
             }
         }
 
-        log.info("Indeed search complete: created={}, filtered={}, searches={}", created, filtered, searched);
+        log.info("Indeed search complete: created={}, filtered={}, enriched={}, searches={}", created, filtered, enriched, searched);
         return new int[]{created, filtered, searched};
     }
 
@@ -175,10 +176,10 @@ public class IndeedJobSearchService {
     }
 
     int[] processJobs(List<IndeedJob> jobs) {
-        int created = 0, filtered = 0;
+        int created = 0, filtered = 0, enriched = 0;
 
         if (jobs == null || jobs.isEmpty()) {
-            return new int[]{0, 0};
+            return new int[]{0, 0, 0};
         }
 
         for (IndeedJob job : jobs) {
@@ -192,12 +193,27 @@ public class IndeedJobSearchService {
                 continue;
             }
 
+            String fingerprint = deduplicationFilter.generateFingerprint(
+                    job.title(), job.company(), job.location());
+            String indeedUrl = job.jobUrl() != null ? job.jobUrl() : "";
+
+            // Try enrichment: if an ATS job with same fingerprint exists, add Indeed link to it
+            Optional<JobPosting> atsMatch = jobPostingRepository.findAtsJobByFingerprint(fingerprint);
+            if (atsMatch.isPresent()) {
+                JobPosting existing = atsMatch.get();
+                Map<String, String> links = existing.getExternalLinks() != null
+                        ? new HashMap<>(existing.getExternalLinks()) : new HashMap<>();
+                links.put("indeed", indeedUrl);
+                existing.setExternalLinks(links);
+                jobPostingRepository.save(existing);
+                enriched++;
+                continue;
+            }
+
             // Apply full filter cascade: language → role → location → yoe → dedup
             FilterDecision decision = FilterDecision.KEEP;
             String filterReason = null;
             Integer requiredYoe = null;
-            String fingerprint = deduplicationFilter.generateFingerprint(
-                    job.title(), job.company(), job.location());
 
             if (job.description() != null && !job.description().isBlank()) {
                 FilterResult langResult = languageFilter.filter(job.title(), job.description());
@@ -245,7 +261,6 @@ public class IndeedJobSearchService {
                 filtered++;
             }
 
-            String applyUrl = job.jobUrl() != null ? job.jobUrl() : "";
             Company companyEntity = findOrCreateCompany(job.company());
             JobPosting posting = JobPosting.builder()
                     .source(AtsType.INDEED)
@@ -254,19 +269,19 @@ public class IndeedJobSearchService {
                     .company(companyEntity)
                     .location(job.location())
                     .description(job.description())
-                    .applyUrl(applyUrl)
+                    .applyUrl(indeedUrl)
                     .discoveredDate(LocalDate.now())
                     .languageFilter(decision)
                     .filterReason(filterReason)
                     .requiredYoe(requiredYoe)
                     .fingerprint(fingerprint)
-                    .externalLinks(Map.of("indeed", applyUrl))
+                    .externalLinks(Map.of("indeed", indeedUrl))
                     .build();
             jobPostingRepository.save(posting);
             created++;
         }
 
-        return new int[]{created, filtered};
+        return new int[]{created, filtered, enriched};
     }
 
     String extractExternalId(String id, String url) {

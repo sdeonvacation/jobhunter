@@ -154,6 +154,7 @@ class LinkedInJobSearchServiceTest {
             when(yoeFilter.extractYoe(anyString())).thenReturn(null);
             when(yoeFilter.filter(any())).thenReturn(FilterResult.keep());
             when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("test-fp");
+            when(jobPostingRepository.findAtsJobByFingerprint(anyString())).thenReturn(Optional.empty());
             when(jobPostingRepository.findFirstByFingerprintAndLanguageFilter(anyString(), any())).thenReturn(Optional.empty());
             when(jobPostingRepository.existsBySourceAndExternalId(any(), anyString())).thenReturn(false);
         }

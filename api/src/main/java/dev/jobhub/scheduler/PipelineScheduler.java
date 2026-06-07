@@ -13,15 +13,20 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
- * Unified pipeline scheduler: crawl → linkedin search → indeed search → scoring (match + opportunity).
- * Runs as a single sequential job so UI always has complete data.
+ * Unified pipeline scheduler: [crawl + linkedin + indeed] in parallel → scoring.
+ * Steps 1-3 run concurrently for speed, scoring waits for all to complete.
  */
 @Slf4j
 @Component
 @DisallowConcurrentExecution
 public class PipelineScheduler implements Job {
+
+    private static final ExecutorService PIPELINE_POOL = Executors.newFixedThreadPool(3);
 
     private final CrawlService crawlService;
     private final ScoringScheduler scoringScheduler;
@@ -39,54 +44,74 @@ public class PipelineScheduler implements Job {
 
     @Override
     public void execute(JobExecutionContext context) throws JobExecutionException {
-        log.info("Pipeline starting: crawl → linkedin → indeed → scoring");
+        runPipeline();
+    }
+
+    /**
+     * Run the full pipeline. Can be called from Quartz or manually via admin endpoint.
+     */
+    public void runPipeline() {
+        log.info("Pipeline starting: [crawl + linkedin + indeed] parallel → scoring");
         Instant start = Instant.now();
 
-        // Step 1: Crawl all ATS endpoints
-        try {
-            log.info("[Pipeline 1/4] Crawling ATS endpoints");
-            int[] crawlStats = crawlService.crawlAllDueEndpoints();
-            log.info("[Pipeline 1/4] Crawl complete: endpoints={}, jobs={}, errors={}",
-                    crawlStats[0], crawlStats[1], crawlStats[2]);
-        } catch (Exception e) {
-            log.error("[Pipeline 1/4] Crawl failed, continuing pipeline", e);
-        }
-
-        // Step 2: LinkedIn job search + matching
-        if (linkedInJobSearchService != null) {
+        // Steps 1-3: Run crawl, LinkedIn, and Indeed in parallel
+        CompletableFuture<int[]> crawlFuture = CompletableFuture.supplyAsync(() -> {
             try {
-                log.info("[Pipeline 2/4] LinkedIn job search");
-                int[] linkedInStats = linkedInJobSearchService.searchAndMatch();
-                log.info("[Pipeline 2/4] LinkedIn complete: enriched={}, created={}, searches={}",
-                        linkedInStats[0], linkedInStats[1], linkedInStats[2]);
+                log.info("[Pipeline] Crawling ATS endpoints");
+                int[] stats = crawlService.crawlAllDueEndpoints();
+                log.info("[Pipeline] Crawl complete: endpoints={}, jobs={}, errors={}",
+                        stats[0], stats[1], stats[2]);
+                return stats;
             } catch (Exception e) {
-                log.error("[Pipeline 2/4] LinkedIn search failed, continuing pipeline", e);
+                log.error("[Pipeline] Crawl failed", e);
+                return new int[]{0, 0, 0};
             }
-        } else {
-            log.info("[Pipeline 2/4] LinkedIn search skipped (not enabled)");
-        }
+        }, PIPELINE_POOL);
 
-        // Step 3: Indeed job search
-        if (indeedJobSearchService != null) {
+        CompletableFuture<int[]> linkedInFuture = CompletableFuture.supplyAsync(() -> {
+            if (linkedInJobSearchService == null) {
+                log.info("[Pipeline] LinkedIn search skipped (not enabled)");
+                return new int[]{0, 0, 0};
+            }
             try {
-                log.info("[Pipeline 3/4] Indeed job search");
-                int[] indeedStats = indeedJobSearchService.searchAndCreate();
-                log.info("[Pipeline 3/4] Indeed complete: created={}, filtered={}, searches={}",
-                        indeedStats[0], indeedStats[1], indeedStats[2]);
+                log.info("[Pipeline] LinkedIn job search");
+                int[] stats = linkedInJobSearchService.searchAndMatch();
+                log.info("[Pipeline] LinkedIn complete: enriched={}, created={}, searches={}",
+                        stats[0], stats[1], stats[2]);
+                return stats;
             } catch (Exception e) {
-                log.error("[Pipeline 3/4] Indeed search failed, continuing pipeline", e);
+                log.error("[Pipeline] LinkedIn search failed", e);
+                return new int[]{0, 0, 0};
             }
-        } else {
-            log.info("[Pipeline 3/4] Indeed search skipped (not enabled)");
-        }
+        }, PIPELINE_POOL);
 
-        // Step 4: Score all unscored jobs (match + opportunity)
+        CompletableFuture<int[]> indeedFuture = CompletableFuture.supplyAsync(() -> {
+            if (indeedJobSearchService == null) {
+                log.info("[Pipeline] Indeed search skipped (not enabled)");
+                return new int[]{0, 0, 0};
+            }
+            try {
+                log.info("[Pipeline] Indeed job search");
+                int[] stats = indeedJobSearchService.searchAndCreate();
+                log.info("[Pipeline] Indeed complete: created={}, filtered={}, searches={}",
+                        stats[0], stats[1], stats[2]);
+                return stats;
+            } catch (Exception e) {
+                log.error("[Pipeline] Indeed search failed", e);
+                return new int[]{0, 0, 0};
+            }
+        }, PIPELINE_POOL);
+
+        // Wait for all three to complete before scoring
+        CompletableFuture.allOf(crawlFuture, linkedInFuture, indeedFuture).join();
+
+        // Step 4: Score all unscored jobs
         try {
-            log.info("[Pipeline 4/4] Scoring unscored jobs");
+            log.info("[Pipeline] Scoring unscored jobs");
             scoringScheduler.scoreAllUnscored();
-            log.info("[Pipeline 4/4] Scoring complete");
+            log.info("[Pipeline] Scoring complete");
         } catch (Exception e) {
-            log.error("[Pipeline 4/4] Scoring failed", e);
+            log.error("[Pipeline] Scoring failed", e);
         }
 
         Duration elapsed = Duration.between(start, Instant.now());
