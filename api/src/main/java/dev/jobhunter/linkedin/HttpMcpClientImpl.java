@@ -180,6 +180,13 @@ public class HttpMcpClientImpl implements HttpMcpClient {
             return false;
         }
         if (throwable instanceof WebClientResponseException wcre) {
+            if (wcre.getStatusCode().value() == 400) {
+                // Stale session — MCP server likely restarted, clear session to re-initialize on retry
+                log.warn("MCP returned 400 (stale session), resetting session for re-initialization");
+                mcpSessionId = null;
+                initAttempted.set(false);
+                return true;
+            }
             return wcre.getStatusCode().is5xxServerError();
         }
         return true;

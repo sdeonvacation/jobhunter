@@ -1,11 +1,11 @@
 package dev.jobhunter.source;
 
+import dev.jobhunter.discovery.DiscoveryProperties;
 import dev.jobhunter.model.enums.DiscoverySource;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.aggregator.McpStrategy;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -19,6 +19,10 @@ import java.util.Map;
 @ConditionalOnProperty(prefix = "linkedin-mcp", name = "enabled", havingValue = "true")
 public class LinkedInSource implements SourceConfig {
 
+    private static final int DEFAULT_MAX_RESULTS = 200;
+    private static final int DEFAULT_FREQUENCY_HOURS = 6;
+    private static final String DEFAULT_DATE_POSTED = "week";
+
     private final McpStrategy mcpStrategy;
     private final List<String> keywords;
     private final List<String> locations;
@@ -26,19 +30,22 @@ public class LinkedInSource implements SourceConfig {
     private final int frequencyHours;
     private final String datePosted;
 
-    public LinkedInSource(
-            McpStrategy mcpStrategy,
-            @Value("${discovery.providers.linkedin.keywords:}") List<String> keywords,
-            @Value("${discovery.providers.linkedin.locations:}") List<String> locations,
-            @Value("${discovery.providers.linkedin.max-results:200}") int maxResults,
-            @Value("${discovery.providers.linkedin.frequency-hours:6}") int frequencyHours,
-            @Value("${discovery.providers.linkedin.date-posted:week}") String datePosted) {
+    public LinkedInSource(McpStrategy mcpStrategy, DiscoveryProperties discoveryProperties) {
         this.mcpStrategy = mcpStrategy;
-        this.keywords = keywords;
-        this.locations = locations;
-        this.maxResults = maxResults;
-        this.frequencyHours = frequencyHours;
-        this.datePosted = datePosted;
+        DiscoveryProperties.ProviderConfig config = discoveryProperties.providers().get("linkedin");
+        if (config != null) {
+            this.keywords = config.keywords();
+            this.locations = config.locations();
+            this.maxResults = config.maxResults() != null ? config.maxResults() : DEFAULT_MAX_RESULTS;
+            this.frequencyHours = config.frequencyHours() != null ? config.frequencyHours() : DEFAULT_FREQUENCY_HOURS;
+            this.datePosted = config.datePosted() != null ? config.datePosted() : DEFAULT_DATE_POSTED;
+        } else {
+            this.keywords = List.of();
+            this.locations = List.of();
+            this.maxResults = DEFAULT_MAX_RESULTS;
+            this.frequencyHours = DEFAULT_FREQUENCY_HOURS;
+            this.datePosted = DEFAULT_DATE_POSTED;
+        }
     }
 
     @Override

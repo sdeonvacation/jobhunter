@@ -15,7 +15,12 @@ public record DiscoveryProperties(
             boolean enabled,
             List<String> keywords,
             List<String> locations,
-            List<String> postalCodes
+            List<String> postalCodes,
+            Integer maxResults,
+            Integer frequencyHours,
+            Integer resultsWanted,
+            Integer hoursOld,
+            String datePosted
     ) {
         public ProviderConfig {
             if (keywords == null) keywords = List.of();

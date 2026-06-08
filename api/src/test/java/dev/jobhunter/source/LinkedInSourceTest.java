@@ -1,5 +1,6 @@
 package dev.jobhunter.source;
 
+import dev.jobhunter.discovery.DiscoveryProperties;
 import dev.jobhunter.model.enums.DiscoverySource;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.strategy.FetchContext;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -18,16 +20,23 @@ class LinkedInSourceTest {
     private McpStrategy mcpStrategy;
     private LinkedInSource source;
 
+    private DiscoveryProperties buildProperties(List<String> keywords, List<String> locations) {
+        return buildProperties(keywords, locations, null, null, null);
+    }
+
+    private DiscoveryProperties buildProperties(List<String> keywords, List<String> locations,
+                                                 Integer maxResults, Integer frequencyHours, String datePosted) {
+        var config = new DiscoveryProperties.ProviderConfig(
+                true, keywords, locations, null, maxResults, frequencyHours, null, null, datePosted);
+        return new DiscoveryProperties(null, Map.of("linkedin", config));
+    }
+
     @BeforeEach
     void setUp() {
         mcpStrategy = mock(McpStrategy.class);
         source = new LinkedInSource(
                 mcpStrategy,
-                List.of("backend engineer", "Java developer"),
-                List.of("Germany", "Netherlands"),
-                200,
-                6,
-                "week"
+                buildProperties(List.of("backend engineer", "Java developer"), List.of("Germany", "Netherlands"))
         );
     }
 
@@ -56,8 +65,8 @@ class LinkedInSourceTest {
     }
 
     @Test
-    @DisplayName("frequencyHours() returns configured value")
-    void frequencyHoursReturnsConfigured() {
+    @DisplayName("frequencyHours() returns default when not configured")
+    void frequencyHoursReturnsDefault() {
         assertThat(source.frequencyHours()).isEqualTo(6);
     }
 
@@ -80,14 +89,31 @@ class LinkedInSourceTest {
     }
 
     @Test
-    @DisplayName("buildContext() with custom frequency")
-    void buildContextWithCustomFrequency() {
+    @DisplayName("buildContext() uses configured values from ProviderConfig")
+    void buildContextWithConfiguredValues() {
         LinkedInSource customSource = new LinkedInSource(
-                mcpStrategy, List.of("kotlin"), List.of("Berlin"), 100, 12, "day");
+                mcpStrategy,
+                buildProperties(List.of("kotlin"), List.of("Berlin"), 100, 12, "day")
+        );
 
         assertThat(customSource.frequencyHours()).isEqualTo(12);
         FetchContext context = customSource.buildContext();
+        assertThat(context.keywords()).containsExactly("kotlin");
+        assertThat(context.locations()).containsExactly("Berlin");
         assertThat(context.config()).containsEntry("date-posted", "day");
         assertThat(context.maxResults()).isEqualTo(100);
+    }
+
+    @Test
+    @DisplayName("buildContext() returns empty lists when provider config missing")
+    void buildContextWithMissingProviderConfig() {
+        DiscoveryProperties emptyProps = new DiscoveryProperties(null, Map.of());
+        LinkedInSource emptySource = new LinkedInSource(mcpStrategy, emptyProps);
+
+        FetchContext context = emptySource.buildContext();
+        assertThat(context.keywords()).isEmpty();
+        assertThat(context.locations()).isEmpty();
+        assertThat(context.maxResults()).isEqualTo(200);
+        assertThat(context.config()).containsEntry("date-posted", "week");
     }
 }

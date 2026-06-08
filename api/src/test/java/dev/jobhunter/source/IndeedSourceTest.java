@@ -1,5 +1,6 @@
 package dev.jobhunter.source;
 
+import dev.jobhunter.discovery.DiscoveryProperties;
 import dev.jobhunter.model.enums.DiscoverySource;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.strategy.FetchContext;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -18,16 +20,23 @@ class IndeedSourceTest {
     private CliStrategy cliStrategy;
     private IndeedSource source;
 
+    private DiscoveryProperties buildProperties(List<String> keywords, List<String> locations) {
+        return buildProperties(keywords, locations, null, null, null);
+    }
+
+    private DiscoveryProperties buildProperties(List<String> keywords, List<String> locations,
+                                                 Integer resultsWanted, Integer hoursOld, Integer frequencyHours) {
+        var config = new DiscoveryProperties.ProviderConfig(
+                true, keywords, locations, null, null, frequencyHours, resultsWanted, hoursOld, null);
+        return new DiscoveryProperties(null, Map.of("jobspy", config));
+    }
+
     @BeforeEach
     void setUp() {
         cliStrategy = mock(CliStrategy.class);
         source = new IndeedSource(
                 cliStrategy,
-                List.of("backend engineer", "Spring Boot"),
-                List.of("Germany", "remote"),
-                25,
-                24,
-                12
+                buildProperties(List.of("backend engineer", "Spring Boot"), List.of("Germany", "remote"))
         );
     }
 
@@ -56,8 +65,8 @@ class IndeedSourceTest {
     }
 
     @Test
-    @DisplayName("frequencyHours() returns configured value")
-    void frequencyHoursReturnsConfigured() {
+    @DisplayName("frequencyHours() returns default when not configured")
+    void frequencyHoursReturnsDefault() {
         assertThat(source.frequencyHours()).isEqualTo(12);
     }
 
@@ -81,10 +90,12 @@ class IndeedSourceTest {
     }
 
     @Test
-    @DisplayName("buildContext() with custom values")
-    void buildContextWithCustomValues() {
+    @DisplayName("buildContext() uses configured values from ProviderConfig")
+    void buildContextWithConfiguredValues() {
         IndeedSource customSource = new IndeedSource(
-                cliStrategy, List.of("kotlin"), List.of("Netherlands"), 50, 12, 8);
+                cliStrategy,
+                buildProperties(List.of("kotlin"), List.of("Netherlands"), 50, 12, 8)
+        );
 
         FetchContext context = customSource.buildContext();
         assertThat(context.keywords()).containsExactly("kotlin");
@@ -92,5 +103,18 @@ class IndeedSourceTest {
         assertThat(context.maxResults()).isEqualTo(50);
         assertThat(context.config()).containsEntry("hours-old", 12);
         assertThat(customSource.frequencyHours()).isEqualTo(8);
+    }
+
+    @Test
+    @DisplayName("buildContext() returns empty lists when provider config missing")
+    void buildContextWithMissingProviderConfig() {
+        DiscoveryProperties emptyProps = new DiscoveryProperties(null, Map.of());
+        IndeedSource emptySource = new IndeedSource(cliStrategy, emptyProps);
+
+        FetchContext context = emptySource.buildContext();
+        assertThat(context.keywords()).isEmpty();
+        assertThat(context.locations()).isEmpty();
+        assertThat(context.maxResults()).isEqualTo(25);
+        assertThat(context.config()).containsEntry("hours-old", 24);
     }
 }
