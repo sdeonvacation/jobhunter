@@ -28,7 +28,7 @@ DASHBOARD_PLIST := /tmp/dev.jobhunter.dashboard.plist
 API_LOG := /tmp/jobhunter-api.log
 DB_PORT := 5435
 
-.PHONY: up down restart build logs status
+.PHONY: up down restart build build-api build-dashboard deploy logs status
 
 up: _check-env _start-db _wait-db _generate-plists _start-services
 	@echo ""
@@ -45,10 +45,24 @@ down:
 
 restart: down up
 
-build:
+deploy: build down _generate-plists _start-services
+	@echo ""
+	@echo "Deployed successfully"
+	@echo "  API:       http://localhost:8080"
+	@echo "  Dashboard: http://localhost:3000"
+
+build: build-api build-dashboard
+	@echo "Build complete (API + Dashboard)"
+
+build-api:
 	@echo "Building API JAR..."
 	@JAVA_HOME=$(JAVA_HOME) $(PROJECT_ROOT)/api/gradlew -p $(PROJECT_ROOT)/api bootJar -x test
-	@echo "Build complete"
+	@echo "API JAR ready"
+
+build-dashboard:
+	@echo "Building Dashboard..."
+	@cd $(PROJECT_ROOT)/dashboard && npm install --silent && npm run build
+	@echo "Dashboard build ready"
 
 logs:
 	@tail -f $(API_LOG)
