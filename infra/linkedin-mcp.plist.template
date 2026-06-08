@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>dev.jobhunter.linkedin-mcp</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__UVX_PATH__</string>
+        <string>linkedin-scraper-mcp@latest</string>
+        <string>--transport</string>
+        <string>streamable-http</string>
+        <string>--host</string>
+        <string>0.0.0.0</string>
+        <string>--port</string>
+        <string>8000</string>
+        <string>--log-level</string>
+        <string>INFO</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/tmp/jobhunter-linkedin-mcp.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/jobhunter-linkedin-mcp.log</string>
+    <key>WorkingDirectory</key>
+    <string>/tmp</string>
+</dict>
+</plist>

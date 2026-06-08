@@ -39,16 +39,20 @@ Each morning, see exactly what's new: how many jobs were found, how many are wor
 | Capability | Detail |
 |-----------|--------|
 | Career pages monitored | Configurable, across 12+ ATS platforms |
-| Crawl frequency | Every 6-12 hours |
+| Aggregator sources | LinkedIn, Indeed, BerlinStartupJobs, Arbeitnow |
+| Crawl frequency | 3x daily (configurable) |
 | Scoring | Keyword match + opportunity composite |
 | Filters | Role, location, language, experience, dedup |
-| AI features | Cover letter generation, resume tailoring |
+| AI features | Cover letter generation, resume tailoring, AI page parsing |
+| LinkedIn integration | Job search via MCP server, contact discovery, outreach |
 | Dashboard | Dark-themed web app with search, filters, applied tracking |
 | MCP integration | Query jobs from any AI assistant (Claude, etc.) |
 
 ## Supported Hiring Platforms
 
-Greenhouse, Lever, Ashby, Workday, SmartRecruiters, Workable, Personio, Recruitee, JOIN, BambooHR, Breezy, SAP SuccessFactors, Arbeitnow, Indeed (via scraping).
+**ATS platforms:** Greenhouse, Lever, Ashby, Workday, SmartRecruiters, Workable, Personio, Recruitee, JOIN, BambooHR, Breezy, SAP SuccessFactors, TeamTailor, iCIMS, Jobvite.
+
+**Aggregators:** LinkedIn (via MCP scraper), Indeed (via JobSpy), BerlinStartupJobs (AI-parsed), Arbeitnow (REST API).
 
 ## How It Works
 
@@ -124,47 +128,74 @@ For contributors or those who want to run services individually.
 
 ### Prerequisites
 
-- Java 21 (Temurin)
+- Java 21 (Temurin) — auto-detected from Gradle toolchain or `JAVA_HOME`
 - Node.js 18+
-- Docker (for PostgreSQL)
+- Docker (Docker Desktop or Colima)
+- `uvx` (for LinkedIn MCP server — `pip install uvx` or `pipx install uv`)
 
-### 1. Start the database
+### 1. Configure
 
 ```bash
-docker compose up -d db
+git clone https://github.com/sdeonvacation/jobhunter.git
+cd jobhunter
 ```
-
-### 2. Configure your profile
 
 Edit `profile.yaml` and `keywords.yaml` at the project root. See [Configuration](#configuration) below for details.
 
-### 3. Start the API
+Set the required environment variable:
 
 ```bash
-cd api
-./gradlew bootRun
+export JOBHUNTER_AI_API_KEY=<your-api-key>           # Anthropic or OpenAI
+export JOBHUNTER_AI_PROVIDER=anthropic               # or "openai" (default: anthropic)
 ```
 
-API starts on http://localhost:8080. On first run, Liquibase creates all database tables automatically.
-
-### 4. Start the dashboard
+### 2. Build and start
 
 ```bash
-cd dashboard
-npm install
-npm run dev
+make build   # compile API JAR (first time only)
+make up      # start entire stack
 ```
 
-Dashboard opens at http://localhost:3000.
+This launches (in order):
+- **PostgreSQL** on port 5435
+- **LinkedIn MCP** on port 8000
+- **API** on http://localhost:8080
+- **Dashboard** on http://localhost:3000
 
-### 5. Add companies and trigger a crawl
+### 3. Add companies and trigger a crawl
 
 ```bash
 curl -X POST http://localhost:8080/api/admin/crawl
 curl -X POST http://localhost:8080/api/admin/score
 ```
 
-Open the dashboard — your Daily Digest is ready.
+Open http://localhost:3000 — your Daily Digest is ready.
+
+### Available Make targets
+
+| Command | Description |
+|---------|-------------|
+| `make up` | Start all services (DB, MCP, API, Dashboard) |
+| `make down` | Stop app services (DB left running) |
+| `make restart` | Stop and start all services |
+| `make build` | Rebuild the API JAR |
+| `make logs` | Tail the API log |
+| `make status` | Show which services are running |
+
+### Running services individually
+
+If you prefer to run services manually instead of using the Makefile:
+
+```bash
+# Database
+docker compose up -d db
+
+# API
+cd api && ./gradlew bootRun
+
+# Dashboard
+cd dashboard && npm install && npm run dev
+```
 
 ## MCP Server
 

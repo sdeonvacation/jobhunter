@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>dev.jobhunter.api</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__JAVA_HOME__/bin/java</string>
+        <string>-Xmx1g</string>
+        <string>-jar</string>
+        <string>__API_JAR__</string>
+        <string>--spring.liquibase.enabled=false</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>JAVA_HOME</key>
+        <string>__JAVA_HOME__</string>
+        <key>PATH</key>
+        <string>__NODE_BIN__:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>JOBHUNTER_AI_API_KEY</key>
+        <string>__AI_API_KEY__</string>
+        <key>JOBHUNTER_AI_PROVIDER</key>
+        <string>__AI_PROVIDER__</string>
+        <key>JOBHUNTER_AI_BASE_URL</key>
+        <string>__AI_BASE_URL__</string>
+        <key>JOBHUNTER_AI_EXTRACTION_MODEL</key>
+        <string>__AI_EXTRACTION_MODEL__</string>
+        <key>JOBHUNTER_AI_TAILORING_MODEL</key>
+        <string>__AI_TAILORING_MODEL__</string>
+    </dict>
+    <key>WorkingDirectory</key>
+    <string>__PROJECT_ROOT__</string>
+    <key>StandardOutPath</key>
+    <string>/tmp/jobhunter-api.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/jobhunter-api.log</string>
+    <key>KeepAlive</key>
+    <false/>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>

@@ -67,3 +67,5 @@ failsafe-reports/
 # package-lock.json
 # gradle.lockfile
 /.opencode/
+.opencode/worktrees/
+api/bin/
