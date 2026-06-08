@@ -97,7 +97,13 @@ function stripHtml(html: string): string {
  * Extract job description from LD+JSON JobPosting schema if present.
  * This gives much cleaner text than the full page HTML.
  */
-function extractJobDescriptionFromHtml(html: string): string {
+interface ExtractedJob {
+  title?: string;
+  company?: string;
+  description: string;
+}
+
+function extractJobDescriptionFromHtml(html: string): ExtractedJob {
   const ldJsonMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g);
   if (ldJsonMatch) {
     for (const block of ldJsonMatch) {
@@ -105,13 +111,17 @@ function extractJobDescriptionFromHtml(html: string): string {
         const content = block.replace(/<\/?script[^>]*>/g, '');
         const data = JSON.parse(content);
         if (data['@type'] === 'JobPosting' && data.description) {
-          return stripHtml(data.description);
+          return {
+            title: data.title || undefined,
+            company: data.hiringOrganization?.name || undefined,
+            description: stripHtml(data.description),
+          };
         }
       } catch { /* ignore parse errors */ }
     }
   }
   // Fallback: strip full page HTML
-  return stripHtml(html);
+  return { description: stripHtml(html) };
 }
 
 function isUrl(input: string): boolean {
@@ -136,10 +146,13 @@ export const getJobKeywordsTool = {
   handler: async (params: z.infer<typeof inputSchema>, client: JobHunterClient) => {
     if (isUrl(params.job_id)) {
       const html = await fetchPageText(params.job_id);
-      const text = extractJobDescriptionFromHtml(html);
-      const keywords = await extractKeywordsViaLLM(text);
+      const extracted = extractJobDescriptionFromHtml(html);
+      const keywords = await extractKeywordsViaLLM(extracted.description);
+      const header = extracted.title && extracted.company
+        ? `${extracted.title} @ ${extracted.company}`
+        : extracted.title || extracted.company || `URL: ${params.job_id}`;
       const output = [
-        `URL: ${params.job_id}`,
+        header,
         `Keywords: ${keywords.join(', ') || 'none extracted'}`,
       ].join('\n');
       return { content: [{ type: 'text' as const, text: output }] };
