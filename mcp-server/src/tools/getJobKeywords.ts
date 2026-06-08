@@ -5,24 +5,16 @@ const inputSchema = z.object({
   job_id: z.string().describe('Job UUID, short ID (8 chars), or job posting URL'),
 });
 
-const SYSTEM_PROMPT = `Extract the job title, company name, and technical skills/tools/frameworks/languages/platforms/methodologies from this job posting.
+const SYSTEM_PROMPT = `Extract technical skills, tools, frameworks, programming languages, platforms, and methodologies from this job posting.
 
 Rules:
-- "title": the role/position name (e.g. "Senior Backend Engineer")
-- "company": the hiring company name
-- "keywords": ONLY extract keywords explicitly mentioned as requirements, qualifications, or tech stack
+- ONLY extract keywords explicitly mentioned as requirements, qualifications, or tech stack
 - Include version-specific mentions (e.g. "Java 8", "Python 3")
 - Include cloud providers, databases, messaging systems, CI/CD tools, testing frameworks, and architectural patterns (e.g. "microservice architecture", "event-driven", "TDD")
 - Ignore navigation, page chrome, HTML/JS boilerplate, iframe attributes, URL patterns, and cookie/tracking scripts
 - Do NOT include single letters, generic business terms (e.g. "collaboration", "ownership"), or partial matches from URLs
 - Each keyword must be a recognizable technology, tool, language, framework, platform, database, methodology, or certification
-- Return as a JSON object with "title", "company", and "keywords" fields`;
-
-interface LLMExtractionResult {
-  title?: string;
-  company?: string;
-  keywords: string[];
-}
+- Return as a JSON object with a "keywords" array of strings`;
 
 interface LLMResponse {
   choices: Array<{
@@ -31,17 +23,17 @@ interface LLMResponse {
 }
 
 /**
- * Call LLM (OpenAI-compatible endpoint) to extract title, company, and keywords from text.
- * Falls back to empty result on any failure.
+ * Call LLM (OpenAI-compatible endpoint) to extract keywords from text.
+ * Falls back to empty array on any failure.
  */
-export async function extractViaLLM(text: string): Promise<LLMExtractionResult> {
+export async function extractKeywordsViaLLM(text: string): Promise<string[]> {
   const baseUrl = process.env.JOBHUNTER_AI_BASE_URL;
   const apiKey = process.env.JOBHUNTER_AI_API_KEY;
   const model = process.env.JOBHUNTER_AI_EXTRACTION_MODEL || 'gemini-3.1-flash-lite';
 
   if (!apiKey || !baseUrl) {
     console.warn('[getJobKeywords] Missing JOBHUNTER_AI_BASE_URL or JOBHUNTER_AI_API_KEY — skipping LLM extraction');
-    return { keywords: [] };
+    return [];
   }
 
   try {
@@ -60,16 +52,14 @@ export async function extractViaLLM(text: string): Promise<LLMExtractionResult> 
         response_format: {
           type: 'json_schema',
           json_schema: {
-            name: 'job_extraction',
+            name: 'keywords_extraction',
             strict: true,
             schema: {
               type: 'object',
               properties: {
-                title: { type: 'string' },
-                company: { type: 'string' },
                 keywords: { type: 'array', items: { type: 'string' } },
               },
-              required: ['title', 'company', 'keywords'],
+              required: ['keywords'],
               additionalProperties: false,
             },
           },
@@ -79,25 +69,21 @@ export async function extractViaLLM(text: string): Promise<LLMExtractionResult> 
 
     if (!response.ok) {
       console.warn(`[getJobKeywords] LLM API returned ${response.status}: ${response.statusText}`);
-      return { keywords: [] };
+      return [];
     }
 
     const data = (await response.json()) as LLMResponse;
     const content = data.choices?.[0]?.message?.content;
     if (!content) {
       console.warn('[getJobKeywords] LLM response missing content');
-      return { keywords: [] };
+      return [];
     }
 
-    const parsed = JSON.parse(content) as LLMExtractionResult;
-    return {
-      title: parsed.title || undefined,
-      company: parsed.company || undefined,
-      keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
-    };
+    const parsed = JSON.parse(content) as { keywords: string[] };
+    return Array.isArray(parsed.keywords) ? parsed.keywords : [];
   } catch (err) {
     console.warn('[getJobKeywords] LLM extraction failed:', err instanceof Error ? err.message : err);
-    return { keywords: [] };
+    return [];
   }
 }
 
@@ -107,17 +93,11 @@ function stripHtml(html: string): string {
     .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-interface JobPostingMeta {
-  title?: string;
-  company?: string;
-  description: string;
-}
-
 /**
- * Extract job description, title, and company from LD+JSON JobPosting schema if present.
+ * Extract job description from LD+JSON JobPosting schema if present.
  * This gives much cleaner text than the full page HTML.
  */
-function extractJobPostingFromHtml(html: string): JobPostingMeta {
+function extractJobDescriptionFromHtml(html: string): string {
   const ldJsonMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g);
   if (ldJsonMatch) {
     for (const block of ldJsonMatch) {
@@ -125,17 +105,13 @@ function extractJobPostingFromHtml(html: string): JobPostingMeta {
         const content = block.replace(/<\/?script[^>]*>/g, '');
         const data = JSON.parse(content);
         if (data['@type'] === 'JobPosting' && data.description) {
-          return {
-            title: data.title || undefined,
-            company: data.hiringOrganization?.name || undefined,
-            description: stripHtml(data.description),
-          };
+          return stripHtml(data.description);
         }
       } catch { /* ignore parse errors */ }
     }
   }
   // Fallback: strip full page HTML
-  return { description: stripHtml(html) };
+  return stripHtml(html);
 }
 
 function isUrl(input: string): boolean {
@@ -160,16 +136,11 @@ export const getJobKeywordsTool = {
   handler: async (params: z.infer<typeof inputSchema>, client: JobHunterClient) => {
     if (isUrl(params.job_id)) {
       const html = await fetchPageText(params.job_id);
-      const posting = extractJobPostingFromHtml(html);
-      const result = await extractViaLLM(posting.description);
-      const title = result.title || posting.title;
-      const company = result.company || posting.company;
-      const header = title && company
-        ? `${title} @ ${company}`
-        : title || company || params.job_id;
+      const text = extractJobDescriptionFromHtml(html);
+      const keywords = await extractKeywordsViaLLM(text);
       const output = [
-        header,
-        `Keywords: ${result.keywords.join(', ') || 'none extracted'}`,
+        `URL: ${params.job_id}`,
+        `Keywords: ${keywords.join(', ') || 'none extracted'}`,
       ].join('\n');
       return { content: [{ type: 'text' as const, text: output }] };
     }
@@ -179,16 +150,11 @@ export const getJobKeywordsTool = {
     const detail = await client.getJob(fullId);
 
     const description = detail.description ? stripHtml(detail.description) : '';
-    const result = description ? await extractViaLLM(description) : { keywords: [] };
+    const keywords = description ? await extractKeywordsViaLLM(description) : [];
 
-    const title = detail.title || result.title;
-    const company = detail.companyName || result.company;
-    const header = title && company
-      ? `${title} @ ${company}`
-      : title || company || fullId;
     const output = [
-      header,
-      `Keywords: ${result.keywords.join(', ') || 'none extracted'}`,
+      `${detail.title} @ ${detail.companyName}`,
+      `Keywords: ${keywords.join(', ') || 'none extracted'}`,
     ].join('\n');
 
     return { content: [{ type: 'text' as const, text: output }] };
