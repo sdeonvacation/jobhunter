@@ -62,34 +62,37 @@ public class JobController {
 
         Page<JobPosting> jobs;
 
-        // Source tab filtering: "ats" excludes LINKEDIN/INDEED, "linkedin"/"indeed" filters to that source
-        if ("linkedin".equalsIgnoreCase(source)) {
-            if (company != null && !company.isBlank()) {
-                jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceAndCompanyName(
-                        FilterDecision.KEEP, JobSource.LINKEDIN, company, pageable);
+        boolean hasQuery = query != null && !query.isBlank();
+        // Resolve source to a specific JobSource enum (for aggregator tabs) or null (for ATS tab)
+        JobSource resolvedSource = resolveSource(source);
+
+        if (hasQuery) {
+            if (resolvedSource != null) {
+                jobs = jobPostingRepository.searchByQueryAndSource(
+                        FilterDecision.KEEP, resolvedSource, query.trim(), company, pageable);
             } else {
-                jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSource(
-                        FilterDecision.KEEP, JobSource.LINKEDIN, pageable);
-            }
-        } else if ("indeed".equalsIgnoreCase(source)) {
-            if (company != null && !company.isBlank()) {
-                jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceAndCompanyName(
-                        FilterDecision.KEEP, JobSource.INDEED, company, pageable);
-            } else {
-                jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSource(
-                        FilterDecision.KEEP, JobSource.INDEED, pageable);
-            }
-        } else if ("ats".equalsIgnoreCase(source) || source == null || source.isBlank()) {
-            if (company != null && !company.isBlank()) {
-                jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceNotInAndCompanyName(
-                        FilterDecision.KEEP, List.of(JobSource.LINKEDIN, JobSource.INDEED), company, pageable);
-            } else {
-                jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceNotIn(
-                        FilterDecision.KEEP, List.of(JobSource.LINKEDIN, JobSource.INDEED), pageable);
+                jobs = jobPostingRepository.searchByQuery(
+                        FilterDecision.KEEP, JobSource.aggregators(), query.trim(), company, pageable);
             }
         } else {
-            jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilter(
-                    FilterDecision.KEEP, pageable);
+            if (resolvedSource != null) {
+                if (company != null && !company.isBlank()) {
+                    jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceAndCompanyName(
+                            FilterDecision.KEEP, resolvedSource, company, pageable);
+                } else {
+                    jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSource(
+                            FilterDecision.KEEP, resolvedSource, pageable);
+                }
+            } else {
+                // ATS tab: exclude all aggregator sources
+                if (company != null && !company.isBlank()) {
+                    jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceNotInAndCompanyName(
+                            FilterDecision.KEEP, JobSource.aggregators(), company, pageable);
+                } else {
+                    jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceNotIn(
+                            FilterDecision.KEEP, JobSource.aggregators(), pageable);
+                }
+            }
         }
 
         return jobs.map(DtoMapper::toJobSummary);
@@ -236,5 +239,22 @@ public class JobController {
         );
 
         return ResponseEntity.ok(radar);
+    }
+
+    /**
+     * Resolves source tab string to a JobSource enum.
+     * Returns null for "ats" or empty (meaning: show only non-aggregator jobs).
+     * Returns a specific JobSource for aggregator tab names.
+     */
+    private JobSource resolveSource(String source) {
+        if (source == null || source.isBlank() || "ats".equalsIgnoreCase(source)) {
+            return null;
+        }
+        try {
+            JobSource resolved = JobSource.valueOf(source.toUpperCase());
+            return resolved.isAggregator() ? resolved : null;
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 }

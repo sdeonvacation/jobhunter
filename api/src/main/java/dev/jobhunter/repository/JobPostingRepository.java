@@ -70,17 +70,19 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     @Query("SELECT jp FROM JobPosting jp WHERE jp.fingerprint = :fingerprint " +
            "AND jp.isActive = true " +
-           "AND jp.source NOT IN (dev.jobhunter.model.enums.JobSource.LINKEDIN, dev.jobhunter.model.enums.JobSource.INDEED, dev.jobhunter.model.enums.JobSource.BERLIN_STARTUP_JOBS, dev.jobhunter.model.enums.JobSource.ARBEITNOW)")
-    Optional<JobPosting> findAtsJobByFingerprint(@Param("fingerprint") String fingerprint);
+           "AND jp.source NOT IN :excludedSources")
+    Optional<JobPosting> findAtsJobByFingerprint(@Param("fingerprint") String fingerprint,
+                                                 @Param("excludedSources") List<JobSource> excludedSources);
 
     @Query(value = "SELECT id FROM job_posting WHERE CAST(id AS TEXT) LIKE :prefix || '%' LIMIT 1", nativeQuery = true)
     Optional<UUID> findIdByPrefix(@Param("prefix") String prefix);
 
     @Query("SELECT jp FROM JobPosting jp WHERE jp.company.normalizedName = :companyName " +
            "AND LOWER(jp.title) LIKE LOWER(CONCAT('%', :titleKeyword, '%')) " +
-           "AND jp.isActive = true AND jp.source NOT IN (dev.jobhunter.model.enums.JobSource.LINKEDIN, dev.jobhunter.model.enums.JobSource.INDEED)")
+           "AND jp.isActive = true AND jp.source NOT IN :excludedSources")
     List<JobPosting> findByCompanyNormalizedNameAndTitleContaining(
-            @Param("companyName") String companyName, @Param("titleKeyword") String titleKeyword);
+            @Param("companyName") String companyName, @Param("titleKeyword") String titleKeyword,
+            @Param("excludedSources") List<JobSource> excludedSources);
 
     boolean existsBySourceAndExternalId(JobSource source, String externalId);
 
@@ -97,4 +99,24 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
             FilterDecision languageFilter, List<JobSource> source, String companyName, Pageable pageable);
 
     List<JobPosting> findByDiscoveredDateBeforeAndAppliedFalse(LocalDate cutoff);
+
+    @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.applied = false AND j.languageFilter = :filter " +
+           "AND j.source NOT IN :excludedSources " +
+           "AND (LOWER(j.title) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(j.company.name) LIKE LOWER(CONCAT('%', :query, '%'))) " +
+           "AND (:company IS NULL OR j.company.name = :company)")
+    Page<JobPosting> searchByQuery(@Param("filter") FilterDecision filter,
+                                   @Param("excludedSources") List<JobSource> excludedSources,
+                                   @Param("query") String query,
+                                   @Param("company") String company,
+                                   Pageable pageable);
+
+    @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.applied = false AND j.languageFilter = :filter " +
+           "AND j.source = :source " +
+           "AND (LOWER(j.title) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(j.company.name) LIKE LOWER(CONCAT('%', :query, '%'))) " +
+           "AND (:company IS NULL OR j.company.name = :company)")
+    Page<JobPosting> searchByQueryAndSource(@Param("filter") FilterDecision filter,
+                                           @Param("source") JobSource source,
+                                           @Param("query") String query,
+                                           @Param("company") String company,
+                                           Pageable pageable);
 }
