@@ -76,7 +76,7 @@ resolution:
   timeout-seconds: 15
 
 scoring:
-  schedule: "0 0 7 * * ?"
+  schedule: "0 30 7,13,19 * * ?"
   opportunity-weights:
     match-score: 0.30
     interview-history: 0.20

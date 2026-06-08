@@ -5,6 +5,7 @@ import dev.jobhunter.scheduler.DigestScheduler;
 import dev.jobhunter.scheduler.DiscoveryScheduler;
 import dev.jobhunter.scheduler.GdprPurgeScheduler;
 import dev.jobhunter.scheduler.PipelineScheduler;
+import dev.jobhunter.scheduler.ScoringScheduler;
 import org.quartz.CronScheduleBuilder;
 import org.quartz.JobBuilder;
 import org.quartz.JobDetail;
@@ -123,6 +124,32 @@ public class QuartzConfig {
         return TriggerBuilder.newTrigger()
                 .forJob(gdprPurgeJobDetail)
                 .withIdentity("gdprPurgeTrigger", "gdpr")
+                .withSchedule(
+                        CronScheduleBuilder.cronSchedule(cronExpression)
+                                .withMisfireHandlingInstructionFireAndProceed()
+                )
+                .build();
+    }
+
+    // --- Scoring (independent safety-net, catches unscored jobs if pipeline crashes) ---
+
+    @Bean
+    public JobDetail scoringJobDetail() {
+        return JobBuilder.newJob(ScoringScheduler.class)
+                .withIdentity("scoringJob", "scoring")
+                .storeDurably()
+                .requestRecovery(true)
+                .build();
+    }
+
+    @Bean
+    public Trigger scoringTrigger(
+            JobDetail scoringJobDetail,
+            @Value("${scoring.schedule:0 30 7,13,19 * * ?}") String cronExpression
+    ) {
+        return TriggerBuilder.newTrigger()
+                .forJob(scoringJobDetail)
+                .withIdentity("scoringTrigger", "scoring")
                 .withSchedule(
                         CronScheduleBuilder.cronSchedule(cronExpression)
                                 .withMisfireHandlingInstructionFireAndProceed()
