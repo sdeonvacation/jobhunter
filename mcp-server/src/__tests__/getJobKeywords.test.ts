@@ -24,21 +24,21 @@ describe('getJobKeywords - LLM extraction', () => {
     expect(getJobKeywordsTool.inputSchema).toBeDefined();
   });
 
-  it('extractKeywordsViaLLM sends correct payload to LLM API', async () => {
-    const { extractKeywordsViaLLM } = await import('../tools/getJobKeywords.js');
+  it('extractViaLLM sends correct payload to LLM API', async () => {
+    const { extractViaLLM } = await import('../tools/getJobKeywords.js');
 
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () =>
         Promise.resolve({
-          choices: [{ message: { content: JSON.stringify({ keywords: ['Java', 'Spring Boot'] }) } }],
+          choices: [{ message: { content: JSON.stringify({ title: 'Backend Dev', company: 'Acme', keywords: ['Java', 'Spring Boot'] }) } }],
         }),
     });
     globalThis.fetch = mockFetch as any;
 
-    const result = await extractKeywordsViaLLM('We need Java and Spring Boot developers');
+    const result = await extractViaLLM('We need Java and Spring Boot developers');
 
-    expect(result).toEqual(['Java', 'Spring Boot']);
+    expect(result).toEqual({ title: 'Backend Dev', company: 'Acme', keywords: ['Java', 'Spring Boot'] });
     expect(mockFetch).toHaveBeenCalledTimes(1);
 
     const [url, options] = mockFetch.mock.calls[0];
@@ -54,33 +54,35 @@ describe('getJobKeywords - LLM extraction', () => {
     expect(body.messages[1].content).toContain('Java and Spring Boot');
     expect(body.response_format.type).toBe('json_schema');
     expect(body.response_format.json_schema.schema.properties.keywords.type).toBe('array');
+    expect(body.response_format.json_schema.schema.properties.title.type).toBe('string');
+    expect(body.response_format.json_schema.schema.properties.company.type).toBe('string');
   });
 
-  it('extractKeywordsViaLLM returns empty array when API key missing', async () => {
-    const { extractKeywordsViaLLM } = await import('../tools/getJobKeywords.js');
+  it('extractViaLLM returns empty keywords when API key missing', async () => {
+    const { extractViaLLM } = await import('../tools/getJobKeywords.js');
     delete process.env.JOBHUNTER_AI_API_KEY;
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const result = await extractKeywordsViaLLM('some text');
+    const result = await extractViaLLM('some text');
 
-    expect(result).toEqual([]);
+    expect(result).toEqual({ keywords: [] });
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Missing'));
     warnSpy.mockRestore();
   });
 
-  it('extractKeywordsViaLLM returns empty array when base URL missing', async () => {
-    const { extractKeywordsViaLLM } = await import('../tools/getJobKeywords.js');
+  it('extractViaLLM returns empty keywords when base URL missing', async () => {
+    const { extractViaLLM } = await import('../tools/getJobKeywords.js');
     delete process.env.JOBHUNTER_AI_BASE_URL;
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const result = await extractKeywordsViaLLM('some text');
+    const result = await extractViaLLM('some text');
 
-    expect(result).toEqual([]);
+    expect(result).toEqual({ keywords: [] });
     warnSpy.mockRestore();
   });
 
-  it('extractKeywordsViaLLM returns empty array on API error', async () => {
-    const { extractKeywordsViaLLM } = await import('../tools/getJobKeywords.js');
+  it('extractViaLLM returns empty keywords on API error', async () => {
+    const { extractViaLLM } = await import('../tools/getJobKeywords.js');
 
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
@@ -89,22 +91,22 @@ describe('getJobKeywords - LLM extraction', () => {
     }) as any;
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const result = await extractKeywordsViaLLM('some text');
+    const result = await extractViaLLM('some text');
 
-    expect(result).toEqual([]);
+    expect(result).toEqual({ keywords: [] });
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('500'));
     warnSpy.mockRestore();
   });
 
-  it('extractKeywordsViaLLM returns empty array on network failure', async () => {
-    const { extractKeywordsViaLLM } = await import('../tools/getJobKeywords.js');
+  it('extractViaLLM returns empty keywords on network failure', async () => {
+    const { extractViaLLM } = await import('../tools/getJobKeywords.js');
 
     globalThis.fetch = vi.fn().mockRejectedValue(new Error('ECONNREFUSED')) as any;
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const result = await extractKeywordsViaLLM('some text');
+    const result = await extractViaLLM('some text');
 
-    expect(result).toEqual([]);
+    expect(result).toEqual({ keywords: [] });
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining('LLM extraction failed'),
       expect.stringContaining('ECONNREFUSED'),
@@ -112,8 +114,8 @@ describe('getJobKeywords - LLM extraction', () => {
     warnSpy.mockRestore();
   });
 
-  it('extractKeywordsViaLLM returns empty array on malformed JSON response', async () => {
-    const { extractKeywordsViaLLM } = await import('../tools/getJobKeywords.js');
+  it('extractViaLLM returns empty keywords on malformed JSON response', async () => {
+    const { extractViaLLM } = await import('../tools/getJobKeywords.js');
 
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -121,23 +123,23 @@ describe('getJobKeywords - LLM extraction', () => {
     }) as any;
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const result = await extractKeywordsViaLLM('some text');
+    const result = await extractViaLLM('some text');
 
-    expect(result).toEqual([]);
+    expect(result).toEqual({ keywords: [] });
     warnSpy.mockRestore();
   });
 
-  it('extractKeywordsViaLLM uses default model when env not set', async () => {
-    const { extractKeywordsViaLLM } = await import('../tools/getJobKeywords.js');
+  it('extractViaLLM uses default model when env not set', async () => {
+    const { extractViaLLM } = await import('../tools/getJobKeywords.js');
     delete process.env.JOBHUNTER_AI_EXTRACTION_MODEL;
 
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ choices: [{ message: { content: '{"keywords":["Go"]}' } }] }),
+      json: () => Promise.resolve({ choices: [{ message: { content: '{"title":"Dev","company":"Co","keywords":["Go"]}' } }] }),
     });
     globalThis.fetch = mockFetch as any;
 
-    await extractKeywordsViaLLM('Go developer needed');
+    await extractViaLLM('Go developer needed');
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.model).toBe('gemini-3.1-flash-lite');
@@ -147,7 +149,7 @@ describe('getJobKeywords - LLM extraction', () => {
     const { getJobKeywordsTool } = await import('../tools/getJobKeywords.js');
 
     const mockHtml = '<html><body>We need Java, Spring Boot, and Kubernetes experience.</body></html>';
-    const llmResponse = { keywords: ['Java', 'Spring Boot', 'Kubernetes'] };
+    const llmResponse = { title: 'Backend Engineer', company: 'ExampleCo', keywords: ['Java', 'Spring Boot', 'Kubernetes'] };
 
     globalThis.fetch = vi.fn().mockImplementation((url: string) => {
       if (url === 'https://example.com/job/123') {
@@ -164,7 +166,7 @@ describe('getJobKeywords - LLM extraction', () => {
     const result = await getJobKeywordsTool.handler({ job_id: 'https://example.com/job/123' }, mockClient);
 
     expect(result.content[0].type).toBe('text');
-    expect(result.content[0].text).toContain('URL: https://example.com/job/123');
+    expect(result.content[0].text).toContain('Backend Engineer @ ExampleCo');
     expect(result.content[0].text).toContain('Java');
     expect(result.content[0].text).toContain('Spring Boot');
     expect(result.content[0].text).toContain('Kubernetes');
@@ -188,7 +190,7 @@ describe('getJobKeywords - LLM extraction', () => {
   it('handler resolves job by ID and extracts via LLM', async () => {
     const { getJobKeywordsTool } = await import('../tools/getJobKeywords.js');
 
-    const llmResponse = { keywords: ['Java', 'Kotlin', 'Spring Boot', 'PostgreSQL'] };
+    const llmResponse = { title: 'Backend Engineer', company: 'TestCo', keywords: ['Java', 'Kotlin', 'Spring Boot', 'PostgreSQL'] };
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ choices: [{ message: { content: JSON.stringify(llmResponse) } }] }),
