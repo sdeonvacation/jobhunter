@@ -150,6 +150,10 @@ public class JobPosting {
     @Column(name = "applied_at", columnDefinition = "TIMESTAMP")
     private LocalDateTime appliedAt;
 
+    @Column(name = "hidden", nullable = false)
+    @Builder.Default
+    private boolean hidden = false;
+
     @Column(name = "required_yoe")
     private Integer requiredYoe;
 

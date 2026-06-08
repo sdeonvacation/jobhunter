@@ -14,29 +14,28 @@ const jobWithUuid: Job = {
 };
 
 describe('JobCard ID display', () => {
-  it('renders first 8 chars of job ID with # prefix', () => {
+  it('renders first 8 chars of job ID', () => {
     render(<JobCard job={jobWithUuid} />);
-    expect(screen.getByText('#abcdef12')).toBeInTheDocument();
+    expect(screen.getByText('abcdef12')).toBeInTheDocument();
   });
 
-  it('has full UUID as title attribute for hover', () => {
+  it('has full UUID in title attribute for hover', () => {
     render(<JobCard job={jobWithUuid} />);
-    const idSpan = screen.getByText('#abcdef12');
-    expect(idSpan).toHaveAttribute('title', 'abcdef12-3456-7890-abcd-ef1234567890');
+    const idBtn = screen.getByText('abcdef12');
+    expect(idBtn).toHaveAttribute('title', 'Click to copy: abcdef12-3456-7890-abcd-ef1234567890');
   });
 
-  it('uses monospace font and select-all for easy copy', () => {
+  it('uses monospace font for easy copy', () => {
     render(<JobCard job={jobWithUuid} />);
-    const idSpan = screen.getByText('#abcdef12');
-    expect(idSpan.className).toContain('font-mono');
-    expect(idSpan.className).toContain('select-all');
+    const idBtn = screen.getByText('abcdef12');
+    expect(idBtn.className).toContain('font-mono');
   });
 
   it('renders ID next to company name', () => {
     render(<JobCard job={jobWithUuid} />);
-    const companyP = screen.getByText('#abcdef12').parentElement;
+    const companyP = screen.getByText('abcdef12').parentElement;
     expect(companyP?.textContent).toContain('IdCorp');
-    expect(companyP?.textContent).toContain('#abcdef12');
+    expect(companyP?.textContent).toContain('abcdef12');
   });
 
   it('handles short IDs gracefully', () => {
@@ -45,6 +44,6 @@ describe('JobCard ID display', () => {
       id: 'abc',
     };
     render(<JobCard job={shortIdJob} />);
-    expect(screen.getByText('#abc')).toBeInTheDocument();
+    expect(screen.getByText('abc')).toBeInTheDocument();
   });
 });

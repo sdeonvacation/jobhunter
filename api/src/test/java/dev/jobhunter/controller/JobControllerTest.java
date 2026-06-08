@@ -74,7 +74,7 @@ class JobControllerTest {
                 .build();
 
         Page<JobPosting> page = new PageImpl<>(List.of(job));
-        when(jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceNotIn(eq(FilterDecision.KEEP), anyList(), any(Pageable.class)))
+        when(jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndSourceNotIn(eq(FilterDecision.KEEP), anyList(), any(Pageable.class)))
                 .thenReturn(page);
 
         var result = controller.searchJobs(null, null, null, null, null, "matchScore", 0, 20);

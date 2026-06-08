@@ -72,6 +72,12 @@ export const api = {
         body: JSON.stringify({ applied }),
       });
     },
+    hideJob(id: string, hidden = true): Promise<void> {
+      return fetchApi(`/api/jobs/${id}/hidden`, {
+        method: 'PATCH',
+        body: JSON.stringify({ hidden }),
+      });
+    },
     getById(id: string): Promise<Job> {
       return fetchApi(`/api/jobs/${id}`);
     },

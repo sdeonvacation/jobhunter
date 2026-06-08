@@ -12,9 +12,10 @@ interface JobCardProps {
   index?: number;
   onMarkApplied?: (id: string) => void;
   onUndoApplied?: (id: string) => void;
+  onHide?: (id: string) => void;
 }
 
-export default function JobCard({ job, index = 0, onMarkApplied, onUndoApplied }: JobCardProps) {
+export default function JobCard({ job, index = 0, onMarkApplied, onUndoApplied, onHide }: JobCardProps) {
   const salary = formatSalary(job);
   const recommendation = job.recommendation;
   const delay = Math.min(index * 50, 300);
@@ -26,6 +27,14 @@ export default function JobCard({ job, index = 0, onMarkApplied, onUndoApplied }
       onUndoApplied(job.id);
     } else if (!job.applied && onMarkApplied) {
       onMarkApplied(job.id);
+    }
+  };
+
+  const handleHide = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onHide) {
+      onHide(job.id);
     }
   };
 
@@ -118,6 +127,18 @@ export default function JobCard({ job, index = 0, onMarkApplied, onUndoApplied }
           )}
           {recommendation && (
             <RecommendationBadge recommendation={recommendation} />
+          )}
+          {onHide && (
+            <button
+              onClick={handleHide}
+              title="Hide job"
+              className="w-8 h-8 flex items-center justify-center rounded-md border border-surface-600 text-text-muted hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="4" y1="4" x2="12" y2="12" />
+                <line x1="12" y1="4" x2="4" y2="12" />
+              </svg>
+            </button>
           )}
           {(onMarkApplied || onUndoApplied) && (
             <button

@@ -77,19 +77,19 @@ public class JobController {
         } else {
             if (resolvedSource != null) {
                 if (company != null && !company.isBlank()) {
-                    jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceAndCompanyName(
+                    jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndSourceAndCompanyName(
                             FilterDecision.KEEP, resolvedSource, company, pageable);
                 } else {
-                    jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSource(
+                    jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndSource(
                             FilterDecision.KEEP, resolvedSource, pageable);
                 }
             } else {
                 // ATS tab: exclude all aggregator sources
                 if (company != null && !company.isBlank()) {
-                    jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceNotInAndCompanyName(
+                    jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndSourceNotInAndCompanyName(
                             FilterDecision.KEEP, JobSource.aggregators(), company, pageable);
                 } else {
-                    jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceNotIn(
+                    jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndSourceNotIn(
                             FilterDecision.KEEP, JobSource.aggregators(), pageable);
                 }
             }
@@ -119,7 +119,7 @@ public class JobController {
                     .and(Sort.by(Sort.Direction.DESC, "opportunityScore.score"));
         };
         Pageable pageable = PageRequest.of(page, size, sortOrder);
-        Page<JobPosting> jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndDiscoveredDate(
+        Page<JobPosting> jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndDiscoveredDate(
                 FilterDecision.KEEP, LocalDate.now(), pageable);
         return jobs.map(DtoMapper::toJobSummary);
     }
@@ -172,6 +172,19 @@ public class JobController {
         boolean applied = body == null || body.getOrDefault("applied", true);
         job.setApplied(applied);
         job.setAppliedAt(applied ? java.time.LocalDateTime.now() : null);
+        jobPostingRepository.save(job);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/hidden")
+    public ResponseEntity<Void> hideJob(@PathVariable UUID id, @RequestBody(required = false) Map<String, Boolean> body) {
+        Optional<JobPosting> jobOpt = jobPostingRepository.findById(id);
+        if (jobOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        JobPosting job = jobOpt.get();
+        boolean hidden = body == null || body.getOrDefault("hidden", true);
+        job.setHidden(hidden);
         jobPostingRepository.save(job);
         return ResponseEntity.noContent().build();
     }

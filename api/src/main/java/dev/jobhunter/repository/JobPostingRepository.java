@@ -50,20 +50,20 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
     @Query("SELECT j FROM JobPosting j LEFT JOIN FETCH j.endpoint WHERE j.source = :source AND j.languageFilter = :filter AND j.description IS NULL AND j.isActive = true")
     List<JobPosting> findBySourceAndLanguageFilterAndDescriptionIsNull(@Param("source") JobSource source, @Param("filter") FilterDecision filter);
 
-    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilter(FilterDecision filter, Pageable pageable);
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilter(FilterDecision filter, Pageable pageable);
 
-    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndLocationContainingIgnoreCase(
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndLocationContainingIgnoreCase(
             FilterDecision filter, String location, Pageable pageable);
 
-    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndCompanyName(
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndCompanyName(
             FilterDecision filter, String companyName, Pageable pageable);
 
-    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndCompanyNameAndLocationContainingIgnoreCase(
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndCompanyNameAndLocationContainingIgnoreCase(
             FilterDecision filter, String companyName, String location, Pageable pageable);
 
     Page<JobPosting> findByIsActiveTrueAndAppliedTrue(Pageable pageable);
 
-    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndDiscoveredDate(
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndDiscoveredDate(
             FilterDecision filter, java.time.LocalDate discoveredDate, Pageable pageable);
 
     Optional<JobPosting> findFirstByFingerprintAndLanguageFilter(String fingerprint, FilterDecision filter);
@@ -86,21 +86,21 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     boolean existsBySourceAndExternalId(JobSource source, String externalId);
 
-    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSource(
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndSource(
             FilterDecision languageFilter, JobSource source, Pageable pageable);
 
-    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceNotIn(
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndSourceNotIn(
             FilterDecision languageFilter, List<JobSource> source, Pageable pageable);
 
-    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceAndCompanyName(
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndSourceAndCompanyName(
             FilterDecision languageFilter, JobSource source, String companyName, Pageable pageable);
 
-    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndSourceNotInAndCompanyName(
+    Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndSourceNotInAndCompanyName(
             FilterDecision languageFilter, List<JobSource> source, String companyName, Pageable pageable);
 
     List<JobPosting> findByDiscoveredDateBeforeAndAppliedFalse(LocalDate cutoff);
 
-    @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.applied = false AND j.languageFilter = :filter " +
+    @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.applied = false AND j.hidden = false AND j.languageFilter = :filter " +
            "AND j.source NOT IN :excludedSources " +
            "AND (LOWER(j.title) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(j.company.name) LIKE LOWER(CONCAT('%', :query, '%'))) " +
            "AND (:company IS NULL OR j.company.name = :company)")
@@ -110,7 +110,7 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
                                    @Param("company") String company,
                                    Pageable pageable);
 
-    @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.applied = false AND j.languageFilter = :filter " +
+    @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.applied = false AND j.hidden = false AND j.languageFilter = :filter " +
            "AND j.source = :source " +
            "AND (LOWER(j.title) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(j.company.name) LIKE LOWER(CONCAT('%', :query, '%'))) " +
            "AND (:company IS NULL OR j.company.name = :company)")

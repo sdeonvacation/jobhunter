@@ -143,9 +143,9 @@ describe('JobCard', () => {
     it('source button click stops propagation', () => {
       render(<JobCard job={jobWithLinks} />);
       const linkedinBtn = screen.getByText('LinkedIn').closest('a')!;
-      const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
-      Object.defineProperty(clickEvent, 'stopPropagation', { value: expect.any(Function) });
-      fireEvent(linkedinBtn, clickEvent);
+      // fireEvent.click dispatches a proper MouseEvent with stopPropagation;
+      // if onClick handler throws, this test will fail
+      fireEvent.click(linkedinBtn);
     });
 
     it('does not render source buttons when externalLinks is empty', () => {

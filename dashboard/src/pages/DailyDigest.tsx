@@ -65,6 +65,15 @@ export default function DailyDigest() {
     }
   };
 
+  const handleHide = async (id: string) => {
+    try {
+      await api.jobs.hideJob(id);
+      setJobs((prev) => prev.filter((j) => j.id !== id));
+    } catch (err) {
+      console.error('Failed to hide job', err);
+    }
+  };
+
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -113,7 +122,7 @@ export default function DailyDigest() {
 
           <div className="space-y-3">
             {jobs.map((job, i) => (
-              <JobCard key={job.id} job={job} index={i} onMarkApplied={handleMarkApplied} />
+              <JobCard key={job.id} job={job} index={i} onMarkApplied={handleMarkApplied} onHide={handleHide} />
             ))}
           </div>
         </>

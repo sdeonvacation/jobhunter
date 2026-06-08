@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import Companies from '../pages/Companies';
 import { api } from '../api/client';
@@ -48,6 +48,10 @@ const mockCompanies = [
 describe('Companies page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('renders company list from page response', async () => {
@@ -128,7 +132,9 @@ describe('Companies page', () => {
       expect(screen.getByText('Acme Corp')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('ACTIVE'));
+    // Use getByRole to target the filter button, not the status badge
+    const activeFilterBtn = screen.getByRole('button', { name: 'ACTIVE' });
+    fireEvent.click(activeFilterBtn);
 
     await waitFor(() => {
       expect(vi.mocked(api.companies.list)).toHaveBeenCalledWith(
@@ -143,9 +149,8 @@ describe('Companies page', () => {
 
     render(<Companies />);
 
-    await waitFor(() => {
-      expect(screen.getByText('Acme Corp')).toBeInTheDocument();
-    });
+    // Flush initial debounce timer + state updates
+    await vi.advanceTimersByTimeAsync(300);
 
     const searchInput = screen.getByPlaceholderText('Search companies...');
     expect(searchInput).toBeInTheDocument();
@@ -158,15 +163,11 @@ describe('Companies page', () => {
     );
 
     // After debounce
-    vi.advanceTimersByTime(300);
+    await vi.advanceTimersByTimeAsync(300);
 
-    await waitFor(() => {
-      expect(vi.mocked(api.companies.list)).toHaveBeenCalledWith(
-        expect.objectContaining({ search: 'acme', page: 0 })
-      );
-    });
-
-    vi.useRealTimers();
+    expect(vi.mocked(api.companies.list)).toHaveBeenCalledWith(
+      expect.objectContaining({ search: 'acme', page: 0 })
+    );
   });
 
   it('renders priority dots for each company', async () => {

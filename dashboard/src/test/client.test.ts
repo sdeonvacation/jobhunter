@@ -13,7 +13,7 @@ describe('fetchApi', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve(mockData),
+      text: () => Promise.resolve(JSON.stringify(mockData)),
     });
 
     const result = await fetchApi('/api/test');
@@ -55,7 +55,7 @@ describe('fetchApi', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({}),
+      text: () => Promise.resolve(JSON.stringify({})),
     });
 
     await fetchApi('/api/test', {
@@ -109,7 +109,7 @@ describe('api.companies', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve(pageResponse),
+      text: () => Promise.resolve(JSON.stringify(pageResponse)),
     });
 
     const result = await api.companies.list();
@@ -125,13 +125,13 @@ describe('api.companies', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({
+      text: () => Promise.resolve(JSON.stringify({
         content: [],
         totalElements: 0,
         totalPages: 0,
         number: 0,
         size: 20,
-      }),
+      })),
     });
 
     await api.companies.list({ status: 'ACTIVE', search: 'acme', page: 1, size: 20 });
@@ -152,7 +152,7 @@ describe('api.pipeline', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve([]),
+      text: () => Promise.resolve(JSON.stringify([])),
     });
 
     await api.pipeline.list();
@@ -167,7 +167,7 @@ describe('api.pipeline', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve([]),
+      text: () => Promise.resolve(JSON.stringify([])),
     });
 
     await api.pipeline.list('APPLIED');
@@ -183,7 +183,7 @@ describe('api.pipeline', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve(mockApp),
+      text: () => Promise.resolve(JSON.stringify(mockApp)),
     });
 
     const result = await api.pipeline.apply('job-123', { notes: 'test' });
@@ -202,7 +202,7 @@ describe('api.pipeline', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({}),
+      text: () => Promise.resolve(JSON.stringify({})),
     });
 
     await api.pipeline.apply('job-456');
@@ -220,7 +220,7 @@ describe('api.pipeline', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({}),
+      text: () => Promise.resolve(JSON.stringify({})),
     });
 
     await api.pipeline.updateStatus('app-1', 'INTERVIEWING', 'went well');
@@ -238,7 +238,7 @@ describe('api.pipeline', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({}),
+      text: () => Promise.resolve(JSON.stringify({})),
     });
 
     await api.pipeline.recordOutcome('app-2', { stage: 'PHONE_SCREEN', notes: 'scheduled' });
@@ -269,7 +269,7 @@ describe('api.jobs', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve(pageData),
+      text: () => Promise.resolve(JSON.stringify(pageData)),
     });
 
     const result = await api.jobs.search({ query: 'react', page: 0, size: 20 });
@@ -286,7 +286,7 @@ describe('api.jobs', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 }),
+      text: () => Promise.resolve(JSON.stringify({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 })),
     });
 
     await api.jobs.search({ query: '', location: '', page: 0, size: 20 });
@@ -302,7 +302,7 @@ describe('api.jobs', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve(digest),
+      text: () => Promise.resolve(JSON.stringify(digest)),
     });
 
     const result = await api.jobs.getDailyDigest();
@@ -315,7 +315,7 @@ describe('api.jobs', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve([]),
+      text: () => Promise.resolve(JSON.stringify([])),
     });
 
     await api.jobs.getRadar();
@@ -333,7 +333,7 @@ describe('api.discovery', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 }),
+      text: () => Promise.resolve(JSON.stringify({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 })),
     });
 
     await api.discovery.getEvents(2, 10);
@@ -349,7 +349,7 @@ describe('api.discovery', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve(stats),
+      text: () => Promise.resolve(JSON.stringify(stats)),
     });
 
     const result = await api.discovery.getStats();

@@ -9,12 +9,15 @@ vi.mock('../api/client', () => ({
     jobs: {
       search: vi.fn(),
       markApplied: vi.fn(),
+      hideJob: vi.fn(),
     },
   },
 }));
 
-// Suppress fetch for /api/jobs/companies
+// Suppress fetch for /api/jobs/companies (raw fetch call uses .json())
 globalThis.fetch = vi.fn().mockResolvedValue({
+  ok: true,
+  status: 200,
   json: () => Promise.resolve([]),
 }) as unknown as typeof fetch;
 
@@ -85,13 +88,10 @@ describe('Jobs page - source tabs', () => {
   });
 
   it('switching to LinkedIn tab calls search with source=linkedin', async () => {
-    vi.mocked(api.jobs.search)
-      .mockResolvedValueOnce(atsJobs)
-      .mockResolvedValueOnce(linkedinJobs);
-
     render(<Jobs />);
     await waitFor(() => expect(screen.getByText('ATS Job')).toBeInTheDocument());
 
+    vi.mocked(api.jobs.search).mockResolvedValue(linkedinJobs);
     fireEvent.click(screen.getByText('LinkedIn'));
 
     await waitFor(() =>
@@ -103,13 +103,10 @@ describe('Jobs page - source tabs', () => {
   });
 
   it('switching to Indeed tab calls search with source=indeed', async () => {
-    vi.mocked(api.jobs.search)
-      .mockResolvedValueOnce(atsJobs)
-      .mockResolvedValueOnce(indeedJobs);
-
     render(<Jobs />);
     await waitFor(() => expect(screen.getByText('ATS Job')).toBeInTheDocument());
 
+    vi.mocked(api.jobs.search).mockResolvedValue(indeedJobs);
     fireEvent.click(screen.getByText('Indeed'));
 
     await waitFor(() =>
@@ -133,13 +130,10 @@ describe('Jobs page - source tabs', () => {
   });
 
   it('shows empty state when backend returns no jobs', async () => {
-    vi.mocked(api.jobs.search)
-      .mockResolvedValueOnce(atsJobs)
-      .mockResolvedValueOnce(emptyResponse);
-
     render(<Jobs />);
     await waitFor(() => expect(screen.getByText('ATS Job')).toBeInTheDocument());
 
+    vi.mocked(api.jobs.search).mockResolvedValue(emptyResponse);
     fireEvent.click(screen.getByText('LinkedIn'));
 
     await waitFor(() => expect(screen.getByText('No jobs found')).toBeInTheDocument());
