@@ -62,7 +62,8 @@ class AggregatorIngestionServiceImplTest {
         service = new AggregatorIngestionServiceImpl(
                 jobPostingRepository, companyRepository, aggregatorRunRepository,
                 languageFilter, roleRelevanceFilter, locationFilter,
-                yoeFilter, deduplicationFilter);
+                yoeFilter, deduplicationFilter,
+                List.of());
     }
 
     private SourceConfig createSourceConfig(JobSource source, DiscoverySource discovery) {

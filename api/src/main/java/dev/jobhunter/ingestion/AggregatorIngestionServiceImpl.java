@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Slf4j
@@ -39,6 +40,7 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
     private final LocationFilter locationFilter;
     private final YoeFilter yoeFilter;
     private final DeduplicationFilter deduplicationFilter;
+    private final List<PostIngestionEnricher> postIngestionEnrichers;
 
     public AggregatorIngestionServiceImpl(JobPostingRepository jobPostingRepository,
                                           CompanyRepository companyRepository,
@@ -47,7 +49,8 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                                           RoleRelevanceFilter roleRelevanceFilter,
                                           LocationFilter locationFilter,
                                           YoeFilter yoeFilter,
-                                          DeduplicationFilter deduplicationFilter) {
+                                          DeduplicationFilter deduplicationFilter,
+                                          List<PostIngestionEnricher> postIngestionEnrichers) {
         this.jobPostingRepository = jobPostingRepository;
         this.companyRepository = companyRepository;
         this.aggregatorRunRepository = aggregatorRunRepository;
@@ -56,6 +59,7 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
         this.locationFilter = locationFilter;
         this.yoeFilter = yoeFilter;
         this.deduplicationFilter = deduplicationFilter;
+        this.postIngestionEnrichers = postIngestionEnrichers;
     }
 
     @Override
@@ -146,6 +150,10 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                 errors++;
             }
         }
+
+        // Run post-ingestion enrichers
+        int totalCreated = created;
+        postIngestionEnrichers.forEach(e -> e.enrich(jobSource, totalCreated));
 
         long elapsedMs = System.currentTimeMillis() - startMs;
         String status = errors > 0 && created == 0 ? "ERROR" : "SUCCESS";
