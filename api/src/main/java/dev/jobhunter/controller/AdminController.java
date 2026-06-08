@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -51,8 +52,8 @@ public class AdminController {
 
     @PostMapping("/pipeline")
     public ResponseEntity<String> triggerPipeline() {
-        pipelineScheduler.runPipeline();
-        return ResponseEntity.ok("Pipeline complete");
+        CompletableFuture.runAsync(pipelineScheduler::runPipeline);
+        return ResponseEntity.accepted().body("Pipeline triggered");
     }
 
     @PostMapping("/crawl")

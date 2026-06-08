@@ -13,7 +13,7 @@ import java.time.Duration;
 @Configuration
 public class WebClientConfig {
 
-    @Value("${crawl.timeout-seconds:30}")
+    @Value("${pipeline.timeout-seconds:30}")
     private int timeoutSeconds;
 
     @Bean

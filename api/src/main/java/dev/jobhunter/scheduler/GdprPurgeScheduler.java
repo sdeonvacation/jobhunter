@@ -1,5 +1,7 @@
 package dev.jobhunter.scheduler;
 
+import dev.jobhunter.model.JobPosting;
+import dev.jobhunter.repository.JobPostingRepository;
 import dev.jobhunter.service.RecruiterDataService;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.DisallowConcurrentExecution;
@@ -10,34 +12,54 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
 
 /**
- * Nightly GDPR purge job (2:00 AM). Removes expired recruiter PII.
+ * Nightly purge job (2:00 AM). Removes expired recruiter PII and old unapplied jobs.
  */
 @Slf4j
 @Component
 @DisallowConcurrentExecution
 public class GdprPurgeScheduler implements Job {
 
-    private final RecruiterDataService recruiterDataService;
+    private static final int JOB_RETENTION_DAYS = 30;
 
-    public GdprPurgeScheduler(RecruiterDataService recruiterDataService) {
+    private final RecruiterDataService recruiterDataService;
+    private final JobPostingRepository jobPostingRepository;
+
+    public GdprPurgeScheduler(RecruiterDataService recruiterDataService,
+                              JobPostingRepository jobPostingRepository) {
         this.recruiterDataService = recruiterDataService;
+        this.jobPostingRepository = jobPostingRepository;
     }
 
     @Override
     public void execute(JobExecutionContext context) throws JobExecutionException {
-        log.info("GDPR purge starting");
+        log.info("Nightly purge starting");
         Instant start = Instant.now();
 
         try {
-            int purged = recruiterDataService.purgeExpiredData();
+            int recruitersPurged = recruiterDataService.purgeExpiredData();
+            int jobsPurged = purgeOldJobs();
             Duration elapsed = Duration.between(start, Instant.now());
 
-            log.info("GDPR purge complete in {}ms: {} records purged",
-                    elapsed.toMillis(), purged);
+            log.info("Nightly purge complete in {}ms: {} recruiter records, {} old jobs purged",
+                    elapsed.toMillis(), recruitersPurged, jobsPurged);
         } catch (Exception e) {
-            log.error("GDPR purge failed", e);
+            log.error("Nightly purge failed", e);
         }
+    }
+
+    private int purgeOldJobs() {
+        LocalDate cutoff = LocalDate.now().minusDays(JOB_RETENTION_DAYS);
+        List<JobPosting> staleJobs = jobPostingRepository.findByDiscoveredDateBeforeAndAppliedFalse(cutoff);
+        if (staleJobs.isEmpty()) {
+            return 0;
+        }
+        jobPostingRepository.deleteAll(staleJobs);
+        log.info("Purged {} unapplied jobs older than {} days (before {})",
+                staleJobs.size(), JOB_RETENTION_DAYS, cutoff);
+        return staleJobs.size();
     }
 }

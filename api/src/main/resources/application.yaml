@@ -29,13 +29,12 @@ ai-crawl:
   max-content-chars: 8000
   enabled: ${AI_CRAWL_ENABLED:true}
 
-crawl:
-  default-frequency-hours: 12
-  high-priority-frequency-hours: 6
+pipeline:
+  schedule: "0 0 7,13,19 * * ?"
   timeout-seconds: 30
 
 discovery:
-  schedule: "0 0 6 * * ?"
+  schedule: "0 0 */6 * * ?"
   providers:
     jobspy:
       enabled: true

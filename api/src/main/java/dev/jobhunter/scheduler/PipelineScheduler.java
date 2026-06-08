@@ -2,8 +2,6 @@ package dev.jobhunter.scheduler;
 
 import dev.jobhunter.ingestion.AggregatorIngestionService;
 import dev.jobhunter.ingestion.IngestionStats;
-import dev.jobhunter.model.AggregatorRun;
-import dev.jobhunter.repository.AggregatorRunRepository;
 import dev.jobhunter.service.CrawlService;
 import dev.jobhunter.source.SourceConfig;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +14,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -24,7 +21,7 @@ import java.util.concurrent.Executors;
 
 /**
  * Unified pipeline scheduler: [crawl + aggregator sources] in parallel → scoring.
- * Crawl and all enabled/due aggregator sources run concurrently, scoring waits for all to complete.
+ * All active ATS endpoints and enabled aggregator sources run every pipeline execution.
  */
 @Slf4j
 @Component
@@ -36,18 +33,15 @@ public class PipelineScheduler implements Job {
     private final CrawlService crawlService;
     private final ScoringScheduler scoringScheduler;
     private final AggregatorIngestionService aggregatorIngestionService;
-    private final AggregatorRunRepository aggregatorRunRepository;
     private final List<SourceConfig> sources;
 
     public PipelineScheduler(CrawlService crawlService,
                              ScoringScheduler scoringScheduler,
                              AggregatorIngestionService aggregatorIngestionService,
-                             AggregatorRunRepository aggregatorRunRepository,
                              @Qualifier("allSources") List<SourceConfig> sources) {
         this.crawlService = crawlService;
         this.scoringScheduler = scoringScheduler;
         this.aggregatorIngestionService = aggregatorIngestionService;
-        this.aggregatorRunRepository = aggregatorRunRepository;
         this.sources = sources;
     }
 
@@ -77,10 +71,9 @@ public class PipelineScheduler implements Job {
             }
         }, PIPELINE_POOL);
 
-        // Step 2: Run each enabled and due aggregator source in parallel
+        // Step 2: Run each enabled aggregator source in parallel
         List<CompletableFuture<IngestionStats>> sourceFutures = sources.stream()
                 .filter(SourceConfig::isEnabled)
-                .filter(this::isDue)
                 .map(source -> CompletableFuture.supplyAsync(() -> {
                     try {
                         log.info("[Pipeline] Ingesting source: {}", source.name());
@@ -112,19 +105,4 @@ public class PipelineScheduler implements Job {
         log.info("Pipeline complete in {}s", elapsed.toSeconds());
     }
 
-    /**
-     * Check if a source is due for execution based on its frequencyHours and last run time.
-     */
-    boolean isDue(SourceConfig source) {
-        return aggregatorRunRepository.findBySourceName(source.name())
-                .map(run -> {
-                    LocalDateTime nextDue = run.getLastRunAt().plusHours(source.frequencyHours());
-                    boolean due = LocalDateTime.now().isAfter(nextDue);
-                    if (!due) {
-                        log.debug("[Pipeline] Source {} not due until {}", source.name(), nextDue);
-                    }
-                    return due;
-                })
-                .orElse(true); // Never run before → due
-    }
 }

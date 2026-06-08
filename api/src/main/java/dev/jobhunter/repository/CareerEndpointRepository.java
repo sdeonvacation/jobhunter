@@ -45,6 +45,9 @@ public interface CareerEndpointRepository extends JpaRepository<CareerEndpoint, 
     @Query("SELECT e FROM CareerEndpoint e JOIN FETCH e.company WHERE e.isActive = true AND e.lastCrawlStatus = :status")
     List<CareerEndpoint> findByIsActiveTrueAndLastCrawlStatus(@Param("status") dev.jobhunter.model.enums.CrawlStatus status);
 
+    @Query("SELECT e FROM CareerEndpoint e JOIN FETCH e.company WHERE e.isActive = true AND e.atsType != 'CUSTOM' ORDER BY e.lastCrawledAt ASC NULLS FIRST")
+    List<CareerEndpoint> findAllActiveNonCustom();
+
     long countByIsActiveTrue();
 
     long countByIsActiveTrueAndLastCrawlStatus(dev.jobhunter.model.enums.CrawlStatus status);

@@ -1,6 +1,5 @@
 package dev.jobhunter.service;
 
-import dev.jobhunter.config.CrawlProperties;
 import dev.jobhunter.ingestion.StrategyRegistry;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
@@ -43,7 +42,6 @@ public class CrawlService {
     private final LocationFilter locationFilter;
     private final YoeFilter yoeFilter;
     private final DeduplicationFilter deduplicationFilter;
-    private final CrawlProperties crawlProperties;
     private final ScoringScheduler scoringScheduler;
 
     public CrawlService(CareerEndpointRepository endpointRepository,
@@ -55,7 +53,6 @@ public class CrawlService {
                         LocationFilter locationFilter,
                         YoeFilter yoeFilter,
                         DeduplicationFilter deduplicationFilter,
-                        CrawlProperties crawlProperties,
                         ScoringScheduler scoringScheduler) {
         this.endpointRepository = endpointRepository;
         this.jobPostingRepository = jobPostingRepository;
@@ -66,7 +63,6 @@ public class CrawlService {
         this.locationFilter = locationFilter;
         this.yoeFilter = yoeFilter;
         this.deduplicationFilter = deduplicationFilter;
-        this.crawlProperties = crawlProperties;
         this.scoringScheduler = scoringScheduler;
     }
 
@@ -75,16 +71,15 @@ public class CrawlService {
      * Returns summary stats: [endpointsCrawled, jobsFound, errors].
      */
     public int[] crawlAllDueEndpoints() {
-        LocalDateTime cutoff = LocalDateTime.now().minusHours(crawlProperties.defaultFrequencyHours());
-        List<CareerEndpoint> dueEndpoints = endpointRepository.findAllDueForCrawl(cutoff);
+        List<CareerEndpoint> endpoints = endpointRepository.findAllActiveNonCustom();
 
-        log.info("Crawl cycle: {} endpoints due", dueEndpoints.size());
+        log.info("Crawl cycle: {} endpoints", endpoints.size());
 
         int endpointsCrawled = 0;
         int totalJobs = 0;
         int errors = 0;
 
-        for (CareerEndpoint endpoint : dueEndpoints) {
+        for (CareerEndpoint endpoint : endpoints) {
             try {
                 int jobsFound = crawlEndpoint(endpoint);
                 totalJobs += jobsFound;
