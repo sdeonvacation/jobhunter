@@ -54,8 +54,7 @@ public class HttpMcpClientImpl implements HttpMcpClient {
         return callToolAsync(toolName, params).block();
     }
 
-    @Override
-    public Mono<JsonNode> callToolAsync(String toolName, Map<String, Object> params) {
+    private Mono<JsonNode> callToolAsync(String toolName, Map<String, Object> params) {
         return ensureInitialized()
                 .then(Mono.defer(() -> {
                     ObjectNode request = buildJsonRpcRequest(toolName, params);
