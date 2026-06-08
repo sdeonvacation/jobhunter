@@ -184,9 +184,19 @@ public class PersonalProfileLoader {
         int competingLanguageCap = scoringMap.containsKey("competing-language-cap")
                 ? ((Number) scoringMap.get("competing-language-cap")).intValue() : 50;
 
+        PersonalProfile.SeniorityDiscountConfig seniorityDiscount = null;
+        Map<String, Object> sdMap = (Map<String, Object>) scoringMap.get("seniority-discount");
+        if (sdMap != null) {
+            boolean enabled = (boolean) sdMap.getOrDefault("enabled", true);
+            List<String> keywords = (List<String>) sdMap.getOrDefault("keywords", List.of());
+            double multiplier = sdMap.containsKey("multiplier")
+                    ? ((Number) sdMap.get("multiplier")).doubleValue() : 0.70;
+            seniorityDiscount = new PersonalProfile.SeniorityDiscountConfig(enabled, keywords, multiplier);
+        }
+
         return new PersonalProfile.ScoringConfig(
                 benchmarkWeight, thresholds, bonusSignals, bonusWeight, skillWeights, skillVariants,
-                primarySkills, primarySkillCap, competingLanguages, competingLanguageCap);
+                primarySkills, primarySkillCap, competingLanguages, competingLanguageCap, seniorityDiscount);
     }
 
     @SuppressWarnings("unchecked")

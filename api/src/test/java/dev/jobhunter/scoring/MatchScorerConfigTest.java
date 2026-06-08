@@ -187,10 +187,10 @@ class MatchScorerConfigTest {
         when(loader.getProfile()).thenReturn(new PersonalProfile(
                 "Test", "Dev", 3, skills,
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
-                null,
-                new PersonalProfile.ScoringConfig(
-                        benchmarkWeight, thresholds, bonusSignals, bonusWeight,
-                        skillWeights, skillVariants, primarySkills, 70, List.of(), 50),
+                 null,
+                 new PersonalProfile.ScoringConfig(
+                         benchmarkWeight, thresholds, bonusSignals, bonusWeight,
+                         skillWeights, skillVariants, primarySkills, 70, List.of(), 50, null),
                 null
         , null));
         return loader;

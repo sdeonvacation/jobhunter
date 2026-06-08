@@ -74,6 +74,9 @@ public class MatchScorer {
     private final int primarySkillCap;
     private final List<Pattern> competingLanguages;
     private final int competingLanguageCap;
+    private final boolean seniorityDiscountEnabled;
+    private final List<String> seniorityDiscountKeywords;
+    private final double seniorityDiscountMultiplier;
 
     public MatchScorer(PersonalProfileLoader profileLoader) {
         this.profileLoader = profileLoader;
@@ -106,6 +109,11 @@ public class MatchScorer {
             this.competingLanguages = compileCompetingLanguages(scoring.competingLanguages());
             this.competingLanguageCap = scoring.competingLanguageCap() > 0
                     ? scoring.competingLanguageCap() : DEFAULT_COMPETING_LANGUAGE_CAP;
+            PersonalProfile.SeniorityDiscountConfig sd = scoring.seniorityDiscount();
+            this.seniorityDiscountEnabled = sd != null && sd.enabled();
+            this.seniorityDiscountKeywords = sd != null ? sd.keywords().stream()
+                    .map(String::toLowerCase).toList() : List.of();
+            this.seniorityDiscountMultiplier = sd != null && sd.multiplier() > 0 ? sd.multiplier() : 0.70;
         } else {
             this.skillWeights = DEFAULT_SKILL_WEIGHTS;
             this.benchmarkWeight = DEFAULT_BENCHMARK_WEIGHT;
@@ -120,6 +128,9 @@ public class MatchScorer {
             this.primarySkillCap = DEFAULT_PRIMARY_SKILL_CAP;
             this.competingLanguages = DEFAULT_COMPETING_LANGUAGES;
             this.competingLanguageCap = DEFAULT_COMPETING_LANGUAGE_CAP;
+            this.seniorityDiscountEnabled = false;
+            this.seniorityDiscountKeywords = List.of();
+            this.seniorityDiscountMultiplier = 0.70;
         }
     }
 
@@ -203,6 +214,15 @@ public class MatchScorer {
                         .anyMatch(ps -> ps.equalsIgnoreCase(s)));
         if (!hasPrimarySkill && overallScore > primarySkillCap) {
             overallScore = primarySkillCap;
+        }
+
+        // Seniority discount: reduce score if title signals over-leveled role
+        if (seniorityDiscountEnabled && !seniorityDiscountKeywords.isEmpty()) {
+            boolean titleHasSeniorityKeyword = seniorityDiscountKeywords.stream()
+                    .anyMatch(titleLower::contains);
+            if (titleHasSeniorityKeyword) {
+                overallScore = (int) Math.round(overallScore * seniorityDiscountMultiplier);
+            }
         }
 
         Recommendation recommendation = computeRecommendation(overallScore, matchedSkills.size());

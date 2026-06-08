@@ -60,6 +60,13 @@ public record PersonalProfile(
     ) {
     }
 
+    public record SeniorityDiscountConfig(
+            boolean enabled,
+            List<String> keywords,
+            double multiplier
+    ) {
+    }
+
     public record ScoringConfig(
             double benchmarkWeight,
             ScoringThresholds thresholds,
@@ -70,7 +77,8 @@ public record PersonalProfile(
             List<String> primarySkills,
             int primarySkillCap,
             List<String> competingLanguages,
-            int competingLanguageCap
+            int competingLanguageCap,
+            SeniorityDiscountConfig seniorityDiscount
     ) {
     }
 

@@ -245,6 +245,10 @@ scoring:
     javascript: 0.3
     go: 0.3
     react: 0.3
+  seniority-discount:
+    enabled: true
+    keywords: ["senior", "staff", "expert"]
+    multiplier: 0.70
   skill-variants:
     java: ["\\bjava\\b", "jvm"]
     spring boot: ["spring", "springboot"]
@@ -276,13 +280,13 @@ scoring:
 
 # LinkedIn job search configuration
 linkedin-search:
-  query: '(software OR java OR backend) AND (developer OR engineer OR associate) NOT graduate NOT lead NOT junior NOT staff NOT principal'
+  query: '(software OR java OR backend OR fullstack OR AI) AND (developer OR engineer) NOT graduate NOT lead NOT staff NOT principal'
   locations: ["Germany", "Remote"]
   date-posted: week
 
 # Indeed job search configuration
 indeed-search:
   keywords: ["backend engineer", "Java developer", "Spring Boot"]
-  locations: ["Germany", "Netherlands"]
+  locations: ["Germany"]
   results-wanted: 25
   hours-old: 168
