@@ -61,7 +61,7 @@ class AggregatorIngestionErrorMessageTest {
         return new SourceConfig() {
             @Override public String name() { return "test-source"; }
             @Override public JobSource sourceType() { return JobSource.LINKEDIN; }
-            @Override public DiscoverySource discoverySource() { return DiscoverySource.AGGREGATOR; }
+            @Override public DiscoverySource discoverySource() { return DiscoverySource.LINKEDIN; }
             @Override public FetchStrategy strategy() { return fetchStrategy; }
             @Override public FetchContext buildContext() { return FetchContext.forSearch(List.of("java"), List.of("Berlin"), 100, 5, Map.of()); }
             @Override public int frequencyHours() { return 4; }

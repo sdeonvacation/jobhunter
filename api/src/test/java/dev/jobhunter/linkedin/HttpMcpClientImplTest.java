@@ -284,7 +284,7 @@ class HttpMcpClientImplTest {
                 .willReturn(aResponse().withStatus(404).withBody("Not Found")));
 
         assertThatThrownBy(() -> client.callTool("nonexistent_tool", Map.of()))
-                .hasCauseInstanceOf(WebClientResponseException.class);
+                .isInstanceOf(WebClientResponseException.class);
 
         // Only 2 requests: init + one failed tool call (no retry)
         verify(2, postRequestedFor(urlEqualTo("/mcp")));

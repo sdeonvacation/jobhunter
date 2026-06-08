@@ -382,7 +382,7 @@ public class DiscoveryService {
         if (sourceUrl == null) return "unknown";
         String lower = sourceUrl.toLowerCase();
         if (lower.contains("stepstone")) return "stepstone";
-        if (lower.contains("linkedin")) return "linkedin-alerts";
+        if (lower.contains("linkedin")) return "linkedin";
         return "jobspy";
     }
 }

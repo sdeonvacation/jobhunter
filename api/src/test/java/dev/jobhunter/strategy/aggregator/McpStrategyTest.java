@@ -189,7 +189,7 @@ class McpStrategyTest {
 
             FetchResult result = strategy.fetch(context);
 
-            assertThat(result.status()).isEqualTo(ExtractionStatus.EMPTY);
+            assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
         }
 
         @Test

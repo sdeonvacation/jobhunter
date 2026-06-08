@@ -1,6 +1,5 @@
 package dev.jobhunter.service;
 
-import dev.jobhunter.config.CrawlProperties;
 import dev.jobhunter.ingestion.StrategyRegistry;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
@@ -60,15 +59,12 @@ class CrawlServiceTest {
     @Mock private ScoringScheduler scoringScheduler;
 
     private CrawlService crawlService;
-    private CrawlProperties properties;
 
     @BeforeEach
     void setUp() {
-        properties = new CrawlProperties(4, 2, 30);
-        crawlService = new CrawlService(
-                endpointRepository, jobPostingRepository,
+        crawlService = new CrawlService(endpointRepository, jobPostingRepository,
                 strategyRegistry, smartRecruitersStrategy, languageFilter, roleRelevanceFilter,
-                locationFilter, yoeFilter, deduplicationFilter, properties, scoringScheduler);
+                locationFilter, yoeFilter, deduplicationFilter, scoringScheduler);
     }
 
     @Test
@@ -282,7 +278,7 @@ class CrawlServiceTest {
                 .company(company)
                 .build();
 
-        when(endpointRepository.findAllDueForCrawl(any(LocalDateTime.class)))
+        when(endpointRepository.findAllActiveNonCustom())
                 .thenReturn(List.of(endpoint1, endpoint2));
 
         FetchStrategy goodStrategy = mock(FetchStrategy.class);

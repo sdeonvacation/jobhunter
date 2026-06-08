@@ -95,7 +95,7 @@ class AggregatorIngestionServiceImplTest {
                 .thenReturn(Optional.empty());
         when(deduplicationFilter.generateFingerprint("Backend Engineer", "Acme Corp", "Berlin"))
                 .thenReturn("fingerprint-abc");
-        when(jobPostingRepository.findAtsJobByFingerprint("fingerprint-abc")).thenReturn(Optional.empty());
+        when(jobPostingRepository.findAtsJobByFingerprint("fingerprint-abc", JobSource.aggregators())).thenReturn(Optional.empty());
         when(languageFilter.filter("Backend Engineer", "Java developer role")).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter("Backend Engineer")).thenReturn(FilterResult.keep());
         when(locationFilter.filter("Berlin")).thenReturn(FilterResult.keep());
@@ -164,7 +164,7 @@ class AggregatorIngestionServiceImplTest {
                 .externalId("gh-456").title("Backend Engineer")
                 .externalLinks(new java.util.HashMap<>())
                 .build();
-        when(jobPostingRepository.findAtsJobByFingerprint("fingerprint-xyz"))
+        when(jobPostingRepository.findAtsJobByFingerprint("fingerprint-xyz", JobSource.aggregators()))
                 .thenReturn(Optional.of(existingAtsJob));
         when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
         when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
@@ -187,7 +187,7 @@ class AggregatorIngestionServiceImplTest {
         when(jobPostingRepository.findBySourceAndExternalId(any(), anyString())).thenReturn(Optional.empty());
         when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
                 .thenReturn("fp");
-        when(jobPostingRepository.findAtsJobByFingerprint("fp")).thenReturn(Optional.empty());
+        when(jobPostingRepository.findAtsJobByFingerprint("fp", JobSource.aggregators())).thenReturn(Optional.empty());
         when(languageFilter.filter("Entwickler", "Java developer role"))
                 .thenReturn(FilterResult.skip("German title"));
         when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
@@ -210,7 +210,7 @@ class AggregatorIngestionServiceImplTest {
         when(jobPostingRepository.findBySourceAndExternalId(any(), anyString())).thenReturn(Optional.empty());
         when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
                 .thenReturn("fp");
-        when(jobPostingRepository.findAtsJobByFingerprint("fp")).thenReturn(Optional.empty());
+        when(jobPostingRepository.findAtsJobByFingerprint("fp", JobSource.aggregators())).thenReturn(Optional.empty());
         when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter("Product Manager")).thenReturn(FilterResult.skip("Not engineering role"));
         when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
@@ -259,7 +259,7 @@ class AggregatorIngestionServiceImplTest {
         when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
         when(jobPostingRepository.findBySourceAndExternalId(any(), anyString())).thenReturn(Optional.empty());
         when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp");
-        when(jobPostingRepository.findAtsJobByFingerprint("fp")).thenReturn(Optional.empty());
+        when(jobPostingRepository.findAtsJobByFingerprint("fp", JobSource.aggregators())).thenReturn(Optional.empty());
         when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
         when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
@@ -296,7 +296,7 @@ class AggregatorIngestionServiceImplTest {
         when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
         when(jobPostingRepository.findBySourceAndExternalId(any(), anyString())).thenReturn(Optional.empty());
         when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp");
-        when(jobPostingRepository.findAtsJobByFingerprint("fp")).thenReturn(Optional.empty());
+        when(jobPostingRepository.findAtsJobByFingerprint("fp", JobSource.aggregators())).thenReturn(Optional.empty());
         when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
         when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
@@ -353,7 +353,7 @@ class AggregatorIngestionServiceImplTest {
         verify(jobPostingRepository).save(captor.capture());
         assertThat(captor.getValue().getCompany()).isEqualTo(unknownCompany);
         // Verify ATS fingerprint lookup was NOT called (null company skips it)
-        verify(jobPostingRepository, never()).findAtsJobByFingerprint(anyString());
+        verify(jobPostingRepository, never()).findAtsJobByFingerprint(anyString(), any());
     }
 
     @Test
@@ -383,7 +383,7 @@ class AggregatorIngestionServiceImplTest {
         IngestionStats stats = service.ingest(sourceConfig);
 
         assertThat(stats.created()).isEqualTo(1);
-        verify(jobPostingRepository, never()).findAtsJobByFingerprint(anyString());
+        verify(jobPostingRepository, never()).findAtsJobByFingerprint(anyString(), any());
     }
 
     @Test
