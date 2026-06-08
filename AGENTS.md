@@ -6,28 +6,28 @@
 
 ```bash
 # Install/build
-JAVA_HOME=/Users/i570749/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew build -x test
+JAVA_HOME=$HOME/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew build -x test
 
 # Run dev server
-JAVA_HOME=/Users/i570749/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew bootRun
+JAVA_HOME=$HOME/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew bootRun
 
 # Run JAR directly (faster restart)
 $JAVA_HOME/bin/java -jar build/libs/jobhunter-api-0.0.1-SNAPSHOT.jar --spring.liquibase.enabled=false --spring.quartz.auto-startup=false
 
 # Build fat JAR
-JAVA_HOME=/Users/i570749/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew bootJar
+JAVA_HOME=$HOME/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew bootJar
 
 # Run ALL unit tests (excludes @Tag("integration"))
-JAVA_HOME=/Users/i570749/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew test
+JAVA_HOME=$HOME/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew test
 
 # Run single test class
-JAVA_HOME=/Users/i570749/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew test --tests "dev.jobhunter.filter.LanguageFilterImplTest"
+JAVA_HOME=$HOME/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew test --tests "dev.jobhunter.filter.LanguageFilterImplTest"
 
 # Run integration tests (needs Docker/Testcontainers)
-JAVA_HOME=/Users/i570749/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew integrationTest
+JAVA_HOME=$HOME/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew integrationTest
 
 # Type check (compile only)
-JAVA_HOME=/Users/i570749/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew compileJava
+JAVA_HOME=$HOME/.gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2/jdk-21.0.11+10/Contents/Home ./gradlew compileJava
 ```
 
 ### Dashboard (React) - run from `dashboard/`
@@ -163,14 +163,84 @@ All filter and scoring logic is externalized to `profile.yaml`:
 - **Animations**: CSS-only via Tailwind keyframes. `animate-slide-up` with `animation-fill-mode: both` for stagger patterns.
 - **Tests**: Vitest + Testing Library. Test files in `src/test/` directory.
 
+## Getting the Application Running
+
+### Prerequisites
+
+- Colima default profile running (`colima start`)
+- Java 21 Temurin (path below)
+
+### Step 1: Start PostgreSQL
+
+```bash
+DOCKER_HOST=unix://$HOME/.colima/default/docker.sock docker compose up -d db
+```
+
+Wait for healthy status:
+```bash
+DOCKER_HOST=unix://$HOME/.colima/default/docker.sock docker compose logs db --tail 3
+# Should show: "database system is ready to accept connections"
+```
+
+### Step 2: Start API (via launchd)
+
+```bash
+launchctl bootstrap gui/$(id -u) /tmp/dev.jobhunter.api.plist
+```
+
+Verify:
+```bash
+curl -s http://localhost:8080/api/jobs/today | python3 -c "import sys,json; print(json.load(sys.stdin).get('totalElements', 'ERROR'))"
+```
+
+To stop/restart:
+```bash
+launchctl bootout gui/$(id -u)/dev.jobhunter.api
+launchctl bootstrap gui/$(id -u) /tmp/dev.jobhunter.api.plist
+```
+
+### Step 3: Start Dashboard (via launchd)
+
+```bash
+launchctl bootstrap gui/$(id -u) /tmp/dev.jobhunter.dashboard.plist
+```
+
+Dashboard at http://localhost:3000, proxies `/api` to `:8080`.
+
+### Step 4: Populate today's data (optional)
+
+```bash
+curl -X POST http://localhost:8080/api/admin/crawl    # crawl all endpoints
+curl -X POST http://localhost:8080/api/admin/score    # score new jobs
+```
+
 ## Runtime Notes
 
-- PostgreSQL runs in Colima (`colima-jobhunt` profile) on port **5435**.
-- Start DB: `cd /Users/i570749/projects/jobhunt && docker -c colima-jobhunt compose up -d db`
-- DB credentials: `jobhunter/jobhunter` database `jobhunter`.
-- API uses launchd plist at `/tmp/dev.jobhunter.api.plist` to stay alive across shell sessions.
-- Dashboard uses launchd plist at `/tmp/dev.jobhunter.dashboard.plist`.
-- Testcontainers need Colima default profile Docker socket (currently incompatible with Docker 29 API).
+### Docker / Colima
+
+- Uses the **Colima default profile** (shared with other applications — do NOT stop, restart, delete, or modify this profile without checking impact on other apps).
+- Docker socket: `unix://$HOME/.colima/default/docker.sock`
+- Set `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` for all docker/compose commands.
+- PostgreSQL exposed on port **5435** (host) → 5432 (container).
+- Volume: `jobhunter_pgdata` (persistent data, do NOT delete).
+- DB was originally initialized with user `jobhub`; role `jobhunter` was added later. Both roles exist.
+
+### DB Credentials
+
+- User: `jobhunter`, Password: `jobhunter`, Database: `jobhunter`, Port: `5435`
+- Legacy data also accessible via user `jobhub` in database `jobhub`.
+
+### Launchd Services
+
+| Label | Plist | Purpose |
+|-------|-------|---------|
+| `dev.jobhunter.api` | `/tmp/dev.jobhunter.api.plist` | Spring Boot API on :8080 |
+| `dev.jobhunter.dashboard` | `/tmp/dev.jobhunter.dashboard.plist` | Vite dev server on :3000 |
+| `dev.jobhunter.linkedin-mcp` | `/tmp/dev.jobhunter.linkedin-mcp.plist` | LinkedIn MCP server |
+| `dev.jobhunter.scrapers` | `/tmp/dev.jobhunter.scrapers.plist` | Scraper workers |
+
+### Other Notes
+
 - `JAVA_HOME` must point to Temurin 21, not the system Java 25.
 - AI config (provider, api-key, base-url, models) in `application.yaml`, overridable via env vars (`JOBHUNTER_AI_PROVIDER`, `JOBHUNTER_AI_API_KEY`, `JOBHUNTER_AI_BASE_URL`).
 - AtsType enum: GREENHOUSE, LEVER, LEVER_EU, ASHBY, SMARTRECRUITERS, WORKABLE, WORKDAY, WORKDAY_PROTECTED, PERSONIO, BREEZY, RECRUITEE, JOIN, BAMBOOHR, TEAMTAILOR, SUCCESSFACTORS, ICIMS, JOBVITE, STEPSTONE, ARBEITNOW, INDEED, LINKEDIN, CUSTOM, UNKNOWN.
