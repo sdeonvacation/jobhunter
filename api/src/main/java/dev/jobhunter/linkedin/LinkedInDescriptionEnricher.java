@@ -2,6 +2,8 @@ package dev.jobhunter.linkedin;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.jobhunter.filter.FilterResult;
+import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.ingestion.PostIngestionEnricher;
 import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.FilterDecision;
@@ -28,15 +30,18 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher {
     private final Optional<LinkedInRateLimiter> rateLimiter;
     private final LinkedInMcpProperties mcpProperties;
     private final JobPostingRepository jobPostingRepository;
+    private final LanguageFilter languageFilter;
 
     public LinkedInDescriptionEnricher(HttpMcpClient httpMcpClient,
                                        Optional<LinkedInRateLimiter> rateLimiter,
                                        LinkedInMcpProperties mcpProperties,
-                                       JobPostingRepository jobPostingRepository) {
+                                       JobPostingRepository jobPostingRepository,
+                                       LanguageFilter languageFilter) {
         this.httpMcpClient = httpMcpClient;
         this.rateLimiter = rateLimiter;
         this.mcpProperties = mcpProperties;
         this.jobPostingRepository = jobPostingRepository;
+        this.languageFilter = languageFilter;
     }
 
     @Override
@@ -85,6 +90,15 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher {
 
                 if (description != null && !description.isBlank()) {
                     job.setDescription(description);
+
+                    // Re-apply language filter now that description is available
+                    FilterResult langResult = languageFilter.filter(job.getTitle(), description);
+                    if (langResult.decision() == FilterDecision.SKIP) {
+                        job.setLanguageFilter(FilterDecision.SKIP);
+                        log.debug("LinkedIn job [{}] filtered by language after enrichment: {}",
+                                job.getExternalId(), langResult.reason());
+                    }
+
                     jobPostingRepository.save(job);
                     enrichedCount++;
                 }

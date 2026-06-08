@@ -2,6 +2,8 @@ package dev.jobhunter.linkedin;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import dev.jobhunter.filter.FilterResult;
+import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.model.enums.JobSource;
@@ -30,6 +32,7 @@ class LinkedInDescriptionEnricherTest {
     @Mock private HttpMcpClient httpMcpClient;
     @Mock private LinkedInRateLimiter rateLimiter;
     @Mock private JobPostingRepository jobPostingRepository;
+    @Mock private LanguageFilter languageFilter;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -43,8 +46,11 @@ class LinkedInDescriptionEnricherTest {
                 new LinkedInMcpProperties.EnrichmentConfig(true, 10, 0)
         );
 
+        // Default: language filter keeps everything
+        lenient().when(languageFilter.filter(any(), any())).thenReturn(FilterResult.keep());
+
         enricher = new LinkedInDescriptionEnricher(
-                httpMcpClient, Optional.of(rateLimiter), properties, jobPostingRepository);
+                httpMcpClient, Optional.of(rateLimiter), properties, jobPostingRepository, languageFilter);
     }
 
     // --- enrich() gateway tests ---
@@ -187,7 +193,7 @@ class LinkedInDescriptionEnricherTest {
                 new LinkedInMcpProperties.EnrichmentConfig(false, 10, 3000)
         );
         enricher = new LinkedInDescriptionEnricher(
-                httpMcpClient, Optional.of(rateLimiter), disabledProps, jobPostingRepository);
+                httpMcpClient, Optional.of(rateLimiter), disabledProps, jobPostingRepository, languageFilter);
 
         enricher.enrichDescriptions();
 
@@ -202,7 +208,7 @@ class LinkedInDescriptionEnricherTest {
                 new LinkedInMcpProperties.EnrichmentConfig(true, 2, 0)
         );
         enricher = new LinkedInDescriptionEnricher(
-                httpMcpClient, Optional.of(rateLimiter), smallBatch, jobPostingRepository);
+                httpMcpClient, Optional.of(rateLimiter), smallBatch, jobPostingRepository, languageFilter);
 
         List<JobPosting> jobs = List.of(
                 JobPosting.builder().id(UUID.randomUUID()).source(JobSource.LINKEDIN).externalId("1").description(null).build(),
@@ -245,7 +251,7 @@ class LinkedInDescriptionEnricherTest {
                 new LinkedInMcpProperties.EnrichmentConfig(true, 10, 0)
         );
         enricher = new LinkedInDescriptionEnricher(
-                httpMcpClient, Optional.empty(), properties, jobPostingRepository);
+                httpMcpClient, Optional.empty(), properties, jobPostingRepository, languageFilter);
 
         JobPosting job = JobPosting.builder()
                 .id(UUID.randomUUID()).source(JobSource.LINKEDIN)
@@ -264,6 +270,39 @@ class LinkedInDescriptionEnricherTest {
 
         verify(jobPostingRepository).save(any(JobPosting.class));
         assertThat(job.getDescription()).isEqualTo("A description");
+    }
+
+    @Test
+    void enrichDescriptions_languageFilterRejects_setsFilterDecisionToSkip() {
+        JobPosting job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.LINKEDIN)
+                .externalId("777")
+                .title("Softwareentwickler")
+                .description(null)
+                .languageFilter(FilterDecision.KEEP)
+                .build();
+
+        when(jobPostingRepository.findBySourceAndLanguageFilterAndDescriptionIsNull(JobSource.LINKEDIN, FilterDecision.KEEP))
+                .thenReturn(List.of(job));
+        when(rateLimiter.acquire(ToolCategory.PROFILE)).thenReturn(true);
+
+        ObjectNode response = objectMapper.createObjectNode();
+        response.putObject("structuredContent").putObject("sections")
+                .put("description", "Wir suchen einen erfahrenen Softwareentwickler mit fließend Deutsch C1.");
+
+        when(httpMcpClient.callTool(eq("get_job_details"), eq(Map.of("job_id", "777"))))
+                .thenReturn(response);
+        when(languageFilter.filter(eq("Softwareentwickler"), any()))
+                .thenReturn(FilterResult.skip("German C1/C2 required"));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+
+        enricher.enrichDescriptions();
+
+        ArgumentCaptor<JobPosting> captor = ArgumentCaptor.forClass(JobPosting.class);
+        verify(jobPostingRepository).save(captor.capture());
+        assertThat(captor.getValue().getLanguageFilter()).isEqualTo(FilterDecision.SKIP);
+        assertThat(captor.getValue().getDescription()).contains("Wir suchen");
     }
 
     // --- extractDescription tests ---
