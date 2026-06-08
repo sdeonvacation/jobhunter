@@ -54,7 +54,8 @@ public class JobController {
         Sort sortOrder = switch (sort) {
             case "date" -> Sort.by(Sort.Direction.DESC, "discoveredDate");
             default -> Sort.by(Sort.Direction.DESC, "matchScore.overallScore")
-                    .and(Sort.by(Sort.Direction.DESC, "discoveredDate"));
+                    .and(Sort.by(Sort.Direction.DESC, "discoveredDate"))
+                    .and(Sort.by(Sort.Direction.DESC, "opportunityScore.score"));
         };
 
         Pageable pageable = PageRequest.of(page, size, sortOrder);
@@ -111,7 +112,8 @@ public class JobController {
         Sort sortOrder = switch (sort) {
             case "date" -> Sort.by(Sort.Direction.DESC, "discoveredDate");
             default -> Sort.by(Sort.Direction.DESC, "matchScore.overallScore")
-                    .and(Sort.by(Sort.Direction.DESC, "discoveredDate"));
+                    .and(Sort.by(Sort.Direction.DESC, "discoveredDate"))
+                    .and(Sort.by(Sort.Direction.DESC, "opportunityScore.score"));
         };
         Pageable pageable = PageRequest.of(page, size, sortOrder);
         Page<JobPosting> jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndLanguageFilterAndDiscoveredDate(
