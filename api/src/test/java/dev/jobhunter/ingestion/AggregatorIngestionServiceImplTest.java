@@ -384,4 +384,41 @@ class AggregatorIngestionServiceImplTest {
         assertThat(stats.created()).isEqualTo(1);
         verify(jobPostingRepository, never()).findAtsJobByFingerprint(anyString());
     }
+
+    @Test
+    void ingest_errorResult_setsErrorsToOne() {
+        var sourceConfig = createSourceConfig(JobSource.LINKEDIN, DiscoverySource.LINKEDIN);
+        when(fetchStrategy.fetch(any())).thenReturn(FetchResult.error("Connection timeout", Duration.ofMillis(200)));
+        when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
+        when(aggregatorRunRepository.save(any(AggregatorRun.class))).thenAnswer(i -> i.getArgument(0));
+
+        IngestionStats stats = service.ingest(sourceConfig);
+
+        assertThat(stats.fetched()).isZero();
+        assertThat(stats.errors()).isEqualTo(1);
+
+        ArgumentCaptor<AggregatorRun> captor = ArgumentCaptor.forClass(AggregatorRun.class);
+        verify(aggregatorRunRepository).save(captor.capture());
+        AggregatorRun saved = captor.getValue();
+        assertThat(saved.getLastStatus()).isEqualTo("ERROR");
+        assertThat(saved.getErrors()).isEqualTo(1);
+    }
+
+    @Test
+    void ingest_emptyResult_setsErrorsToZero() {
+        var sourceConfig = createSourceConfig(JobSource.LINKEDIN, DiscoverySource.LINKEDIN);
+        when(fetchStrategy.fetch(any())).thenReturn(FetchResult.empty(Duration.ofMillis(50)));
+        when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
+        when(aggregatorRunRepository.save(any(AggregatorRun.class))).thenAnswer(i -> i.getArgument(0));
+
+        IngestionStats stats = service.ingest(sourceConfig);
+
+        assertThat(stats.errors()).isZero();
+
+        ArgumentCaptor<AggregatorRun> captor = ArgumentCaptor.forClass(AggregatorRun.class);
+        verify(aggregatorRunRepository).save(captor.capture());
+        AggregatorRun saved = captor.getValue();
+        assertThat(saved.getLastStatus()).isEqualTo("EMPTY");
+        assertThat(saved.getErrors()).isZero();
+    }
 }

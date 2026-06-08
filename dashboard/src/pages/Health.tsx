@@ -13,6 +13,16 @@ interface EndpointHealth {
   lastCrawledAt?: string;
 }
 
+interface AggregatorHealth {
+  name: string;
+  status: string;
+  jobsFetched: number;
+  errors: number;
+  errorMessage?: string;
+  lastRunAt?: string;
+  elapsedMs: number;
+}
+
 interface HealthReport {
   totalEndpoints: number;
   errored: number;
@@ -20,6 +30,7 @@ interface HealthReport {
   neverCrawled: number;
   errors: EndpointHealth[];
   empties: EndpointHealth[];
+  aggregatorIssues: AggregatorHealth[];
 }
 
 export default function Health() {
@@ -69,7 +80,18 @@ export default function Health() {
         </section>
       )}
 
-      {report.errors.length === 0 && report.empties.length === 0 && (
+      {report.aggregatorIssues.length > 0 && (
+        <section className="mb-8 animate-fade-in">
+          <h2 className="text-lg font-semibold text-warning mb-3">Aggregator Issues ({report.aggregatorIssues.length})</h2>
+          <div className="space-y-2">
+            {report.aggregatorIssues.map((agg) => (
+              <AggregatorRow key={agg.name} aggregator={agg} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {report.errors.length === 0 && report.empties.length === 0 && report.aggregatorIssues.length === 0 && (
         <div className="text-center py-12 animate-fade-in">
           <p className="text-success text-lg mb-2">All endpoints healthy</p>
           <p className="text-text-muted text-sm">No errors or empty responses detected.</p>
@@ -126,6 +148,48 @@ function EndpointRow({ endpoint }: { endpoint: EndpointHealth }) {
             {endpoint.consecutiveErrors}x failed
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+function AggregatorRow({ aggregator }: { aggregator: AggregatorHealth }) {
+  const isError = aggregator.status === 'ERROR';
+  const statusColor = isError ? 'text-danger' : 'text-warning';
+  const badgeBg = isError ? 'bg-danger/20 text-danger' : 'bg-warning/20 text-warning';
+
+  return (
+    <div className="bg-surface-800 border border-surface-600 rounded-lg p-4 transition-all duration-150 hover:border-surface-500">
+      <div className="flex items-start justify-between">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-text-primary">{aggregator.name}</span>
+            <span className={`text-xs px-2 py-0.5 rounded font-mono ${badgeBg}`}>
+              {aggregator.status}
+            </span>
+          </div>
+          {aggregator.errorMessage && (
+            <p className="text-xs text-danger mt-1 font-mono truncate">{aggregator.errorMessage}</p>
+          )}
+          <div className="flex items-center gap-3 mt-1">
+            <span className="text-xs text-text-muted">
+              Fetched: <span className={`font-mono ${statusColor}`}>{aggregator.jobsFetched}</span>
+            </span>
+            {aggregator.errors > 0 && (
+              <span className="text-xs text-danger font-mono">
+                {aggregator.errors} error{aggregator.errors > 1 ? 's' : ''}
+              </span>
+            )}
+            <span className="text-xs text-text-muted font-mono">
+              {aggregator.elapsedMs}ms
+            </span>
+            {aggregator.lastRunAt && (
+              <span className="text-xs text-text-muted shrink-0">
+                Last run: {new Date(aggregator.lastRunAt).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

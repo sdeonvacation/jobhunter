@@ -10,6 +10,7 @@ import dev.jobhunter.model.AggregatorRun;
 import dev.jobhunter.model.Company;
 import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.CompanyStatus;
+import dev.jobhunter.model.enums.ExtractionStatus;
 import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.AggregatorRunRepository;
@@ -69,14 +70,15 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
         } catch (Exception e) {
             log.error("Fetch failed for source [{}]: {}", source.name(), e.getMessage(), e);
             long elapsed = System.currentTimeMillis() - startMs;
-            updateAggregatorRun(source.name(), "ERROR", 0, 0, 0, 0, 1, elapsed);
+            updateAggregatorRun(source.name(), "ERROR", 0, 0, 0, 0, 1, elapsed, e.getMessage());
             return new IngestionStats(source.name(), 0, 0, 0, 0, 0, 1, elapsed);
         }
 
         if (result.jobs().isEmpty()) {
             long elapsed = System.currentTimeMillis() - startMs;
-            updateAggregatorRun(source.name(), result.status().name(), 0, 0, 0, 0, 0, elapsed);
-            return new IngestionStats(source.name(), 0, 0, 0, 0, 0, 0, elapsed);
+            int fetchErrors = result.status() == ExtractionStatus.ERROR ? 1 : 0;
+            updateAggregatorRun(source.name(), result.status().name(), 0, 0, 0, 0, fetchErrors, elapsed, result.errorMessage());
+            return new IngestionStats(source.name(), 0, 0, 0, 0, 0, fetchErrors, elapsed);
         }
 
         JobSource jobSource = source.sourceType();
@@ -96,7 +98,7 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                 // Check if an ATS job with same fingerprint exists — enrich it
                 // Only attempt ATS matching when company name is known (avoids false positives)
                 if (job.companyName() != null && !job.companyName().isBlank()) {
-                    Optional<JobPosting> atsMatch = jobPostingRepository.findAtsJobByFingerprint(fingerprint);
+                    Optional<JobPosting> atsMatch = jobPostingRepository.findAtsJobByFingerprint(fingerprint, JobSource.aggregators());
                     if (atsMatch.isPresent()) {
                         JobPosting existing = atsMatch.get();
                         existing.getExternalLinks().put(source.name(), job.applyUrl());
@@ -147,7 +149,7 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
 
         long elapsedMs = System.currentTimeMillis() - startMs;
         String status = errors > 0 && created == 0 ? "ERROR" : "SUCCESS";
-        updateAggregatorRun(source.name(), status, result.jobs().size(), created, enriched, filtered, errors, elapsedMs);
+        updateAggregatorRun(source.name(), status, result.jobs().size(), created, enriched, filtered, errors, elapsedMs, null);
 
         log.info("Ingestion [{}]: fetched={}, created={}, enriched={}, filtered={}, duplicates={}, errors={}, elapsed={}ms",
                 source.name(), result.jobs().size(), created, enriched, filtered, duplicates, errors, elapsedMs);
@@ -198,7 +200,7 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
 
     private void updateAggregatorRun(String sourceName, String status,
                                      int fetched, int created, int enriched, int filtered,
-                                     int errors, long elapsedMs) {
+                                     int errors, long elapsedMs, String errorMessage) {
         AggregatorRun run = aggregatorRunRepository.findBySourceName(sourceName)
                 .orElse(AggregatorRun.builder().sourceName(sourceName).build());
         run.setLastRunAt(LocalDateTime.now());
@@ -209,6 +211,7 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
         run.setJobsFiltered(filtered);
         run.setErrors(errors);
         run.setElapsedMs(elapsedMs);
+        run.setErrorMessage(errorMessage);
         aggregatorRunRepository.save(run);
     }
 }

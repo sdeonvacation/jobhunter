@@ -65,6 +65,8 @@ public class CliStrategy implements FetchStrategy {
                 : DEFAULT_TIMEOUT.toSeconds();
 
         List<RawAggregatorJob> allJobs = new ArrayList<>();
+        String lastError = null;
+        int errorCount = 0;
 
         for (String keyword : keywords) {
             for (String location : locations) {
@@ -73,12 +75,17 @@ public class CliStrategy implements FetchStrategy {
                     allJobs.addAll(jobs);
                 } catch (Exception e) {
                     log.error("jobspy-js CLI failed for '{}' in '{}': {}", keyword, location, e.getMessage());
+                    lastError = e.getMessage();
+                    errorCount++;
                 }
             }
         }
 
         Duration elapsed = Duration.between(start, Instant.now());
         if (allJobs.isEmpty()) {
+            if (errorCount > 0) {
+                return FetchResult.error("All searches failed (" + errorCount + "): " + lastError, elapsed);
+            }
             return FetchResult.empty(elapsed);
         }
         return FetchResult.success(allJobs, elapsed);

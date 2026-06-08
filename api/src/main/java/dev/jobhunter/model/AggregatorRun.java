@@ -46,6 +46,9 @@ public class AggregatorRun {
     @Builder.Default
     private int errors = 0;
 
+    @Column(name = "error_message", length = 500)
+    private String errorMessage;
+
     @Column(name = "elapsed_ms")
     @Builder.Default
     private long elapsedMs = 0;

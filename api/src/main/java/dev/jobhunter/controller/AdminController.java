@@ -59,7 +59,17 @@ public class AdminController {
     @PostMapping("/crawl")
     public ResponseEntity<CrawlResult> triggerCrawl() {
         int[] stats = crawlService.crawlAllDueEndpoints();
+        scoringScheduler.scoreAllUnscored();
         return ResponseEntity.ok(new CrawlResult(stats[0], stats[1], stats[2]));
+    }
+
+    @PostMapping("/crawl/aggregators")
+    public ResponseEntity<List<IngestionStats>> triggerAggregatorCrawl() {
+        List<IngestionStats> results = sources.stream()
+                .map(aggregatorIngestionService::ingest)
+                .toList();
+        scoringScheduler.scoreAllUnscored();
+        return ResponseEntity.ok(results);
     }
 
     @PostMapping("/crawl/{endpointId}")
@@ -172,7 +182,22 @@ public class AdminController {
         long totalEmpty = empties.size();
         long neverCrawled = careerEndpointRepository.countByIsActiveTrueAndLastCrawlStatusIsNull();
 
-        return ResponseEntity.ok(new HealthReport(totalActive, totalErrored, totalEmpty, neverCrawled, errors, empties));
+        List<AggregatorHealth> aggregatorIssues = aggregatorRunRepository.findAll().stream()
+                .filter(run -> "ERROR".equals(run.getLastStatus())
+                        || "EMPTY".equals(run.getLastStatus())
+                        || ("SUCCESS".equals(run.getLastStatus()) && run.getJobsFetched() == 0))
+                .map(run -> new AggregatorHealth(
+                        run.getSourceName(),
+                        run.getLastStatus(),
+                        run.getJobsFetched(),
+                        run.getErrors(),
+                        run.getErrorMessage(),
+                        run.getLastRunAt(),
+                        run.getElapsedMs()
+                ))
+                .toList();
+
+        return ResponseEntity.ok(new HealthReport(totalActive, totalErrored, totalEmpty, neverCrawled, errors, empties, aggregatorIssues));
     }
 
     public record CrawlResult(int endpointsProcessed, int jobsFound, int errors) {}
@@ -192,7 +217,12 @@ public class AdminController {
             String url, String status, String errorMessage,
             int consecutiveErrors, LocalDateTime lastCrawledAt) {}
 
+    public record AggregatorHealth(
+            String name, String status, int jobsFetched, int errors,
+            String errorMessage, LocalDateTime lastRunAt, long elapsedMs) {}
+
     public record HealthReport(
             long totalEndpoints, long errored, long empty, long neverCrawled,
-            List<EndpointHealth> errors, List<EndpointHealth> empties) {}
+            List<EndpointHealth> errors, List<EndpointHealth> empties,
+            List<AggregatorHealth> aggregatorIssues) {}
 }
