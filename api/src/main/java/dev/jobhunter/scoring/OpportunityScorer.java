@@ -100,9 +100,8 @@ public class OpportunityScorer {
         if (company == null) return NEUTRAL;
         Double priority = company.getPriorityScore();
         if (priority == null) return NEUTRAL;
-        // Priority is 1-5 scale; map to 0-100 for scoring
-        // 1→20, 2→40, 3→60, 4→80, 5→100
-        return (int) Math.round(priority * 20);
+        // Priority is already 0-100 from CompanyPriorityScorer
+        return (int) Math.round(Math.max(0, Math.min(100, priority)));
     }
 
     private int computeSeniorityFactor(String title) {
