@@ -28,7 +28,7 @@ DASHBOARD_PLIST := /tmp/dev.jobhunter.dashboard.plist
 API_LOG := /tmp/jobhunter-api.log
 DB_PORT := 5435
 
-.PHONY: up down restart build build-api build-dashboard deploy logs status
+.PHONY: up down restart build build-api build-dashboard deploy logs status dev dev-down
 
 up: _check-env _start-db _wait-db _generate-plists _start-services
 	@echo ""
@@ -77,6 +77,36 @@ status:
 		launchctl print $(GUI_DOMAIN)/dev.jobhunter.api 2>/dev/null | grep -q "state = running" && echo "running" || echo "stopped"
 	@printf "  %-15s " "Dashboard:"; \
 		launchctl print $(GUI_DOMAIN)/dev.jobhunter.dashboard 2>/dev/null | grep -q "state = running" && echo "running" || echo "stopped"
+
+# --- Dev mode (foreground, no pre-built JAR needed) ---
+
+dev: _start-db _wait-db
+	@echo "Starting API (bootRun)..."
+	@JAVA_HOME=$(JAVA_HOME) $(PROJECT_ROOT)/api/gradlew -p $(PROJECT_ROOT)/api bootRun \
+		--args='--spring.liquibase.enabled=false --profile.path=file:$(PROJECT_ROOT)/profile.yaml' \
+		> /tmp/jobhunter-api.log 2>&1 & echo $$! > /tmp/jobhunter-api.pid
+	@echo "Starting Dashboard (vite)..."
+	@cd $(PROJECT_ROOT)/dashboard && npm run dev > /tmp/jobhunter-dashboard.log 2>&1 & echo $$! > /tmp/jobhunter-dashboard.pid
+	@printf "Waiting for API..."
+	@for i in $$(seq 1 30); do \
+		curl -sf http://localhost:8080/api/admin/health > /dev/null 2>&1 && break; \
+		printf "."; \
+		sleep 2; \
+	done
+	@curl -sf http://localhost:8080/api/admin/health > /dev/null 2>&1 || (echo " FAILED" && exit 1)
+	@echo " ready"
+	@echo ""
+	@echo "JobHunter dev stack is up"
+	@echo "  API:       http://localhost:8080  (log: /tmp/jobhunter-api.log)"
+	@echo "  Dashboard: http://localhost:3000  (log: /tmp/jobhunter-dashboard.log)"
+	@echo "  Stop with: make dev-down"
+
+dev-down:
+	@echo "Stopping services..."
+	@if [ -f /tmp/jobhunter-api.pid ]; then kill $$(cat /tmp/jobhunter-api.pid) 2>/dev/null; rm -f /tmp/jobhunter-api.pid; fi
+	@if [ -f /tmp/jobhunter-dashboard.pid ]; then kill $$(cat /tmp/jobhunter-dashboard.pid) 2>/dev/null; rm -f /tmp/jobhunter-dashboard.pid; fi
+	@DOCKER_HOST=$(DOCKER_HOST) docker compose stop db 2>/dev/null || true
+	@echo "Done"
 
 # --- Internal targets ---
 
