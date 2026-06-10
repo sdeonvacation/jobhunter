@@ -145,8 +145,13 @@ _wait-db:
 
 _generate-plists:
 	@echo "Generating service plists..."
-	@UVX_PATH=$$(which uvx 2>/dev/null || echo "/usr/local/bin/uvx"); \
-	NODE_BIN=$$(dirname $$(which node 2>/dev/null) || echo "/usr/local/bin"); \
+	@export PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$$PATH"; \
+	UVX_PATH=$$(which uvx 2>/dev/null); \
+	if [ -z "$$UVX_PATH" ]; then echo "ERROR: uvx not found in PATH. Install with: curl -LsSf https://astral.sh/uv/install.sh | sh"; exit 1; fi; \
+	NODE_BIN=$$(dirname $$(which node 2>/dev/null) 2>/dev/null); \
+	if [ -z "$$NODE_BIN" ] || [ ! -d "$$NODE_BIN" ]; then echo "ERROR: node not found in PATH. Install Node.js 18+"; exit 1; fi; \
+	echo "  uvx: $$UVX_PATH"; \
+	echo "  node: $$NODE_BIN/node"; \
 	sed -e "s|__JAVA_HOME__|$(JAVA_HOME)|g" \
 	    -e "s|__PROJECT_ROOT__|$(PROJECT_ROOT)|g" \
 	    -e "s|__API_JAR__|$(API_JAR)|g" \
@@ -156,16 +161,16 @@ _generate-plists:
 	    -e "s|__AI_EXTRACTION_MODEL__|$${JOBHUNTER_AI_EXTRACTION_MODEL:-claude-haiku-4-5}|g" \
 	    -e "s|__AI_TAILORING_MODEL__|$${JOBHUNTER_AI_TAILORING_MODEL:-claude-sonnet-4-5}|g" \
 	    -e "s|__NODE_BIN__|$$NODE_BIN|g" \
-	    $(PROJECT_ROOT)/infra/api.plist.template > $(API_PLIST)
-	@sed -e "s|__UVX_PATH__|$$UVX_PATH|g" \
-	    $(PROJECT_ROOT)/infra/linkedin-mcp.plist.template > $(MCP_PLIST)
-	@sed -e "s|__PROJECT_ROOT__|$(PROJECT_ROOT)|g" \
+	    $(PROJECT_ROOT)/infra/api.plist.template > $(API_PLIST); \
+	sed -e "s|__UVX_PATH__|$$UVX_PATH|g" \
+	    $(PROJECT_ROOT)/infra/linkedin-mcp.plist.template > $(MCP_PLIST); \
+	sed -e "s|__PROJECT_ROOT__|$(PROJECT_ROOT)|g" \
 	    -e "s|__NODE_BIN__|$$NODE_BIN|g" \
 	    $(PROJECT_ROOT)/infra/dashboard.plist.template > $(DASHBOARD_PLIST)
 
 _start-services:
 	@echo "Checking LinkedIn session..."
-	@UVX_PATH=$$(which uvx 2>/dev/null || echo "uvx"); \
+	@UVX_PATH=$$(PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$$PATH" which uvx 2>/dev/null || echo "uvx"); \
 	if ! $$UVX_PATH linkedin-scraper-mcp@latest --status 2>&1 | grep -q "Session is valid"; then \
 		echo "LinkedIn session expired. Opening browser for login..."; \
 		$$UVX_PATH linkedin-scraper-mcp@latest --login --no-headless; \

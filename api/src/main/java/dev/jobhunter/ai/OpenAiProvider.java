@@ -84,7 +84,7 @@ public class OpenAiProvider implements AiProvider {
     private <T> ObjectNode buildExtractionRequest(String systemPrompt, String content, Class<T> outputType) {
         ObjectNode requestBody = objectMapper.createObjectNode();
         requestBody.put("model", extractionModel);
-        requestBody.put("max_tokens", 4096);
+        requestBody.put("max_tokens", 16384);
 
         ArrayNode messages = requestBody.putArray("messages");
         ObjectNode sysMsg = messages.addObject();
@@ -130,13 +130,69 @@ public class OpenAiProvider implements AiProvider {
             JsonNode root = objectMapper.readTree(response);
             JsonNode choices = root.get("choices");
             if (choices != null && choices.isArray() && !choices.isEmpty()) {
-                JsonNode message = choices.get(0).get("message");
+                JsonNode firstChoice = choices.get(0);
+                JsonNode message = firstChoice.get("message");
                 String content = message.get("content").asText();
-                return objectMapper.readValue(content, outputType);
+
+                // Check if response was truncated due to token limit
+                String finishReason = firstChoice.has("finish_reason")
+                        ? firstChoice.get("finish_reason").asText() : "unknown";
+                if ("length".equals(finishReason)) {
+                    log.warn("OpenAI extraction response truncated (hit max_tokens). Attempting JSON repair.");
+                }
+
+                try {
+                    return objectMapper.readValue(content, outputType);
+                } catch (JsonProcessingException parseEx) {
+                    // Attempt JSON repair for truncated responses
+                    String repaired = attemptJsonRepair(content);
+                    if (repaired != null) {
+                        log.warn("Recovered partial results from truncated OpenAI response");
+                        return objectMapper.readValue(repaired, outputType);
+                    }
+                    throw parseEx;
+                }
             }
             throw new AiProviderException("No choices in OpenAI response");
         } catch (JsonProcessingException e) {
             throw new AiProviderException("Failed to parse OpenAI extraction response", e);
+        }
+    }
+
+    private String attemptJsonRepair(String truncatedJson) {
+        // Find last complete JSON object in array
+        int lastCloseBrace = truncatedJson.lastIndexOf('}');
+        if (lastCloseBrace <= 0) return null;
+
+        String trimmed = truncatedJson.substring(0, lastCloseBrace + 1);
+
+        // Count unclosed brackets to determine what needs closing
+        int openBrackets = 0;
+        int openBraces = 0;
+        boolean inString = false;
+        for (int i = 0; i < trimmed.length(); i++) {
+            char c = trimmed.charAt(i);
+            if (c == '"' && (i == 0 || trimmed.charAt(i - 1) != '\\')) {
+                inString = !inString;
+            }
+            if (!inString) {
+                if (c == '[') openBrackets++;
+                else if (c == ']') openBrackets--;
+                else if (c == '{') openBraces++;
+                else if (c == '}') openBraces--;
+            }
+        }
+
+        StringBuilder repaired = new StringBuilder(trimmed);
+        for (int i = 0; i < openBrackets; i++) repaired.append(']');
+        for (int i = 0; i < openBraces; i++) repaired.append('}');
+
+        // Validate the repaired JSON parses successfully
+        try {
+            objectMapper.readTree(repaired.toString());
+            return repaired.toString();
+        } catch (JsonProcessingException e) {
+            return null;
         }
     }
 
