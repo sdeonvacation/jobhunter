@@ -25,6 +25,8 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     Optional<JobPosting> findBySourceAndExternalId(JobSource source, String externalId);
 
+    Optional<JobPosting> findFirstByApplyUrl(String applyUrl);
+
     List<JobPosting> findByEndpointIdAndIsActiveTrue(UUID endpointId);
 
     List<JobPosting> findByCompanyIdAndIsActiveTrue(UUID companyId);

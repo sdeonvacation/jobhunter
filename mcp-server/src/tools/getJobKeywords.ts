@@ -174,6 +174,20 @@ export const getJobKeywordsTool = {
   inputSchema,
   handler: async (params: z.infer<typeof inputSchema>, client: JobHunterClient) => {
     if (isUrl(params.job_id)) {
+      // Try DB lookup first — job may already be crawled
+      const dbJob = await client.getJobByUrl(params.job_id);
+      if (dbJob) {
+        const description = dbJob.description ? stripHtml(dbJob.description) : '';
+        const keywords = description ? await extractKeywordsViaLLM(description) : [];
+        const output = [
+          `${dbJob.title} @ ${dbJob.companyName}`,
+          dbJob.atsType ? `ATS: ${dbJob.atsType}` : null,
+          `Keywords: ${keywords.join(', ') || 'none extracted'}`,
+        ].filter(Boolean).join('\n');
+        return { content: [{ type: 'text' as const, text: output }] };
+      }
+
+      // Fallback: fetch page directly
       const html = await fetchPageText(params.job_id);
       const extracted = extractJobDescriptionFromHtml(html);
       const keywords = await extractKeywordsViaLLM(extracted.description);

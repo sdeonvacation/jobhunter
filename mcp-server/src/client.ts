@@ -94,6 +94,14 @@ export class JobHunterClient {
     return this.request<JobDetail>(`/api/jobs/${id}`);
   }
 
+  async getJobByUrl(url: string): Promise<JobDetail | null> {
+    try {
+      return await this.request<JobDetail>(`/api/jobs/by-url?url=${encodeURIComponent(url)}`);
+    } catch {
+      return null;
+    }
+  }
+
   async getTechStack(id: string): Promise<TechStack> {
     return this.request<TechStack>(`/api/jobs/${id}/tech-stack`);
   }

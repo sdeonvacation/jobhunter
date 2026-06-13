@@ -150,6 +150,17 @@ public class JobController {
                    .orElse(ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/by-url")
+    public ResponseEntity<JobDetailDto> getJobByUrl(@RequestParam String url) {
+        Optional<JobPosting> jobOpt = jobPostingRepository.findFirstByApplyUrl(url);
+        if (jobOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        JobPosting job = jobOpt.get();
+        List<JobSkill> skills = jobSkillRepository.findByJobId(job.getId());
+        return ResponseEntity.ok(DtoMapper.toJobDetail(job, skills));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<JobDetailDto> getJob(@PathVariable UUID id) {
         Optional<JobPosting> jobOpt = jobPostingRepository.findById(id);
