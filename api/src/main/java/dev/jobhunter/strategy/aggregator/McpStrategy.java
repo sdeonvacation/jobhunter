@@ -108,15 +108,33 @@ public class McpStrategy implements FetchStrategy {
 
     /**
      * Parse the MCP search_jobs response into RawAggregatorJob records.
-     * Response structure: { structuredContent: { sections: { search_results: "..." }, job_ids: [...] } }
+     * Uses references.search_results for authoritative (jobId, title) mapping,
+     * then matches against text-parsed entries by title to get company/location.
      */
     List<RawAggregatorJob> parseSearchResponse(JsonNode result) {
         List<RawAggregatorJob> jobs = new ArrayList<>();
 
-        JsonNode sc = result.path("structuredContent");
-        JsonNode jobIds = sc.path("job_ids");
+        // Try structuredContent (old format) or root-level fields
+        JsonNode sc = result.has("structuredContent") ? result.path("structuredContent") : result;
         String searchText = sc.path("sections").path("search_results").asText("");
+        JsonNode references = sc.path("references").path("search_results");
 
+        // Primary path: use references for reliable ID-title alignment
+        if (references.isArray() && references.size() > 0) {
+            List<ParsedLinkedInJob> textParsed = searchText.isBlank()
+                    ? List.of()
+                    : parseJobLines(searchText.split("\n"));
+
+            List<ReferenceJob> refJobs = parseReferences(references);
+            jobs = alignReferencesWithText(refJobs, textParsed);
+
+            if (!jobs.isEmpty()) {
+                return jobs;
+            }
+        }
+
+        // Fallback: old positional alignment (job_ids array)
+        JsonNode jobIds = sc.path("job_ids");
         if (searchText.isBlank() || !jobIds.isArray()) {
             return jobs;
         }
@@ -124,28 +142,91 @@ public class McpStrategy implements FetchStrategy {
         String[] lines = searchText.split("\n");
         List<ParsedLinkedInJob> parsed = parseJobLines(lines);
 
-        int idIdx = 0;
-        for (ParsedLinkedInJob pj : parsed) {
-            if (idIdx >= jobIds.size()) break;
+        // Only use positional fallback if counts match exactly
+        if (parsed.size() != jobIds.size()) {
+            log.warn("LinkedIn parser: text entries ({}) != job_ids ({}), skipping unreliable batch",
+                    parsed.size(), jobIds.size());
+            return jobs;
+        }
 
-            String jobId = jobIds.get(idIdx).asText();
+        for (int i = 0; i < parsed.size(); i++) {
+            ParsedLinkedInJob pj = parsed.get(i);
+            String jobId = jobIds.get(i).asText();
             String linkedinUrl = "https://www.linkedin.com/jobs/view/" + jobId + "/";
-            idIdx++;
-
             jobs.add(new RawAggregatorJob(
-                    jobId,
-                    pj.title(),
-                    pj.company(),
-                    pj.location(),
-                    null, // description fetched later by ingestion service
-                    linkedinUrl,
-                    null, // postedDate not in search results
-                    null, null, null, // salary not in search results
-                    null // rawJson
+                    jobId, pj.title(), pj.company(), pj.location(),
+                    null, linkedinUrl, null, null, null, null, null
             ));
         }
 
         return jobs;
+    }
+
+    /**
+     * Extract (jobId, title) pairs from references.search_results where kind=job.
+     */
+    List<ReferenceJob> parseReferences(JsonNode references) {
+        List<ReferenceJob> refs = new ArrayList<>();
+        for (JsonNode ref : references) {
+            if (!"job".equals(ref.path("kind").asText(""))) continue;
+            String url = ref.path("url").asText("");
+            String title = ref.path("text").asText("").trim();
+            String jobId = extractJobIdFromUrl(url);
+            if (jobId != null && !title.isBlank()) {
+                refs.add(new ReferenceJob(jobId, title));
+            }
+        }
+        return refs;
+    }
+
+    /**
+     * Match reference jobs to text-parsed entries by title to get company/location.
+     * Uses consume-once matching to handle duplicate titles correctly.
+     */
+    List<RawAggregatorJob> alignReferencesWithText(List<ReferenceJob> refJobs, List<ParsedLinkedInJob> textParsed) {
+        List<RawAggregatorJob> jobs = new ArrayList<>();
+        boolean[] used = new boolean[textParsed.size()];
+
+        for (ReferenceJob ref : refJobs) {
+            String company = null;
+            String location = null;
+
+            // Find matching text entry by title (consume-once)
+            for (int i = 0; i < textParsed.size(); i++) {
+                if (used[i]) continue;
+                if (titlesMatch(ref.title(), textParsed.get(i).title())) {
+                    company = textParsed.get(i).company();
+                    location = textParsed.get(i).location();
+                    used[i] = true;
+                    break;
+                }
+            }
+
+            String linkedinUrl = "https://www.linkedin.com/jobs/view/" + ref.jobId() + "/";
+            jobs.add(new RawAggregatorJob(
+                    ref.jobId(), ref.title(), company, location,
+                    null, linkedinUrl, null, null, null, null, null
+            ));
+        }
+
+        return jobs;
+    }
+
+    private boolean titlesMatch(String refTitle, String textTitle) {
+        if (refTitle.equalsIgnoreCase(textTitle)) return true;
+        // References may truncate long titles; check prefix match
+        if (refTitle.length() > 10 && textTitle.toLowerCase().startsWith(refTitle.toLowerCase())) return true;
+        if (textTitle.length() > 10 && refTitle.toLowerCase().startsWith(textTitle.toLowerCase())) return true;
+        return false;
+    }
+
+    private String extractJobIdFromUrl(String url) {
+        // Pattern: /jobs/view/12345/ or full URL
+        int viewIdx = url.indexOf("/jobs/view/");
+        if (viewIdx < 0) return null;
+        String after = url.substring(viewIdx + "/jobs/view/".length());
+        int slashIdx = after.indexOf('/');
+        return slashIdx > 0 ? after.substring(0, slashIdx) : after;
     }
 
     /**
@@ -182,4 +263,5 @@ public class McpStrategy implements FetchStrategy {
     }
 
     record ParsedLinkedInJob(String title, String company, String location) {}
+    record ReferenceJob(String jobId, String title) {}
 }

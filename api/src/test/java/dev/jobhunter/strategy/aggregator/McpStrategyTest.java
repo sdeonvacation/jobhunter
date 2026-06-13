@@ -60,6 +60,27 @@ class McpStrategyTest {
         sections.put("search_results", searchText);
         ArrayNode ids = sc.putArray("job_ids");
         jobIds.forEach(ids::add);
+        // No references → triggers positional fallback
+        sc.putObject("references");
+        return root;
+    }
+
+    private JsonNode buildSearchResponseWithRefs(String searchText, List<String[]> refs) {
+        ObjectNode root = mapper.createObjectNode();
+        ObjectNode sc = root.putObject("structuredContent");
+        ObjectNode sections = sc.putObject("sections");
+        sections.put("search_results", searchText);
+        sc.putArray("job_ids"); // empty, not used when refs present
+        ObjectNode references = sc.putObject("references");
+        ArrayNode searchResults = references.putArray("search_results");
+        for (String[] ref : refs) {
+            ObjectNode refNode = mapper.createObjectNode();
+            refNode.put("kind", "job");
+            refNode.put("url", "/jobs/view/" + ref[0] + "/");
+            refNode.put("text", ref[1]);
+            refNode.put("context", "job result");
+            searchResults.add(refNode);
+        }
         return root;
     }
 
@@ -247,16 +268,135 @@ class McpStrategyTest {
         }
 
         @Test
-        @DisplayName("Should stop at fewer job_ids than parsed jobs")
-        void shouldStopAtJobIdLimit() {
+        @DisplayName("Should skip batch when job_ids count mismatches parsed entries (no references)")
+        void shouldSkipMismatchedCounts() {
             String text = "Engineer A\nCompany1\nBerlin (Remote)\n\n"
                     + "Engineer B\nCompany2\nMunich (Hybrid)\n";
             JsonNode response = buildSearchResponse(text, List.of("only-one"));
 
             List<RawAggregatorJob> jobs = strategy.parseSearchResponse(response);
 
+            assertThat(jobs).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("References-based alignment")
+    class ReferencesAlignmentTests {
+
+        @Test
+        @DisplayName("Should use references for reliable ID-title-company alignment")
+        void shouldAlignViaReferences() {
+            String text = "Backend Engineer\nN26\nBerlin (Hybrid)\n\n"
+                    + "Java Backend Engineer (m/f/x)\nosapiens\nMannheim (Hybrid)\n";
+            List<String[]> refs = List.of(
+                    new String[]{"111", "Backend Engineer"},
+                    new String[]{"222", "Java Backend Engineer (m/f/x)"}
+            );
+            JsonNode response = buildSearchResponseWithRefs(text, refs);
+
+            List<RawAggregatorJob> jobs = strategy.parseSearchResponse(response);
+
+            assertThat(jobs).hasSize(2);
+            assertThat(jobs.get(0).externalId()).isEqualTo("111");
+            assertThat(jobs.get(0).title()).isEqualTo("Backend Engineer");
+            assertThat(jobs.get(0).companyName()).isEqualTo("N26");
+            assertThat(jobs.get(1).externalId()).isEqualTo("222");
+            assertThat(jobs.get(1).title()).isEqualTo("Java Backend Engineer (m/f/x)");
+            assertThat(jobs.get(1).companyName()).isEqualTo("osapiens");
+        }
+
+        @Test
+        @DisplayName("Should handle references in different order than text")
+        void shouldHandleDifferentOrder() {
+            String text = "Engineer A\nCompany1\nBerlin (Remote)\n\n"
+                    + "Engineer B\nCompany2\nMunich (Hybrid)\n";
+            // References in reverse order compared to text
+            List<String[]> refs = List.of(
+                    new String[]{"222", "Engineer B"},
+                    new String[]{"111", "Engineer A"}
+            );
+            JsonNode response = buildSearchResponseWithRefs(text, refs);
+
+            List<RawAggregatorJob> jobs = strategy.parseSearchResponse(response);
+
+            assertThat(jobs).hasSize(2);
+            assertThat(jobs.get(0).externalId()).isEqualTo("222");
+            assertThat(jobs.get(0).companyName()).isEqualTo("Company2");
+            assertThat(jobs.get(1).externalId()).isEqualTo("111");
+            assertThat(jobs.get(1).companyName()).isEqualTo("Company1");
+        }
+
+        @Test
+        @DisplayName("Should still produce jobs when text has no match for a reference")
+        void shouldProduceJobsWithoutTextMatch() {
+            String text = "Engineer A\nCompany1\nBerlin (Remote)\n";
+            List<String[]> refs = List.of(
+                    new String[]{"111", "Engineer A"},
+                    new String[]{"222", "Unknown Title Not In Text"}
+            );
+            JsonNode response = buildSearchResponseWithRefs(text, refs);
+
+            List<RawAggregatorJob> jobs = strategy.parseSearchResponse(response);
+
+            assertThat(jobs).hasSize(2);
+            assertThat(jobs.get(0).externalId()).isEqualTo("111");
+            assertThat(jobs.get(0).companyName()).isEqualTo("Company1");
+            assertThat(jobs.get(1).externalId()).isEqualTo("222");
+            assertThat(jobs.get(1).companyName()).isNull(); // no text match
+        }
+
+        @Test
+        @DisplayName("Should handle duplicate titles with consume-once matching")
+        void shouldHandleDuplicateTitles() {
+            String text = "Backend Engineer\nN26\nBerlin (Hybrid)\n\n"
+                    + "Backend Engineer\nFreenow\nHamburg (Hybrid)\n";
+            List<String[]> refs = List.of(
+                    new String[]{"111", "Backend Engineer"},
+                    new String[]{"222", "Backend Engineer"}
+            );
+            JsonNode response = buildSearchResponseWithRefs(text, refs);
+
+            List<RawAggregatorJob> jobs = strategy.parseSearchResponse(response);
+
+            assertThat(jobs).hasSize(2);
+            assertThat(jobs.get(0).externalId()).isEqualTo("111");
+            assertThat(jobs.get(0).companyName()).isEqualTo("N26");
+            assertThat(jobs.get(1).externalId()).isEqualTo("222");
+            assertThat(jobs.get(1).companyName()).isEqualTo("Freenow");
+        }
+
+        @Test
+        @DisplayName("Should skip non-job references")
+        void shouldSkipNonJobReferences() {
+            String text = "Engineer\nAcme\nBerlin (Remote)\n";
+
+            ObjectNode root = mapper.createObjectNode();
+            ObjectNode sc = root.putObject("structuredContent");
+            sc.putObject("sections").put("search_results", text);
+            sc.putArray("job_ids");
+            ObjectNode references = sc.putObject("references");
+            ArrayNode searchResults = references.putArray("search_results");
+
+            // Add a company reference (should be skipped)
+            ObjectNode companyRef = mapper.createObjectNode();
+            companyRef.put("kind", "company");
+            companyRef.put("url", "/company/acme/");
+            companyRef.put("text", "Show more");
+            searchResults.add(companyRef);
+
+            // Add a job reference
+            ObjectNode jobRef = mapper.createObjectNode();
+            jobRef.put("kind", "job");
+            jobRef.put("url", "/jobs/view/999/");
+            jobRef.put("text", "Engineer");
+            searchResults.add(jobRef);
+
+            List<RawAggregatorJob> jobs = strategy.parseSearchResponse(root);
+
             assertThat(jobs).hasSize(1);
-            assertThat(jobs.get(0).title()).isEqualTo("Engineer A");
+            assertThat(jobs.get(0).externalId()).isEqualTo("999");
+            assertThat(jobs.get(0).companyName()).isEqualTo("Acme");
         }
     }
 
