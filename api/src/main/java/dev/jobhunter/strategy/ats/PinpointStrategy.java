@@ -115,8 +115,8 @@ public class PinpointStrategy implements FetchStrategy {
             String location = locationNode.path("city").asText(
                     locationNode.path("name").asText(null));
 
-            // Description is HTML
-            String description = stripHtml(node.path("description").asText(""));
+            // Description: Pinpoint splits content across multiple fields
+            String description = buildFullDescription(node);
 
             // Apply URL
             String applyUrl = node.path("url").asText(null);
@@ -136,6 +136,23 @@ public class PinpointStrategy implements FetchStrategy {
             log.debug("Pinpoint: failed to map job node: {}", e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Pinpoint splits job content across: description, key_responsibilities,
+     * skills_knowledge_expertise, and sometimes benefits. Concatenate all for
+     * complete description used by scoring and keyword extraction.
+     */
+    private String buildFullDescription(JsonNode node) {
+        StringBuilder sb = new StringBuilder();
+        for (String field : List.of("description", "key_responsibilities", "skills_knowledge_expertise")) {
+            String value = node.path(field).asText("");
+            if (!value.isBlank()) {
+                if (sb.length() > 0) sb.append(" ");
+                sb.append(stripHtml(value));
+            }
+        }
+        return sb.toString();
     }
 
     private BigDecimal parseBigDecimal(JsonNode node) {
