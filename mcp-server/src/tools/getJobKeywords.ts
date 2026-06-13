@@ -151,6 +151,9 @@ function detectAtsFromUrl(url: string): string | null {
   for (const [pattern, atsType] of ATS_URL_PATTERNS) {
     if (pattern.test(url)) return atsType;
   }
+  // Query param heuristics for custom domains
+  if (/[?&]gh_jid=/.test(url)) return 'GREENHOUSE';
+  if (/[?&]lever_source=/.test(url)) return 'LEVER';
   return null;
 }
 
