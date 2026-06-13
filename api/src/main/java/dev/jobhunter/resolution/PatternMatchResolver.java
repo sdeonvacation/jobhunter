@@ -28,6 +28,7 @@ public class PatternMatchResolver implements EndpointResolver {
         PATTERNS.put(Pattern.compile("https?://jobs\\.ashbyhq\\.com/([\\w-]+)/?.*"), AtsType.ASHBY);
         PATTERNS.put(Pattern.compile("https?://([\\w-]+)\\.wd(\\d+)\\.myworkdayjobs\\.com/?.*"), AtsType.WORKDAY);
         PATTERNS.put(Pattern.compile("https?://wd(\\d+)\\.myworkdayjobs\\.com/([\\w-]+)/?.*"), AtsType.WORKDAY);
+        PATTERNS.put(Pattern.compile("https?://([\\w-]+)\\.pinpointhq\\.com/?.*"), AtsType.PINPOINT);
         // Generic greenhouse subdomain pattern last (extract slug from subdomain)
         PATTERNS.put(Pattern.compile("https?://(?!boards)([\\w-]+)\\.greenhouse\\.io/?.*"), AtsType.GREENHOUSE);
     }

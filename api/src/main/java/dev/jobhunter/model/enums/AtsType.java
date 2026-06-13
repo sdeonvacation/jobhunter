@@ -18,6 +18,7 @@ public enum AtsType {
     SUCCESSFACTORS,
     ICIMS,
     JOBVITE,
+    PINPOINT,
     STEPSTONE,
     ARBEITNOW,
     INDEED,

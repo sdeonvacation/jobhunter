@@ -144,6 +144,7 @@ const ATS_URL_PATTERNS: [RegExp, string][] = [
   [/https?:\/\/[\w-]+\.teamtailor\.com/, 'TEAMTAILOR'],
   [/https?:\/\/www\.stepstone\.(de|at|nl|be)\//, 'STEPSTONE'],
   [/https?:\/\/[\w-]+\.icims\.com/, 'ICIMS'],
+  [/https?:\/\/[\w-]+\.pinpointhq\.com/, 'PINPOINT'],
   [/https?:\/\/(?!boards)[\w-]+\.greenhouse\.io/, 'GREENHOUSE'],
 ];
 
