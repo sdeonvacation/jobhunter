@@ -177,9 +177,9 @@ export const getJobKeywordsTool = {
     if (isUrl(params.job_id)) {
       // Try DB lookup first — job may already be crawled
       const dbJob = await client.getJobByUrl(params.job_id);
-      if (dbJob) {
-        const description = dbJob.description ? stripHtml(dbJob.description) : '';
-        const keywords = description ? await extractKeywordsViaLLM(description) : [];
+      if (dbJob && dbJob.description && dbJob.description.length > 1500) {
+        const description = stripHtml(dbJob.description);
+        const keywords = await extractKeywordsViaLLM(description);
         const output = [
           `${dbJob.title} @ ${dbJob.companyName}`,
           dbJob.atsType ? `ATS: ${dbJob.atsType}` : null,
@@ -188,17 +188,19 @@ export const getJobKeywordsTool = {
         return { content: [{ type: 'text' as const, text: output }] };
       }
 
-      // Fallback: fetch page directly
+      // Fallback: fetch page directly (DB missing or description too short)
       const html = await fetchPageText(params.job_id);
       const extracted = extractJobDescriptionFromHtml(html);
       const keywords = await extractKeywordsViaLLM(extracted.description);
       const atsType = detectAtsFromUrl(params.job_id);
-      const header = extracted.title && extracted.company
-        ? `${extracted.title} @ ${extracted.company}`
-        : extracted.title || extracted.company || `URL: ${params.job_id}`;
+      const title = dbJob?.title || extracted.title;
+      const company = dbJob?.companyName || extracted.company;
+      const header = title && company
+        ? `${title} @ ${company}`
+        : title || company || `URL: ${params.job_id}`;
       const output = [
         header,
-        atsType ? `ATS: ${atsType}` : null,
+        atsType || dbJob?.atsType ? `ATS: ${atsType || dbJob?.atsType}` : null,
         `Keywords: ${keywords.join(', ') || 'none extracted'}`,
       ].filter(Boolean).join('\n');
       return { content: [{ type: 'text' as const, text: output }] };

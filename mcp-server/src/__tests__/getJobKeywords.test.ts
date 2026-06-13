@@ -160,7 +160,7 @@ describe('getJobKeywords - LLM extraction', () => {
       });
     }) as any;
 
-    const mockClient = {} as any;
+    const mockClient = { getJobByUrl: vi.fn().mockResolvedValue(null) } as any;
     const result = await getJobKeywordsTool.handler({ job_id: 'https://example.com/job/123' }, mockClient);
 
     expect(result.content[0].type).toBe('text');
@@ -179,7 +179,7 @@ describe('getJobKeywords - LLM extraction', () => {
       statusText: 'Not Found',
     }) as any;
 
-    const mockClient = {} as any;
+    const mockClient = { getJobByUrl: vi.fn().mockResolvedValue(null) } as any;
     await expect(
       getJobKeywordsTool.handler({ job_id: 'https://example.com/missing' }, mockClient),
     ).rejects.toThrow('Failed to fetch URL: 404 Not Found');
@@ -268,7 +268,7 @@ describe('getJobKeywords - LLM extraction', () => {
       });
     }) as any;
 
-    const mockClient = {} as any;
+    const mockClient = { getJobByUrl: vi.fn().mockResolvedValue(null) } as any;
     const result = await getJobKeywordsTool.handler(
       { job_id: 'https://boards.greenhouse.io/acme/jobs/12345' }, mockClient,
     );
@@ -293,7 +293,7 @@ describe('getJobKeywords - LLM extraction', () => {
       });
     }) as any;
 
-    const mockClient = {} as any;
+    const mockClient = { getJobByUrl: vi.fn().mockResolvedValue(null) } as any;
     const result = await getJobKeywordsTool.handler(
       { job_id: 'https://jobs.lever.co/stripe/abc-123' }, mockClient,
     );
@@ -317,7 +317,7 @@ describe('getJobKeywords - LLM extraction', () => {
       });
     }) as any;
 
-    const mockClient = {} as any;
+    const mockClient = { getJobByUrl: vi.fn().mockResolvedValue(null) } as any;
     const result = await getJobKeywordsTool.handler(
       { job_id: 'https://randomsite.com/careers/123' }, mockClient,
     );
