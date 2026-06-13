@@ -128,6 +128,32 @@ function isUrl(input: string): boolean {
   return input.startsWith('http://') || input.startsWith('https://');
 }
 
+const ATS_URL_PATTERNS: [RegExp, string][] = [
+  [/https?:\/\/boards(?:-api)?\.greenhouse\.io\/(?:v1\/boards\/)?[\w-]+/, 'GREENHOUSE'],
+  [/https?:\/\/jobs\.eu\.lever\.co\/[\w-]+/, 'LEVER_EU'],
+  [/https?:\/\/jobs\.lever\.co\/[\w-]+/, 'LEVER'],
+  [/https?:\/\/jobs\.ashbyhq\.com\/[\w-]+/, 'ASHBY'],
+  [/https?:\/\/[\w-]+\.wd\d+\.myworkdayjobs\.com/, 'WORKDAY'],
+  [/https?:\/\/[\w-]+\.smartrecruiters\.com/, 'SMARTRECRUITERS'],
+  [/https?:\/\/[\w-]+\.workable\.com/, 'WORKABLE'],
+  [/https?:\/\/[\w-]+\.personio\.de/, 'PERSONIO'],
+  [/https?:\/\/[\w-]+\.recruitee\.com/, 'RECRUITEE'],
+  [/https?:\/\/[\w-]+\.join\.com/, 'JOIN'],
+  [/https?:\/\/[\w-]+\.breezy\.hr/, 'BREEZY'],
+  [/https?:\/\/[\w-]+\.bamboohr\.com/, 'BAMBOOHR'],
+  [/https?:\/\/[\w-]+\.teamtailor\.com/, 'TEAMTAILOR'],
+  [/https?:\/\/www\.stepstone\.(de|at|nl|be)\//, 'STEPSTONE'],
+  [/https?:\/\/[\w-]+\.icims\.com/, 'ICIMS'],
+  [/https?:\/\/(?!boards)[\w-]+\.greenhouse\.io/, 'GREENHOUSE'],
+];
+
+function detectAtsFromUrl(url: string): string | null {
+  for (const [pattern, atsType] of ATS_URL_PATTERNS) {
+    if (pattern.test(url)) return atsType;
+  }
+  return null;
+}
+
 async function fetchPageText(url: string): Promise<string> {
   const response = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; JobHunterBot/1.0)' },
@@ -148,13 +174,15 @@ export const getJobKeywordsTool = {
       const html = await fetchPageText(params.job_id);
       const extracted = extractJobDescriptionFromHtml(html);
       const keywords = await extractKeywordsViaLLM(extracted.description);
+      const atsType = detectAtsFromUrl(params.job_id);
       const header = extracted.title && extracted.company
         ? `${extracted.title} @ ${extracted.company}`
         : extracted.title || extracted.company || `URL: ${params.job_id}`;
       const output = [
         header,
+        atsType ? `ATS: ${atsType}` : null,
         `Keywords: ${keywords.join(', ') || 'none extracted'}`,
-      ].join('\n');
+      ].filter(Boolean).join('\n');
       return { content: [{ type: 'text' as const, text: output }] };
     }
 
@@ -167,8 +195,9 @@ export const getJobKeywordsTool = {
 
     const output = [
       `${detail.title} @ ${detail.companyName}`,
+      detail.atsType ? `ATS: ${detail.atsType}` : null,
       `Keywords: ${keywords.join(', ') || 'none extracted'}`,
-    ].join('\n');
+    ].filter(Boolean).join('\n');
 
     return { content: [{ type: 'text' as const, text: output }] };
   },

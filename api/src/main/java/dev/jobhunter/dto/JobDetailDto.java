@@ -25,6 +25,7 @@ public record JobDetailDto(
         String salaryPeriod,
         String source,
         String externalId,
+        String atsType,
         int opportunityScore,
         int matchScore,
         String recommendation,

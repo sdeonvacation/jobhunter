@@ -79,6 +79,8 @@ public final class DtoMapper {
                 job.getSalaryPeriod() != null ? job.getSalaryPeriod().name() : null,
                 job.getSource() != null ? job.getSource().name() : null,
                 job.getExternalId(),
+                job.getEndpoint() != null && job.getEndpoint().getAtsType() != null
+                        ? job.getEndpoint().getAtsType().name() : null,
                 opp != null ? opp.getScore() : 0,
                 match != null ? match.getOverallScore() : 0,
                 match != null && match.getRecommendation() != null ? match.getRecommendation().name() : null,

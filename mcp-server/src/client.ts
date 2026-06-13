@@ -27,6 +27,7 @@ export interface JobSummary {
 
 export interface JobDetail extends JobSummary {
   description?: string;
+  atsType?: string;
 }
 
 export interface TechStack {

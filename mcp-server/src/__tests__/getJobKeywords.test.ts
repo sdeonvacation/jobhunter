@@ -251,4 +251,103 @@ describe('getJobKeywords - LLM extraction', () => {
     expect(result.content[0].text).toContain('none extracted');
     warnSpy.mockRestore();
   });
+
+  it('handler detects ATS type from Greenhouse URL', async () => {
+    const { getJobKeywordsTool } = await import('../tools/getJobKeywords.js');
+
+    const mockHtml = '<html><body>We need TypeScript developers</body></html>';
+    const llmResponse = { keywords: ['TypeScript'] };
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('greenhouse.io')) {
+        return Promise.resolve({ ok: true, text: () => Promise.resolve(mockHtml) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ choices: [{ message: { content: JSON.stringify(llmResponse) } }] }),
+      });
+    }) as any;
+
+    const mockClient = {} as any;
+    const result = await getJobKeywordsTool.handler(
+      { job_id: 'https://boards.greenhouse.io/acme/jobs/12345' }, mockClient,
+    );
+
+    expect(result.content[0].text).toContain('ATS: GREENHOUSE');
+    expect(result.content[0].text).toContain('TypeScript');
+  });
+
+  it('handler detects ATS type from Lever URL', async () => {
+    const { getJobKeywordsTool } = await import('../tools/getJobKeywords.js');
+
+    const mockHtml = '<html><body>Python role</body></html>';
+    const llmResponse = { keywords: ['Python'] };
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('lever.co')) {
+        return Promise.resolve({ ok: true, text: () => Promise.resolve(mockHtml) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ choices: [{ message: { content: JSON.stringify(llmResponse) } }] }),
+      });
+    }) as any;
+
+    const mockClient = {} as any;
+    const result = await getJobKeywordsTool.handler(
+      { job_id: 'https://jobs.lever.co/stripe/abc-123' }, mockClient,
+    );
+
+    expect(result.content[0].text).toContain('ATS: LEVER');
+  });
+
+  it('handler shows no ATS line for unknown URL patterns', async () => {
+    const { getJobKeywordsTool } = await import('../tools/getJobKeywords.js');
+
+    const mockHtml = '<html><body>Go developers wanted</body></html>';
+    const llmResponse = { keywords: ['Go'] };
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('randomsite.com')) {
+        return Promise.resolve({ ok: true, text: () => Promise.resolve(mockHtml) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ choices: [{ message: { content: JSON.stringify(llmResponse) } }] }),
+      });
+    }) as any;
+
+    const mockClient = {} as any;
+    const result = await getJobKeywordsTool.handler(
+      { job_id: 'https://randomsite.com/careers/123' }, mockClient,
+    );
+
+    expect(result.content[0].text).not.toContain('ATS:');
+    expect(result.content[0].text).toContain('Go');
+  });
+
+  it('handler includes atsType from API response for ID-based lookup', async () => {
+    const { getJobKeywordsTool } = await import('../tools/getJobKeywords.js');
+
+    const llmResponse = { keywords: ['Java'] };
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ choices: [{ message: { content: JSON.stringify(llmResponse) } }] }),
+    }) as any;
+
+    const mockClient = {
+      resolveJobId: vi.fn().mockResolvedValue('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),
+      getJob: vi.fn().mockResolvedValue({
+        title: 'Engineer',
+        companyName: 'AshbyCo',
+        description: '<p>Java dev</p>',
+        atsType: 'ASHBY',
+      }),
+    } as any;
+
+    const result = await getJobKeywordsTool.handler({ job_id: 'aaaaaaaa' }, mockClient);
+
+    expect(result.content[0].text).toContain('ATS: ASHBY');
+    expect(result.content[0].text).toContain('Engineer @ AshbyCo');
+  });
 });
