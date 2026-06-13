@@ -52,7 +52,7 @@ discovery:
 
 linkedin-mcp:
   enabled: ${LINKEDIN_MCP_ENABLED:true}
-  base-url: ${LINKEDIN_MCP_URL:http://localhost:8000}
+  base-url: ${LINKEDIN_MCP_URL:http://127.0.0.1:8000}
   path: /mcp
   timeout-seconds: 30
   rate-limit:

@@ -28,7 +28,7 @@ DASHBOARD_PLIST := /tmp/dev.jobhunter.dashboard.plist
 API_LOG := /tmp/jobhunter-api.log
 DB_PORT := 5435
 
-.PHONY: up down restart build build-api build-dashboard deploy logs status dev dev-down
+.PHONY: up down restart build build-api build-dashboard deploy logs status dev dev-down _start-linkedin-mcp
 
 up: _check-env _start-db _wait-db _generate-plists _start-services
 	@echo ""
@@ -80,7 +80,7 @@ status:
 
 # --- Dev mode (foreground, no pre-built JAR needed) ---
 
-dev: _start-db _wait-db
+dev: _start-db _wait-db _start-linkedin-mcp
 	@echo "Starting API (bootRun)..."
 	@JAVA_HOME=$(JAVA_HOME) $(PROJECT_ROOT)/api/gradlew -p $(PROJECT_ROOT)/api bootRun \
 		--args='--spring.liquibase.enabled=false --profile.path=file:$(PROJECT_ROOT)/profile.yaml' \
@@ -97,12 +97,14 @@ dev: _start-db _wait-db
 	@echo " ready"
 	@echo ""
 	@echo "JobHunter dev stack is up"
+	@echo "  LinkedIn MCP: http://localhost:8000  (log: /tmp/jobhunter-linkedin-mcp.log)"
 	@echo "  API:       http://localhost:8080  (log: /tmp/jobhunter-api.log)"
 	@echo "  Dashboard: http://localhost:3000  (log: /tmp/jobhunter-dashboard.log)"
 	@echo "  Stop with: make dev-down"
 
 dev-down:
 	@echo "Stopping services..."
+	@if [ -f /tmp/jobhunter-linkedin-mcp.pid ]; then kill $$(cat /tmp/jobhunter-linkedin-mcp.pid) 2>/dev/null; rm -f /tmp/jobhunter-linkedin-mcp.pid; fi
 	@if [ -f /tmp/jobhunter-api.pid ]; then kill $$(cat /tmp/jobhunter-api.pid) 2>/dev/null; rm -f /tmp/jobhunter-api.pid; fi
 	@if [ -f /tmp/jobhunter-dashboard.pid ]; then kill $$(cat /tmp/jobhunter-dashboard.pid) 2>/dev/null; rm -f /tmp/jobhunter-dashboard.pid; fi
 	@DOCKER_HOST=$(DOCKER_HOST) docker compose stop db 2>/dev/null || true
@@ -142,6 +144,26 @@ _wait-db:
 	done
 	@nc -z localhost $(DB_PORT) 2>/dev/null || (echo " FAILED (timeout)" && exit 1)
 	@echo " ready"
+
+_start-linkedin-mcp:
+	@if nc -z localhost 8000 2>/dev/null; then \
+		echo "LinkedIn MCP already running"; \
+	else \
+		echo "Starting LinkedIn MCP..."; \
+		UVX_PATH=$$(PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$$PATH" which uvx 2>/dev/null); \
+		if [ -z "$$UVX_PATH" ]; then echo "WARN: uvx not found, skipping LinkedIn MCP"; \
+		else \
+			$$UVX_PATH linkedin-scraper-mcp@latest --transport streamable-http --host 0.0.0.0 --port 8000 --log-level INFO \
+				> /tmp/jobhunter-linkedin-mcp.log 2>&1 & echo $$! > /tmp/jobhunter-linkedin-mcp.pid; \
+			printf "  Waiting for MCP..."; \
+			for i in $$(seq 1 10); do \
+				nc -z localhost 8000 2>/dev/null && break; \
+				printf "."; \
+				sleep 1; \
+			done; \
+			nc -z localhost 8000 2>/dev/null && echo " ready" || echo " WARN: not responding (check /tmp/jobhunter-linkedin-mcp.log)"; \
+		fi; \
+	fi
 
 _generate-plists:
 	@echo "Generating service plists..."
