@@ -130,8 +130,13 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher {
             return null;
         }
 
-        // Try structuredContent.sections.description
-        JsonNode structured = response.path("structuredContent").path("sections").path("description");
+        // Try structuredContent.sections.description or job_posting
+        JsonNode sections = response.path("structuredContent").path("sections");
+        JsonNode structured = sections.path("description");
+        if (structured.isTextual() && !structured.asText().isBlank()) {
+            return structured.asText();
+        }
+        structured = sections.path("job_posting");
         if (structured.isTextual() && !structured.asText().isBlank()) {
             return structured.asText();
         }
@@ -145,7 +150,13 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher {
                 try {
                     ObjectMapper mapper = new ObjectMapper();
                     JsonNode parsed = mapper.readTree(textNode.asText());
+                    // Try sections.description (legacy format)
                     JsonNode desc = parsed.path("sections").path("description");
+                    if (desc.isTextual() && !desc.asText().isBlank()) {
+                        return desc.asText();
+                    }
+                    // Try sections.job_posting (linkedin-scraper-mcp format)
+                    desc = parsed.path("sections").path("job_posting");
                     if (desc.isTextual() && !desc.asText().isBlank()) {
                         return desc.asText();
                     }
