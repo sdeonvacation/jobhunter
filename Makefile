@@ -80,7 +80,7 @@ status:
 
 # --- Dev mode (foreground, no pre-built JAR needed) ---
 
-dev: _start-db _wait-db _start-linkedin-mcp
+dev: _start-db _wait-db _backup-db _start-linkedin-mcp
 	@echo "Starting API (bootRun)..."
 	@JAVA_HOME=$(JAVA_HOME) $(PROJECT_ROOT)/api/gradlew -p $(PROJECT_ROOT)/api bootRun \
 		--args='--spring.liquibase.enabled=false --profile.path=file:$(PROJECT_ROOT)/profile.yaml' \
@@ -144,6 +144,10 @@ _wait-db:
 	done
 	@nc -z localhost $(DB_PORT) 2>/dev/null || (echo " FAILED (timeout)" && exit 1)
 	@echo " ready"
+
+_backup-db:
+	@echo "Backing up database to iCloud..."
+	@$(PROJECT_ROOT)/scripts/backup-db.sh || echo "WARN: Backup failed (non-fatal)"
 
 _start-linkedin-mcp:
 	@if nc -z localhost 8000 2>/dev/null; then \
