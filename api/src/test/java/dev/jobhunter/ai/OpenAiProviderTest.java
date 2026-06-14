@@ -2,6 +2,8 @@ package dev.jobhunter.ai;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
+import com.github.tomakehurst.wiremock.stubbing.Scenario;
+import dev.jobhunter.strategy.direct.AiExtractionResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -144,6 +146,105 @@ class OpenAiProviderTest {
 
         assertThat(result.skills()).hasSize(1);
         assertThat(result.skills().get(0).name()).isEqualTo("Docker");
+    }
+
+    @Test
+    void extract_aiExtractionResponse_sendsCorrectSchema() {
+        String content = """
+                {"jobs":[{"title":"Backend Engineer","location":"Berlin","applyUrl":"https://example.com/apply"}]}""";
+        String responseBody = openAiResponse(content, "stop");
+
+        stubFor(post("/v1/chat/completions").willReturn(okJson(responseBody)));
+
+        AiExtractionResponse result = provider.extract(
+                "Extract jobs", "<html>jobs page</html>", AiExtractionResponse.class);
+
+        assertThat(result.jobs()).hasSize(1);
+        assertThat(result.jobs().get(0).title()).isEqualTo("Backend Engineer");
+        assertThat(result.jobs().get(0).location()).isEqualTo("Berlin");
+        assertThat(result.jobs().get(0).applyUrl()).isEqualTo("https://example.com/apply");
+
+        // Verify schema sent in request
+        verify(postRequestedFor(urlEqualTo("/v1/chat/completions"))
+                .withRequestBody(containing("\"json_schema\""))
+                .withRequestBody(containing("\"jobs\""))
+                .withRequestBody(containing("\"applyUrl\"")));
+    }
+
+    @Test
+    void extract_aiExtractionResponse_schemaIncludesRequiredFields() {
+        String content = """
+                {"jobs":[]}""";
+        String responseBody = openAiResponse(content, "stop");
+
+        stubFor(post("/v1/chat/completions").willReturn(okJson(responseBody)));
+
+        provider.extract("Extract jobs", "empty page", AiExtractionResponse.class);
+
+        verify(postRequestedFor(urlEqualTo("/v1/chat/completions"))
+                .withRequestBody(containing("\"additionalProperties\":false"))
+                .withRequestBody(containing("\"required\":[\"title\",\"location\",\"applyUrl\"]")));
+    }
+
+    @Test
+    void extract_retriesOnParseFailure_succeedsOnSecondAttempt() {
+        // First call returns garbage, second returns valid JSON
+        String garbage = "not json at all {{{";
+        String validContent = """
+                {"skills":[{"name":"Java","category":"Language","required":true,"rawMention":"Java 21"}]}""";
+
+        stubFor(post("/v1/chat/completions")
+                .inScenario("retry")
+                .whenScenarioStateIs(Scenario.STARTED)
+                .willReturn(okJson(openAiResponse(garbage, "stop")))
+                .willSetStateTo("retried"));
+
+        stubFor(post("/v1/chat/completions")
+                .inScenario("retry")
+                .whenScenarioStateIs("retried")
+                .willReturn(okJson(openAiResponse(validContent, "stop"))));
+
+        SkillExtractionResponse result = provider.extract(
+                "Extract skills", "Java 21 job", SkillExtractionResponse.class);
+
+        assertThat(result.skills()).hasSize(1);
+        assertThat(result.skills().get(0).name()).isEqualTo("Java");
+
+        // Verify two requests were made
+        verify(2, postRequestedFor(urlEqualTo("/v1/chat/completions")));
+    }
+
+    @Test
+    void extract_retriesOnParseFailure_throwsAfterBothFail() {
+        String garbage = "completely invalid json !!!";
+        String responseBody = openAiResponse(garbage, "stop");
+
+        stubFor(post("/v1/chat/completions").willReturn(okJson(responseBody)));
+
+        assertThatThrownBy(() -> provider.extract(
+                "Extract skills", "content", SkillExtractionResponse.class))
+                .isInstanceOf(AiProviderException.class)
+                .hasMessageContaining("Failed to parse");
+
+        // Verify two attempts were made
+        verify(2, postRequestedFor(urlEqualTo("/v1/chat/completions")));
+    }
+
+    @Test
+    void extract_nonParseError_doesNotRetry() {
+        // "No choices" error should not trigger retry
+        String responseBody = """
+                {"id":"chatcmpl-123","object":"chat.completion","choices":[]}""";
+
+        stubFor(post("/v1/chat/completions").willReturn(okJson(responseBody)));
+
+        assertThatThrownBy(() -> provider.extract(
+                "Extract skills", "content", SkillExtractionResponse.class))
+                .isInstanceOf(AiProviderException.class)
+                .hasMessageContaining("No choices");
+
+        // Only one request - no retry for non-parse errors
+        verify(1, postRequestedFor(urlEqualTo("/v1/chat/completions")));
     }
 
     private String openAiResponse(String content, String finishReason) {

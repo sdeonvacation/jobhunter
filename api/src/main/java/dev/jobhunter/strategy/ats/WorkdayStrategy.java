@@ -30,6 +30,7 @@ public class WorkdayStrategy implements FetchStrategy {
     private static final String API_PATH = "/wday/cxs/%s/%s/jobs";
     private static final int PAGE_SIZE = 20;
     private static final int MAX_PAGES = 100;
+    private static final Duration PAGE_DELAY = Duration.ofMillis(300);
     private static final Pattern POSTED_DAYS_PATTERN = Pattern.compile("Posted (\\d+) Days? Ago");
     private static final Pattern SITE_PATH_PATTERN = Pattern.compile("/([^/]+)/?$");
 
@@ -106,6 +107,14 @@ public class WorkdayStrategy implements FetchStrategy {
                 }
 
                 offset += PAGE_SIZE;
+                if (offset < total) {
+                    try {
+                        Thread.sleep(PAGE_DELAY.toMillis());
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
             }
 
             if (allJobs.isEmpty()) {

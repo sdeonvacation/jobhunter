@@ -288,6 +288,62 @@ class WorkdayStrategyTest {
                 .withRequestBody(containing("\"searchText\":\"\"")));
     }
 
+    @Test
+    void extract_multiPage_hasDelayBetweenPages() {
+        // 2 pages: 20+5 jobs, total=25
+        String page1 = buildPageResponse(25, 20);
+        String page2 = buildPageResponse(25, 5);
+
+        stubFor(post(urlPathMatching("/wday/cxs/.*"))
+                .inScenario("delay-test")
+                .whenScenarioStateIs("Started")
+                .willReturn(okJson(page1))
+                .willSetStateTo("page2"));
+
+        stubFor(post(urlPathMatching("/wday/cxs/.*"))
+                .inScenario("delay-test")
+                .whenScenarioStateIs("page2")
+                .willReturn(okJson(page2)));
+
+        var endpoint = buildEndpoint("DelayCo", "1", "https://DelayCo.wd1.myworkdayjobs.com/Jobs");
+
+        long startMs = System.currentTimeMillis();
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+        long elapsedMs = System.currentTimeMillis() - startMs;
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs()).hasSize(25);
+        // At least 300ms delay between the two pages
+        assertThat(elapsedMs).isGreaterThanOrEqualTo(250); // slight margin for timing
+    }
+
+    @Test
+    void extract_interruptDuringPagination_stopsEarlyAndRestoresFlag() throws Exception {
+        // 2 pages expected, but interrupt arrives during delay after first page
+        String page1 = buildPageResponse(40, 20);
+
+        stubFor(post(urlPathMatching("/wday/cxs/.*"))
+                .willReturn(okJson(page1)));
+
+        var endpoint = buildEndpoint("InterruptCo", "1", "https://InterruptCo.wd1.myworkdayjobs.com/Jobs");
+
+        // Schedule interrupt after 100ms (after first page fetch, during sleep delay)
+        Thread testThread = Thread.currentThread();
+        var scheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        scheduler.schedule(() -> testThread.interrupt(), 100, java.util.concurrent.TimeUnit.MILLISECONDS);
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+        scheduler.shutdown();
+
+        // Should have fetched first page only (20 jobs), then broken out on interrupt
+        assertThat(result.jobs()).hasSize(20);
+        // Interrupt flag should be restored
+        assertThat(Thread.currentThread().isInterrupted()).isTrue();
+
+        // Clear interrupt flag to not affect other tests
+        Thread.interrupted();
+    }
+
     // --- Helper methods ---
 
     private CareerEndpoint buildEndpoint(String tenant, String shardId, String url) {

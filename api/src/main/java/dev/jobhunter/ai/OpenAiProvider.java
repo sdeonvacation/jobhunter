@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import dev.jobhunter.strategy.direct.AiExtractionResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
@@ -49,8 +50,21 @@ public class OpenAiProvider implements AiProvider {
     @Override
     public <T> T extract(String systemPrompt, String content, Class<T> outputType) {
         ObjectNode requestBody = buildExtractionRequest(systemPrompt, content, outputType);
-        String response = executeRequest(requestBody);
-        return parseJsonResponse(response, outputType);
+        AiProviderException lastError = null;
+        for (int attempt = 0; attempt < 2; attempt++) {
+            try {
+                String response = executeRequest(requestBody);
+                return parseJsonResponse(response, outputType);
+            } catch (AiProviderException e) {
+                if (e.getMessage().contains("Failed to parse")) {
+                    lastError = e;
+                    log.warn("OpenAI extraction parse failed (attempt {}), retrying", attempt + 1);
+                    continue;
+                }
+                throw e;
+            }
+        }
+        throw lastError;
     }
 
     @Override
@@ -234,6 +248,21 @@ public class OpenAiProvider implements AiProvider {
             properties.putObject("name").put("type", "string");
             properties.putObject("email").put("type", "string");
             schema.putArray("required").add("name").add("email");
+            schema.put("additionalProperties", false);
+        } else if (AiExtractionResponse.class.equals(type)) {
+            ObjectNode properties = schema.putObject("properties");
+            ObjectNode jobs = properties.putObject("jobs");
+            jobs.put("type", "array");
+            ObjectNode items = jobs.putObject("items");
+            items.put("type", "object");
+            ObjectNode itemProps = items.putObject("properties");
+            itemProps.putObject("title").put("type", "string");
+            itemProps.putObject("location").put("type", "string");
+            itemProps.putObject("applyUrl").put("type", "string");
+            ArrayNode itemRequired = items.putArray("required");
+            itemRequired.add("title").add("location").add("applyUrl");
+            items.put("additionalProperties", false);
+            schema.putArray("required").add("jobs");
             schema.put("additionalProperties", false);
         }
 
