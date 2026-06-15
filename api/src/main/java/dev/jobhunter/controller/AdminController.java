@@ -94,8 +94,8 @@ public class AdminController {
 
     @PostMapping("/backfill-descriptions")
     public ResponseEntity<BackfillResult> backfillDescriptions() {
-        int filled = crawlService.backfillSmartRecruitersDescriptions();
-        return ResponseEntity.ok(new BackfillResult(filled));
+        int[] result = crawlService.backfillSmartRecruitersDescriptions();
+        return ResponseEntity.ok(new BackfillResult(result[0], result[1]));
     }
 
     @PostMapping("/score")
@@ -222,7 +222,7 @@ public class AdminController {
 
     public record CrawlResult(int endpointsProcessed, int jobsFound, int errors) {}
     public record SingleCrawlResult(UUID endpointId, int jobsFound) {}
-    public record BackfillResult(int descriptionsBackfilled) {}
+    public record BackfillResult(int descriptionsBackfilled, int languageFiltered) {}
     public record RescoreResult(long deleted, long rescored) {}
     public record ResolveResult(int total, int resolved, int failed, int skipped) {}
     public record DiscoverResult(int providersQueried, int companiesFound, int newCompanies) {}

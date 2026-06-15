@@ -14,39 +14,16 @@ public class RoleRelevanceFilterImpl implements RoleRelevanceFilter {
     private final Pattern engineeringPattern;
     private final Pattern excludedRolesPattern;
 
-    // Default include patterns (used when config section is absent)
-    private static final List<String> DEFAULT_INCLUDE_PATTERNS = List.of(
-            "engineer", "developer", "programmer", "\\bsre\\b", "devops",
-            "dev\\s*ops", "software", "backend", "back[\\s-]end", "fullstack",
-            "full[\\s-]stack", "platform", "infrastructure", "\\bcloud\\b",
-            "\\bml\\b", "machine\\s+learning", "\\bsde\\b", "\\bcto\\b",
-            "\\bsdet\\b", "site\\s+reliability", "\\bdevsecops\\b",
-            "\\bsys\\s*admin\\b", "\\bkubernetes\\b", "\\bk8s\\b"
-    );
-
-    // Default exclude keywords (used when config section is absent)
-    private static final List<String> DEFAULT_EXCLUDE_KEYWORDS = List.of(
-            "manager", "architect", "analyst", "director", "principal",
-            "counsel", "legal", "recruiter", "designer", "marketing",
-            "sales", "finance", "accountant", "hr", "frontend",
-            "front[\\s-]end", "lead", "qa", "devops", "mlops",
-            "student", "intern", "trainee", "android", "ios"
-    );
-
     public RoleRelevanceFilterImpl(PersonalProfileLoader profileLoader) {
         PersonalProfile profile = profileLoader.getProfile();
-        List<String> includePatterns = DEFAULT_INCLUDE_PATTERNS;
-        List<String> excludeKeywords = DEFAULT_EXCLUDE_KEYWORDS;
 
-        if (profile.filters() != null && profile.filters().role() != null) {
-            PersonalProfile.RoleFilterConfig roleConfig = profile.filters().role();
-            if (!roleConfig.includePatterns().isEmpty()) {
-                includePatterns = roleConfig.includePatterns();
-            }
-            if (!roleConfig.excludeKeywords().isEmpty()) {
-                excludeKeywords = roleConfig.excludeKeywords();
-            }
+        if (profile.filters() == null || profile.filters().role() == null) {
+            throw new IllegalStateException("profile.yaml must define filters.role with include-patterns and exclude-keywords");
         }
+
+        PersonalProfile.RoleFilterConfig roleConfig = profile.filters().role();
+        List<String> includePatterns = roleConfig.includePatterns();
+        List<String> excludeKeywords = roleConfig.excludeKeywords();
 
         this.engineeringPattern = Pattern.compile(
                 String.join("|", includePatterns),

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -41,27 +42,26 @@ class RoleRelevanceFilterConfigTest {
     }
 
     @Test
-    void fallsBackToDefaultsWhenConfigNull() {
+    void throwsWhenFiltersConfigNull() {
         PersonalProfileLoader loader = loaderWithNullFilters();
-        RoleRelevanceFilterImpl filter = new RoleRelevanceFilterImpl(loader);
 
-        // Default patterns should work
-        assertThat(filter.filter("Backend Engineer").decision()).isEqualTo(FilterDecision.KEEP);
-        assertThat(filter.filter("Engineering Manager").decision()).isEqualTo(FilterDecision.SKIP);
+        assertThatThrownBy(() -> new RoleRelevanceFilterImpl(loader))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("profile.yaml must define filters.role");
     }
 
     @Test
-    void fallsBackToDefaultsWhenRoleConfigNull() {
+    void throwsWhenRoleConfigNull() {
         PersonalProfileLoader loader = mock(PersonalProfileLoader.class);
         when(loader.getProfile()).thenReturn(new PersonalProfile(
                 "", "", 0, List.of(),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
                 new PersonalProfile.FilterConfig(null, null, null, null),
                 null, null, null));
-        RoleRelevanceFilterImpl filter = new RoleRelevanceFilterImpl(loader);
 
-        assertThat(filter.filter("Software Developer").decision()).isEqualTo(FilterDecision.KEEP);
-        assertThat(filter.filter("Sales Manager").decision()).isEqualTo(FilterDecision.SKIP);
+        assertThatThrownBy(() -> new RoleRelevanceFilterImpl(loader))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("profile.yaml must define filters.role");
     }
 
     private PersonalProfileLoader loaderWithRoleConfig(List<String> include, List<String> exclude) {

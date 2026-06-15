@@ -24,7 +24,13 @@ class RoleRelevanceFilterImplTest {
         when(loader.getProfile()).thenReturn(new PersonalProfile(
                 "", "", 0, List.of(),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
-                null, null, null, null));
+                new PersonalProfile.FilterConfig(
+                        new PersonalProfile.RoleFilterConfig(
+                                List.of("engineer", "developer", "\\bsre\\b", "\\bsdet?\\b", "\\bcto\\b"),
+                                List.of("\\bfront[\\s-]?end", "\\bqa\\b", "\\blead\\b", "devops",
+                                        "sales", "manager", "architect", "analyst", "director")),
+                        null, null, null),
+                null, null, null));
         filter = new RoleRelevanceFilterImpl(loader);
     }
 

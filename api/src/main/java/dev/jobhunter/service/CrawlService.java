@@ -292,20 +292,24 @@ public class CrawlService {
     /**
      * Backfill descriptions for SmartRecruiters KEEP jobs that have no description.
      * Only fetches details for filtered (visible) jobs, not all 1000+.
+     * After backfill, re-runs language filter — jobs with German descriptions get marked SKIP.
+     *
+     * @return int array: [0] = descriptions filled, [1] = language-filtered (marked SKIP)
      */
     @Transactional
-    public int backfillSmartRecruitersDescriptions() {
+    public int[] backfillSmartRecruitersDescriptions() {
         List<JobPosting> jobsWithoutDesc = jobPostingRepository
                 .findBySourceAndLanguageFilterAndDescriptionIsNull(
                         JobSource.SMARTRECRUITERS,
                         FilterDecision.KEEP);
 
         if (jobsWithoutDesc.isEmpty()) {
-            return 0;
+            return new int[]{0, 0};
         }
 
         log.info("Backfilling descriptions for {} SmartRecruiters KEEP jobs", jobsWithoutDesc.size());
         int filled = 0;
+        int filtered = 0;
 
         for (JobPosting job : jobsWithoutDesc) {
             String slug = job.getEndpoint() != null ? job.getEndpoint().getAtsSlug() : null;
@@ -314,12 +318,24 @@ public class CrawlService {
             String description = smartRecruitersStrategy.fetchDescription(slug, job.getExternalId());
             if (description != null) {
                 job.setDescription(description);
-                jobPostingRepository.save(job);
                 filled++;
+
+                // Re-run language filter now that description is available
+                FilterResult filterResult = languageFilter.filter(job.getTitle(), description);
+                if (filterResult.decision() == FilterDecision.SKIP) {
+                    job.setLanguageFilter(FilterDecision.SKIP);
+                    job.setFilterReason(filterResult.reason());
+                    filtered++;
+                    log.debug("Post-backfill language filter SKIP: job={} reason={}",
+                            job.getExternalId(), filterResult.reason());
+                }
+
+                jobPostingRepository.save(job);
             }
         }
 
-        log.info("Backfilled {}/{} SmartRecruiters descriptions", filled, jobsWithoutDesc.size());
-        return filled;
+        log.info("Backfilled {}/{} SmartRecruiters descriptions, {} language-filtered",
+                filled, jobsWithoutDesc.size(), filtered);
+        return new int[]{filled, filtered};
     }
 }

@@ -316,4 +316,202 @@ class CrawlServiceTest {
         assertThat(endpoint.getLastCrawledAt()).isNotNull();
         verify(endpointRepository).save(endpoint);
     }
+
+    // --- Backfill + language re-filter tests ---
+
+    @Test
+    void backfillDescriptions_noJobs_returnsZeros() {
+        when(jobPostingRepository.findBySourceAndLanguageFilterAndDescriptionIsNull(
+                JobSource.SMARTRECRUITERS, FilterDecision.KEEP))
+                .thenReturn(List.of());
+
+        int[] result = crawlService.backfillSmartRecruitersDescriptions();
+
+        assertThat(result[0]).isZero();
+        assertThat(result[1]).isZero();
+        verify(smartRecruitersStrategy, never()).fetchDescription(any(), any());
+    }
+
+    @Test
+    void backfillDescriptions_englishJob_keepsFilterStatus() {
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsSlug("company-slug")
+                .build();
+        var job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .externalId("sr-123")
+                .title("Software Engineer")
+                .source(JobSource.SMARTRECRUITERS)
+                .languageFilter(FilterDecision.KEEP)
+                .endpoint(endpoint)
+                .build();
+
+        when(jobPostingRepository.findBySourceAndLanguageFilterAndDescriptionIsNull(
+                JobSource.SMARTRECRUITERS, FilterDecision.KEEP))
+                .thenReturn(List.of(job));
+        when(smartRecruitersStrategy.fetchDescription("company-slug", "sr-123"))
+                .thenReturn("We are looking for a Java engineer");
+        when(languageFilter.filter("Software Engineer", "We are looking for a Java engineer"))
+                .thenReturn(FilterResult.keep());
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+
+        int[] result = crawlService.backfillSmartRecruitersDescriptions();
+
+        assertThat(result[0]).isEqualTo(1); // filled
+        assertThat(result[1]).isZero();     // none filtered
+
+        var captor = ArgumentCaptor.forClass(JobPosting.class);
+        verify(jobPostingRepository).save(captor.capture());
+        var saved = captor.getValue();
+        assertThat(saved.getDescription()).isEqualTo("We are looking for a Java engineer");
+        assertThat(saved.getLanguageFilter()).isEqualTo(FilterDecision.KEEP);
+        assertThat(saved.getFilterReason()).isNull();
+    }
+
+    @Test
+    void backfillDescriptions_germanJob_marksSkip() {
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsSlug("firma-slug")
+                .build();
+        var job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .externalId("sr-456")
+                .title("Entwickler")
+                .source(JobSource.SMARTRECRUITERS)
+                .languageFilter(FilterDecision.KEEP)
+                .endpoint(endpoint)
+                .build();
+
+        String germanDesc = "Wir suchen einen erfahrenen Softwareentwickler mit Java-Kenntnissen";
+
+        when(jobPostingRepository.findBySourceAndLanguageFilterAndDescriptionIsNull(
+                JobSource.SMARTRECRUITERS, FilterDecision.KEEP))
+                .thenReturn(List.of(job));
+        when(smartRecruitersStrategy.fetchDescription("firma-slug", "sr-456"))
+                .thenReturn(germanDesc);
+        when(languageFilter.filter("Entwickler", germanDesc))
+                .thenReturn(FilterResult.skip("German JD"));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+
+        int[] result = crawlService.backfillSmartRecruitersDescriptions();
+
+        assertThat(result[0]).isEqualTo(1); // filled
+        assertThat(result[1]).isEqualTo(1); // filtered
+
+        var captor = ArgumentCaptor.forClass(JobPosting.class);
+        verify(jobPostingRepository).save(captor.capture());
+        var saved = captor.getValue();
+        assertThat(saved.getDescription()).isEqualTo(germanDesc);
+        assertThat(saved.getLanguageFilter()).isEqualTo(FilterDecision.SKIP);
+        assertThat(saved.getFilterReason()).isEqualTo("German JD");
+    }
+
+    @Test
+    void backfillDescriptions_nullSlug_skipsJob() {
+        var job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .externalId("sr-789")
+                .title("Engineer")
+                .source(JobSource.SMARTRECRUITERS)
+                .languageFilter(FilterDecision.KEEP)
+                .endpoint(null)
+                .build();
+
+        when(jobPostingRepository.findBySourceAndLanguageFilterAndDescriptionIsNull(
+                JobSource.SMARTRECRUITERS, FilterDecision.KEEP))
+                .thenReturn(List.of(job));
+
+        int[] result = crawlService.backfillSmartRecruitersDescriptions();
+
+        assertThat(result[0]).isZero();
+        assertThat(result[1]).isZero();
+        verify(smartRecruitersStrategy, never()).fetchDescription(any(), any());
+        verify(jobPostingRepository, never()).save(any(JobPosting.class));
+    }
+
+    @Test
+    void backfillDescriptions_fetchReturnsNull_doesNotSave() {
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsSlug("slug")
+                .build();
+        var job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .externalId("sr-000")
+                .title("Engineer")
+                .source(JobSource.SMARTRECRUITERS)
+                .languageFilter(FilterDecision.KEEP)
+                .endpoint(endpoint)
+                .build();
+
+        when(jobPostingRepository.findBySourceAndLanguageFilterAndDescriptionIsNull(
+                JobSource.SMARTRECRUITERS, FilterDecision.KEEP))
+                .thenReturn(List.of(job));
+        when(smartRecruitersStrategy.fetchDescription("slug", "sr-000"))
+                .thenReturn(null);
+
+        int[] result = crawlService.backfillSmartRecruitersDescriptions();
+
+        assertThat(result[0]).isZero();
+        assertThat(result[1]).isZero();
+        verify(jobPostingRepository, never()).save(any(JobPosting.class));
+        verify(languageFilter, never()).filter(any(), any());
+    }
+
+    @Test
+    void backfillDescriptions_mixedJobs_countsCorrectly() {
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsSlug("mixed-co")
+                .build();
+        var englishJob = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .externalId("en-1")
+                .title("Engineer")
+                .source(JobSource.SMARTRECRUITERS)
+                .languageFilter(FilterDecision.KEEP)
+                .endpoint(endpoint)
+                .build();
+        var germanJob = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .externalId("de-1")
+                .title("Entwickler")
+                .source(JobSource.SMARTRECRUITERS)
+                .languageFilter(FilterDecision.KEEP)
+                .endpoint(endpoint)
+                .build();
+
+        when(jobPostingRepository.findBySourceAndLanguageFilterAndDescriptionIsNull(
+                JobSource.SMARTRECRUITERS, FilterDecision.KEEP))
+                .thenReturn(List.of(englishJob, germanJob));
+        when(smartRecruitersStrategy.fetchDescription("mixed-co", "en-1"))
+                .thenReturn("English description");
+        when(smartRecruitersStrategy.fetchDescription("mixed-co", "de-1"))
+                .thenReturn("Deutsche Beschreibung mit fließend Deutsch C1 erforderlich");
+        when(languageFilter.filter("Engineer", "English description"))
+                .thenReturn(FilterResult.keep());
+        when(languageFilter.filter("Entwickler", "Deutsche Beschreibung mit fließend Deutsch C1 erforderlich"))
+                .thenReturn(FilterResult.skip("German C1/C2 required"));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+
+        int[] result = crawlService.backfillSmartRecruitersDescriptions();
+
+        assertThat(result[0]).isEqualTo(2); // both filled
+        assertThat(result[1]).isEqualTo(1); // one filtered
+
+        var captor = ArgumentCaptor.forClass(JobPosting.class);
+        verify(jobPostingRepository, times(2)).save(captor.capture());
+        var saved = captor.getAllValues();
+
+        var savedEnglish = saved.stream()
+                .filter(j -> "en-1".equals(j.getExternalId())).findFirst().orElseThrow();
+        assertThat(savedEnglish.getLanguageFilter()).isEqualTo(FilterDecision.KEEP);
+
+        var savedGerman = saved.stream()
+                .filter(j -> "de-1".equals(j.getExternalId())).findFirst().orElseThrow();
+        assertThat(savedGerman.getLanguageFilter()).isEqualTo(FilterDecision.SKIP);
+        assertThat(savedGerman.getFilterReason()).isEqualTo("German C1/C2 required");
+    }
 }
