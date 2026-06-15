@@ -43,7 +43,7 @@ class AdminControllerHealthTest {
     void setUp() {
         controller = new AdminController(crawlService, careerEndpointRepository, scoringScheduler,
                 discoveryService, pipelineScheduler, aggregatorIngestionService,
-                aggregatorRunRepository, List.of());
+                aggregatorRunRepository, null, null, List.of());
     }
 
     @Test

@@ -51,7 +51,7 @@ class AdminControllerAggregatorTest {
         controller = new AdminController(crawlService, careerEndpointRepository,
                 scoringScheduler, null, pipelineScheduler,
                 aggregatorIngestionService, aggregatorRunRepository,
-                List.of(linkedinSource, indeedSource));
+                null, null, List.of(linkedinSource, indeedSource));
     }
 
     @Test
@@ -128,7 +128,7 @@ class AdminControllerAggregatorTest {
     void listAggregators_noSources_returnsEmptyList() {
         AdminController emptyController = new AdminController(crawlService, careerEndpointRepository,
                 scoringScheduler, null, pipelineScheduler,
-                aggregatorIngestionService, aggregatorRunRepository, List.of());
+                aggregatorIngestionService, aggregatorRunRepository, null, null, List.of());
 
         ResponseEntity<List<AdminController.AggregatorStatus>> response = emptyController.listAggregators();
 

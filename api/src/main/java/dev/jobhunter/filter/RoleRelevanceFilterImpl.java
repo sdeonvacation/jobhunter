@@ -29,7 +29,8 @@ public class RoleRelevanceFilterImpl implements RoleRelevanceFilter {
             "manager", "architect", "analyst", "director", "principal",
             "counsel", "legal", "recruiter", "designer", "marketing",
             "sales", "finance", "accountant", "hr", "frontend",
-            "front[\\s-]end", "lead", "qa", "devops", "mlops"
+            "front[\\s-]end", "lead", "qa", "devops", "mlops",
+            "student", "intern", "trainee", "android", "ios"
     );
 
     public RoleRelevanceFilterImpl(PersonalProfileLoader profileLoader) {

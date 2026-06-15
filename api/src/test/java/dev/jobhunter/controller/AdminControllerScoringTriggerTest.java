@@ -34,7 +34,7 @@ class AdminControllerScoringTriggerTest {
     @BeforeEach
     void setUp() {
         controller = new AdminController(crawlService, null, scoringScheduler, null,
-                null, aggregatorIngestionService, aggregatorRunRepository, List.of(sourceConfig));
+                null, aggregatorIngestionService, aggregatorRunRepository, null, null, List.of(sourceConfig));
     }
 
     @Test

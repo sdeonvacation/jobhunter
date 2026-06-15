@@ -1,6 +1,7 @@
+# below are for AI usecases
 name: Sam
-title: Senior Backend Engineer
-years-of-experience: 8
+title: Software Engineer
+years-of-experience: 4
 
 skills:
   - name: Java
@@ -10,7 +11,7 @@ skills:
     proficiency: expert
     category: framework
   - name: Kotlin
-    proficiency: advanced
+    proficiency: intermediate
     category: language
   - name: PostgreSQL
     proficiency: expert
@@ -46,9 +47,9 @@ skills:
     proficiency: expert
     category: tooling
   - name: Hibernate/JPA
-    proficiency: expert
+    proficiency: intermediate
     category: framework
-  - name: Gradle
+  - name: Maven
     proficiency: advanced
     category: tooling
   - name: Redis
@@ -60,11 +61,232 @@ skills:
   - name: Terraform
     proficiency: intermediate
     category: infrastructure
+  - name: AI
+    proficiency: expert
+    category: infrastructure
+  - name: Claude
+    proficiency: expert
+    category: infrastructure
+  - name: Github Copilot
+    proficiency: expert
+    category: infrastructure
+  - name: JUnit
+    proficiency: expert
+    category: testing
+  - name: SOLID
+    proficiency: expert
+    category: architecture
+  - name: Distributed Systems
+    proficiency: advanced
+    category: architecture
 
 preferences:
-  locations: ["Germany", "Netherlands", "remote"]
+  locations: ["Germany", "remote"]
   employment-type: FULL_TIME
-  min-salary-eur: 85000
-  seniority: ["senior", "staff", "lead"]
+  min-salary-eur: 65000
+  seniority: ["senior", "junior", "mid"]
   languages: ["English", "German"]
   excluded-industries: ["gambling", "defense", "surveillance"]
+
+# below are filters used by the application
+filters:
+  role:
+    include-patterns:
+      - "\\bjava\\b"
+      - "developer"
+      - "programmer"
+      - "\\bsre\\b"
+      - "devops"
+      - "dev\\s*ops"
+      - "software"
+      - "backend"
+      - "back[\\s-]end"
+      - "fullstack"
+      - "full[\\s-]stack"
+      - "platform"
+      - "infrastructure"
+      - "\\bcloud\\b"
+      - "\\bml\\b"
+      - "machine\\s+learning"
+      - "\\bsde\\b"
+      - "site\\s+reliability"
+      - "forward"
+      - "\\bai\\b"
+      - "artificial\\s+intelligence"
+      - "entwickler"
+      - "cloud[\\s-]native"
+    exclude-keywords:
+      - "manager"
+      - "architect"
+      - "analyst"
+      - "director"
+      - "principal"
+      - "counsel"
+      - "legal"
+      - "recruiter"
+      - "designer"
+      - "marketing"
+      - "student"
+      - "intern"
+      - "trainee"
+      - "sales"
+      - "finance"
+      - "accountant"
+      - "hr"
+      - "frontend"
+      - "front[\\s-]end"
+      - "lead"
+      - "qa"
+      - "devops"
+      - "mlops"
+      - "android"
+      - "ios"
+  location:
+    target-cities:
+      - "germany"
+      - "deutschland"
+      - "berlin"
+      - "munich"
+      - "m[uü]nchen"
+      - "hamburg"
+      - "frankfurt"
+      - "cologne"
+      - "k[oö]ln"
+      - "stuttgart"
+      - "d[uü]sseldorf"
+      - "dortmund"
+      - "dresden"
+      - "leipzig"
+      - "nuremberg"
+      - "n[uü]rnberg"
+      - "hannover"
+      - "bremen"
+      - "bonn"
+      - "mannheim"
+      - "karlsruhe"
+      - "heidelberg"
+      - "potsdam"
+      - "walldorf"
+      - "freiburg"
+      - "essen"
+      - "duisburg"
+      - "wiesbaden"
+      - "mainz"
+      - "aachen"
+      - "regensburg"
+      - "augsburg"
+      - "rostock"
+      - "jena"
+      - "erkner"
+      - "bielefeld"
+    remote-patterns:
+      - "^(remote|remote\\s*-\\s*(eu|europe|emea|global|worldwide|dach|ger(many)?))$"
+  language:
+    target: "en"
+    exclude-patterns:
+      - "german\\s+c[12]"
+      - "deutsch\\s+c[12]"
+      - "flie[ßs]end\\s+deutsch"
+      - "fluent\\s+german"
+      - "muttersprache"
+      - "native\\s+german"
+      - "german\\s+native"
+      - "verhandlungssicher"
+  yoe:
+    max-years: 5
+
+scoring:
+  benchmark-weight: 22.0
+  primary-skills: ["java", "spring boot", "kotlin"]
+  primary-skill-cap: 70
+  competing-languages: ["\\bpython\\b", "\\bgolang\\b", "\\bgo\\b developer", "\\bruby\\b", "\\brust\\b", "\\bc\\+\\+\\b", "\\bc#\\b", "\\.net\\b", "\\bphp\\b", "\\bnode\\.?js\\b", "\\bscala\\b", "\\belixir\\b"]
+  competing-language-cap: 50
+  thresholds:
+    apply-score: 40
+    apply-min-matches: 4
+    maybe-score: 25
+    maybe-min-matches: 2
+  bonus-signals:
+    - "ai"
+    - "machine learning"
+    - "llm"
+    - "agent"
+    - "agentic"
+  bonus-weight: 2.0
+  skill-weights:
+    java: 5.0
+    spring boot: 4.5
+    kubernetes: 3.0
+    docker: 2.5
+    aws: 2.5
+    azure: 2.5
+    kafka: 3.0
+    postgresql: 2.0
+    microservices: 2.0
+    claude: 2.0
+    redis: 1.5
+    elasticsearch: 1.5
+    ci/cd: 1.5
+    sql: 1.5
+    rest: 2.0
+    hibernate/jpa: 1.5
+    python: 1.0
+    gradle: 1.0
+    kotlin: 1.0
+    terraform: 1.0
+    architecture: 1.0
+    orchestration: 1.0
+    git: 0.5
+    junit: 1.5
+    solid: 1.5
+    distributed systems: 2.0
+    typescript: 0.5
+    node.js: 0.3
+    javascript: 0.3
+    go: 0.3
+    react: 0.3
+  seniority-discount:
+    enabled: true
+    keywords: ["senior", "staff", "expert"]
+    multiplier: 0.70
+  skill-variants:
+    java: ["\\bjava\\b", "jvm"]
+    spring boot: ["spring", "springboot"]
+    kotlin: ["kotlin"]
+    postgresql: ["postgres", "postgresql"]
+    kafka: ["kafka"]
+    kubernetes: ["kubernetes", "k8s"]
+    aws: ["\\baws\\b", "amazon web"]
+    docker: ["docker", "container"]
+    typescript: ["typescript", "type script"]
+    microservices: ["microservice", "micro-service"]
+    rest apis: ["\\brest\\b", "restful", "rest api"]
+    ci/cd: ["ci/cd", "ci cd", "continuous integration", "continuous delivery"]
+    sql: ["\\bsql\\b"]
+    git: ["\\bgit\\b", "github", "gitlab"]
+    hibernate/jpa: ["hibernate", "jpa"]
+    maven: ["gradle", "maven"]
+    redis: ["redis"]
+    junit: ["junit", "testing framework", "unit test"]
+    solid: ["solid", "design principle", "clean code"]
+    distributed systems: ["distributed", "scalab", "high availability"]
+    elasticsearch: ["elasticsearch", "elastic", "opensearch", "kibana"]
+    terraform: ["terraform", "infrastructure as code"]
+    node.js: ["node.js", "nodejs", "\\bnode\\b"]
+    javascript: ["javascript", "\\bjs\\b"]
+    go: ["\\bgolang\\b", "\\bgo\\b"]
+    react: ["\\breact\\b"]
+    ai/ml: ["ai", "machine learning", "llm"]
+
+# LinkedIn job search configuration
+linkedin-search:
+  query: '(software OR java OR backend OR fullstack OR AI) AND (developer OR engineer) NOT graduate NOT lead NOT staff NOT principal'
+  locations: ["Germany", "Remote"]
+  date-posted: week
+
+# Indeed job search configuration
+indeed-search:
+  keywords: ["backend engineer", "Java developer", "Spring Boot"]
+  locations: ["Germany"]
+  results-wanted: 25
+  hours-old: 168

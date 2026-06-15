@@ -8,12 +8,15 @@ import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.enums.CrawlStatus;
 import dev.jobhunter.repository.AggregatorRunRepository;
 import dev.jobhunter.repository.CareerEndpointRepository;
+import dev.jobhunter.repository.MatchScoreRepository;
+import dev.jobhunter.repository.OpportunityScoreRepository;
 import dev.jobhunter.scheduler.PipelineScheduler;
 import dev.jobhunter.scheduler.ScoringScheduler;
 import dev.jobhunter.service.CrawlService;
 import dev.jobhunter.source.SourceConfig;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -32,6 +35,8 @@ public class AdminController {
     private final PipelineScheduler pipelineScheduler;
     private final AggregatorIngestionService aggregatorIngestionService;
     private final AggregatorRunRepository aggregatorRunRepository;
+    private final MatchScoreRepository matchScoreRepository;
+    private final OpportunityScoreRepository opportunityScoreRepository;
     private final List<SourceConfig> sources;
 
     public AdminController(CrawlService crawlService, CareerEndpointRepository careerEndpointRepository,
@@ -39,6 +44,8 @@ public class AdminController {
                            PipelineScheduler pipelineScheduler,
                            AggregatorIngestionService aggregatorIngestionService,
                            AggregatorRunRepository aggregatorRunRepository,
+                           MatchScoreRepository matchScoreRepository,
+                           OpportunityScoreRepository opportunityScoreRepository,
                            @Qualifier("allSources") List<SourceConfig> sources) {
         this.crawlService = crawlService;
         this.careerEndpointRepository = careerEndpointRepository;
@@ -47,6 +54,8 @@ public class AdminController {
         this.pipelineScheduler = pipelineScheduler;
         this.aggregatorIngestionService = aggregatorIngestionService;
         this.aggregatorRunRepository = aggregatorRunRepository;
+        this.matchScoreRepository = matchScoreRepository;
+        this.opportunityScoreRepository = opportunityScoreRepository;
         this.sources = sources;
     }
 
@@ -93,6 +102,17 @@ public class AdminController {
     public ResponseEntity<String> triggerScoring() {
         scoringScheduler.scoreAllUnscored();
         return ResponseEntity.ok("Scoring complete");
+    }
+
+    @PostMapping("/rescore")
+    @Transactional
+    public ResponseEntity<RescoreResult> rescoreAll() {
+        long deleted = matchScoreRepository.count();
+        matchScoreRepository.deleteAllInBatch();
+        opportunityScoreRepository.deleteAllInBatch();
+        scoringScheduler.scoreAllUnscored();
+        long rescored = matchScoreRepository.count();
+        return ResponseEntity.ok(new RescoreResult(deleted, rescored));
     }
 
     @PostMapping("/discover")
@@ -203,6 +223,7 @@ public class AdminController {
     public record CrawlResult(int endpointsProcessed, int jobsFound, int errors) {}
     public record SingleCrawlResult(UUID endpointId, int jobsFound) {}
     public record BackfillResult(int descriptionsBackfilled) {}
+    public record RescoreResult(long deleted, long rescored) {}
     public record ResolveResult(int total, int resolved, int failed, int skipped) {}
     public record DiscoverResult(int providersQueried, int companiesFound, int newCompanies) {}
 

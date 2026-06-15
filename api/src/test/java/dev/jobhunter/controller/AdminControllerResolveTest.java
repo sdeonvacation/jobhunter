@@ -31,7 +31,7 @@ class AdminControllerResolveTest {
     @BeforeEach
     void setUp() {
         controller = new AdminController(crawlService, careerEndpointRepository, scoringScheduler, discoveryService,
-                null, null, null, List.of());
+                null, null, null, null, null, List.of());
     }
 
     @Test
