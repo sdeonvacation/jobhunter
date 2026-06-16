@@ -148,6 +148,9 @@ public class OpenAiProvider implements AiProvider {
                 JsonNode message = firstChoice.get("message");
                 String content = message.get("content").asText();
 
+                // Strip markdown fences (Gemini often wraps JSON in ```json ... ```)
+                content = stripMarkdownFences(content);
+
                 // Check if response was truncated due to token limit
                 String finishReason = firstChoice.has("finish_reason")
                         ? firstChoice.get("finish_reason").asText() : "unknown";
@@ -164,6 +167,8 @@ public class OpenAiProvider implements AiProvider {
                         log.warn("Recovered partial results from truncated OpenAI response");
                         return objectMapper.readValue(repaired, outputType);
                     }
+                    log.error("Failed to parse AI response. Content starts with: {}",
+                            content.substring(0, Math.min(200, content.length())));
                     throw parseEx;
                 }
             }
@@ -171,6 +176,23 @@ public class OpenAiProvider implements AiProvider {
         } catch (JsonProcessingException e) {
             throw new AiProviderException("Failed to parse OpenAI extraction response", e);
         }
+    }
+
+    private String stripMarkdownFences(String content) {
+        if (content == null) return null;
+        String trimmed = content.strip();
+        if (trimmed.startsWith("```")) {
+            // Remove opening fence (```json or ```)
+            int firstNewline = trimmed.indexOf('\n');
+            if (firstNewline > 0) {
+                trimmed = trimmed.substring(firstNewline + 1);
+            }
+            // Remove closing fence
+            if (trimmed.endsWith("```")) {
+                trimmed = trimmed.substring(0, trimmed.length() - 3).stripTrailing();
+            }
+        }
+        return trimmed;
     }
 
     private String attemptJsonRepair(String truncatedJson) {
