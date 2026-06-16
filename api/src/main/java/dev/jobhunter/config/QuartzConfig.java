@@ -182,4 +182,13 @@ public class QuartzConfig {
                 )
                 .build();
     }
+
+    @Bean
+    public Trigger aiCrawlStartupTrigger(JobDetail aiCrawlJobDetail) {
+        return TriggerBuilder.newTrigger()
+                .forJob(aiCrawlJobDetail)
+                .withIdentity("aiCrawlStartupTrigger", "ai-crawl")
+                .startAt(new java.util.Date(System.currentTimeMillis() + 30_000))
+                .build();
+    }
 }
