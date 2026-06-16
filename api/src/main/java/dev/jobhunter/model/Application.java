@@ -1,6 +1,7 @@
 package dev.jobhunter.model;
 
 import dev.jobhunter.model.enums.ApplicationStatus;
+import dev.jobhunter.people.model.enums.InterviewSource;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -38,6 +39,10 @@ public class Application {
 
     @Column(name = "resume_variant")
     private String resumeVariant;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "interview_source")
+    private InterviewSource interviewSource;
 
     @Column(name = "created_at", columnDefinition = "TIMESTAMP", updatable = false)
     private LocalDateTime createdAt;

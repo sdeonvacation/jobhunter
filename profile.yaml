@@ -278,6 +278,37 @@ scoring:
     react: ["\\breact\\b"]
     ai/ml: ["ai", "machine learning", "llm"]
 
+# People module configuration
+people:
+  discovery:
+    auto-discovery-enabled: true
+    daily-search-budget: 10
+    title-keywords: ["recruiter", "talent acquisition", "hiring manager", "engineering manager"]
+    high-priority-threshold: 70
+    low-priority-interval-days: 7
+  scoring:
+    interview-generation-weights:
+      RECRUITER: 95
+      MANAGER: 90
+      SENIOR: 75
+      STAFF: 70
+      IC: 50
+      DIRECTOR: 65
+    warmth-factors:
+      shared-employer: 30
+      same-country: 25
+      same-university: 15
+      same-tech-stack: 15
+      mutual-connections: 15
+    composite-weights:
+      interview-generation: 0.6
+      warmth: 0.4
+  relationship:
+    ghosting-threshold-days: 14
+    stale-contact-days: 90
+  gdpr:
+    contact-retention-days: 180
+
 # LinkedIn job search configuration
 linkedin-search:
   query: '(software OR java OR backend OR fullstack OR AI) AND (developer OR engineer) NOT graduate NOT lead NOT staff NOT principal'

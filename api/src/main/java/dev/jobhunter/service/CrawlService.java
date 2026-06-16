@@ -21,6 +21,7 @@ import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.CareerEndpointRepository;
 import dev.jobhunter.repository.JobPostingRepository;
 import dev.jobhunter.scheduler.ScoringScheduler;
+import dev.jobhunter.people.crawl.PostCrawlPipeline;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +44,7 @@ public class CrawlService {
     private final YoeFilter yoeFilter;
     private final DeduplicationFilter deduplicationFilter;
     private final ScoringScheduler scoringScheduler;
+    private final PostCrawlPipeline postCrawlPipeline;
 
     public CrawlService(CareerEndpointRepository endpointRepository,
                         JobPostingRepository jobPostingRepository,
@@ -53,7 +55,8 @@ public class CrawlService {
                         LocationFilter locationFilter,
                         YoeFilter yoeFilter,
                         DeduplicationFilter deduplicationFilter,
-                        ScoringScheduler scoringScheduler) {
+                        ScoringScheduler scoringScheduler,
+                        PostCrawlPipeline postCrawlPipeline) {
         this.endpointRepository = endpointRepository;
         this.jobPostingRepository = jobPostingRepository;
         this.strategyRegistry = strategyRegistry;
@@ -64,6 +67,7 @@ public class CrawlService {
         this.yoeFilter = yoeFilter;
         this.deduplicationFilter = deduplicationFilter;
         this.scoringScheduler = scoringScheduler;
+        this.postCrawlPipeline = postCrawlPipeline;
     }
 
     /**
@@ -225,6 +229,13 @@ public class CrawlService {
                 posting.setRequiredYoe(yoe);
                 posting.setFingerprint(fingerprint);
                 jobPostingRepository.save(posting);
+
+                // Run post-crawl hooks (poster extraction, etc.) for KEEP jobs
+                if (filterResult.decision() == FilterDecision.KEEP) {
+                    Map<String, Object> rawContent = posting.getRawContent() != null ? posting.getRawContent() : Map.of();
+                    postCrawlPipeline.run(posting, rawJob.rawJson(), rawContent);
+                }
+
                 newJobsCount++;
             }
         }

@@ -11,5 +11,6 @@
     <include file="db/changelog/004-fix-migrated-endpoints.sql"/>
     <include file="db/changelog/005-job-source-migration.sql"/>
     <include file="db/changelog/006-add-hidden-column.sql"/>
+    <include file="db/changelog/007-people-module.sql"/>
 
 </databaseChangeLog>

@@ -89,6 +89,27 @@ public class Company {
     @Column(name = "linkedin_enriched_at", columnDefinition = "TIMESTAMP")
     private LocalDateTime linkedinEnrichedAt;
 
+    @Column(name = "hiring_velocity")
+    private Integer hiringVelocity;
+
+    @Column(name = "employee_growth")
+    private String employeeGrowth;
+
+    @Column(name = "funding_stage")
+    private String fundingStage;
+
+    @Column(name = "has_sponsored_before")
+    private Boolean hasSponsoredBefore;
+
+    @Column(name = "english_speaking")
+    private Boolean englishSpeaking;
+
+    @Column(name = "international_workforce")
+    private Boolean internationalWorkforce;
+
+    @Column(name = "visa_friendliness")
+    private String visaFriendliness;
+
     @OneToMany(mappedBy = "company", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     @ToString.Exclude

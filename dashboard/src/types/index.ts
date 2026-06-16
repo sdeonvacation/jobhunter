@@ -175,3 +175,155 @@ export interface PersonalProfile {
   minSalary?: number;
   preferredRemote?: RemoteType;
 }
+
+// People Module types
+export type Seniority = 'RECRUITER' | 'MANAGER' | 'DIRECTOR' | 'STAFF' | 'SENIOR' | 'IC';
+export type ContactDiscoverySource = 'JOB_POSTER' | 'LINKEDIN_SEARCH' | 'MANUAL';
+export type RelationshipStatus = 'DISCOVERED' | 'CONTACTED' | 'REPLIED' | 'ENGAGED' | 'REFERRED' | 'INTERVIEW_OBTAINED' | 'GHOSTED' | 'COLD';
+export type EventType = 'CONTACT_DISCOVERED' | 'MESSAGE_SENT' | 'REPLIED' | 'CALL_BOOKED' | 'REFERRAL_REQUESTED' | 'REFERRAL_GIVEN' | 'INTERVIEW_OBTAINED' | 'GHOSTED_AUTO' | 'STATUS_OVERRIDE';
+export type InterviewSource = 'APPLICATION' | 'RECRUITER' | 'REFERRAL' | 'NETWORKING' | 'EVENT';
+export type ConnectionStatus = 'NONE' | 'PENDING' | 'CONNECTED' | 'DECLINED';
+
+export interface Contact {
+  id: string;
+  personName: string;
+  title?: string;
+  linkedinUrl: string;
+  companyId: string;
+  companyName: string;
+  seniority?: Seniority;
+  discoveredVia: ContactDiscoverySource;
+  connectionStatus: ConnectionStatus;
+  interviewGenerationWeight: number;
+  warmthScore: number;
+  contactPriorityScore: number;
+  relationshipStatus?: RelationshipStatus;
+  lastContactAt?: string;
+  createdAt: string;
+}
+
+export interface ContactDetail extends Contact {
+  location?: string;
+  techStack?: string[];
+  events: RelationshipEvent[];
+  messages: OutreachMessageItem[];
+  linkedJobs: LinkedJob[];
+  referredBy?: Contact;
+}
+
+export interface RelationshipEvent {
+  id: string;
+  eventType: EventType;
+  occurredAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface OutreachMessageItem {
+  id: string;
+  direction: 'IN' | 'OUT';
+  channel: 'LINKEDIN' | 'EMAIL';
+  messageType: string;
+  content?: string;
+  sentAt: string;
+  replied: boolean;
+  repliedAt?: string;
+}
+
+export interface LinkedJob {
+  id: string;
+  title: string;
+  companyName: string;
+  location?: string;
+  postedDate?: string;
+}
+
+export interface PeopleStats {
+  totalContacts: number;
+  byStatus: Record<RelationshipStatus, number>;
+  bySeniority: Record<Seniority, number>;
+  avgPriorityScore: number;
+  discoveredToday: number;
+}
+
+export interface ContactDiscoveryRun {
+  id: string;
+  companyId: string;
+  companyName: string;
+  source: ContactDiscoverySource;
+  contactsFound: number;
+  contactsNew: number;
+  runAt: string;
+}
+
+export interface PeoplePage {
+  content: Contact[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
+
+// Phase 3-5 types
+export type MessageVariant = 'INFO_CHAT' | 'TECH_DISCUSSION' | 'REFERRAL_ASK' | 'FOLLOW_UP' | 'RECRUITER_PITCH';
+export type ActionType = 'FOLLOW_UP' | 'CONNECT' | 'APPLY' | 'PREPARE' | 'SEND_MESSAGE';
+export type VisaFriendliness = 'UNKNOWN' | 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface GeneratedMessage {
+  content: string;
+  variant: MessageVariant;
+  contactId: string;
+  jobId?: string;
+  modelUsed: string;
+  tokensUsed: number;
+}
+
+export interface ScoredAction {
+  entityId: string;
+  type: ActionType;
+  impactScore: number;
+  urgencyScore: number;
+  actionScore: number;
+  reason: string;
+  expiresIn: string;
+  contactId?: string;
+  jobId?: string;
+  contactName?: string;
+  companyName: string;
+  jobTitle?: string;
+}
+
+export interface FunnelData {
+  applications: number;
+  recruiterScreen: number;
+  technical: number;
+  finalRound: number;
+  offers: number;
+  conversionRates: Record<string, number>;
+  avgDaysBetweenStages: Record<string, number>;
+}
+
+export interface FunnelAnalysis {
+  primaryBottleneck: string;
+  explanation: string;
+  suggestions: string[];
+  stageInsights: Record<string, string>;
+}
+
+export interface CompanyIntelligence {
+  companyId: string;
+  industry?: string;
+  employeeCount?: number;
+  specialties?: string;
+  hiringVelocity?: number;
+  employeeGrowth?: string;
+  fundingStage?: string;
+  visaSignals: VisaSignals;
+  lastEnrichedAt?: string;
+}
+
+export interface VisaSignals {
+  hasSponsoredBefore?: boolean;
+  englishSpeaking?: boolean;
+  internationalWorkforce?: boolean;
+  derived: VisaFriendliness;
+}

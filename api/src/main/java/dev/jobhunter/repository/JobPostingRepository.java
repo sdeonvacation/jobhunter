@@ -117,8 +117,10 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
            "AND (LOWER(j.title) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(j.company.name) LIKE LOWER(CONCAT('%', :query, '%'))) " +
            "AND (:company IS NULL OR j.company.name = :company)")
     Page<JobPosting> searchByQueryAndSource(@Param("filter") FilterDecision filter,
-                                           @Param("source") JobSource source,
-                                           @Param("query") String query,
-                                           @Param("company") String company,
-                                           Pageable pageable);
+                                            @Param("source") JobSource source,
+                                            @Param("query") String query,
+                                            @Param("company") String company,
+                                            Pageable pageable);
+
+    List<JobPosting> findByPosterContactId(UUID posterContactId);
 }

@@ -15,6 +15,16 @@ const links = [
     ),
   },
   {
+    to: '/today',
+    label: 'Today',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="10" cy="10" r="7" />
+        <path d="M10 6v4l3 2" />
+      </svg>
+    ),
+  },
+  {
     to: '/jobs',
     label: 'Jobs',
     icon: (
@@ -42,6 +52,16 @@ const links = [
         <path d="M7 4V2h6v2" />
         <path d="M3 9h14" />
         <path d="M8 9v3h4V9" />
+      </svg>
+    ),
+  },
+  {
+    to: '/people',
+    label: 'People',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="10" cy="7" r="3" />
+        <path d="M5 17v-1a5 5 0 0110 0v1" />
       </svg>
     ),
   },

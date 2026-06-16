@@ -1,10 +1,15 @@
 package dev.jobhunter.linkedin;
 
 import dev.jobhunter.model.Company;
+import dev.jobhunter.people.model.enums.ContactDiscoverySource;
+import dev.jobhunter.people.model.enums.Seniority;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -46,6 +51,34 @@ public class OutreachContact {
 
     @Column(columnDefinition = "TEXT")
     private String notes;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "seniority")
+    private Seniority seniority;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "discovered_via")
+    @Builder.Default
+    private ContactDiscoverySource discoveredVia = ContactDiscoverySource.MANUAL;
+
+    @Column(name = "location")
+    private String location;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "tech_stack", columnDefinition = "jsonb")
+    private List<String> techStack;
+
+    @Column(name = "interview_generation_weight")
+    @Builder.Default
+    private Integer interviewGenerationWeight = 0;
+
+    @Column(name = "warmth_score")
+    @Builder.Default
+    private Integer warmthScore = 0;
+
+    @Column(name = "contact_priority_score")
+    @Builder.Default
+    private Integer contactPriorityScore = 0;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
