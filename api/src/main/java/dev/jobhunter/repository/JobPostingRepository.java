@@ -123,4 +123,10 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
                                             Pageable pageable);
 
     List<JobPosting> findByPosterContactId(UUID posterContactId);
+
+    @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.applied = false AND j.hidden = false " +
+           "AND j.languageFilter = :filter AND j.postedDate >= :since")
+    Page<JobPosting> findRecentlyPostedJobs(@Param("filter") FilterDecision filter,
+                                           @Param("since") LocalDate since,
+                                           Pageable pageable);
 }

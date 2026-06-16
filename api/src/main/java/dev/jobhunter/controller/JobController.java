@@ -113,14 +113,15 @@ public class JobController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         Sort sortOrder = switch (sort) {
-            case "date" -> Sort.by(Sort.Direction.DESC, "discoveredDate");
+            case "date" -> Sort.by(Sort.Direction.DESC, "postedDate");
             default -> Sort.by(Sort.Direction.DESC, "matchScore.overallScore")
-                    .and(Sort.by(Sort.Direction.DESC, "discoveredDate"))
+                    .and(Sort.by(Sort.Direction.DESC, "postedDate"))
                     .and(Sort.by(Sort.Direction.DESC, "opportunityScore.score"));
         };
         Pageable pageable = PageRequest.of(page, size, sortOrder);
-        Page<JobPosting> jobs = jobPostingRepository.findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndDiscoveredDate(
-                FilterDecision.KEEP, LocalDate.now(), pageable);
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        Page<JobPosting> jobs = jobPostingRepository.findRecentlyPostedJobs(
+                FilterDecision.KEEP, yesterday, pageable);
         return jobs.map(DtoMapper::toJobSummary);
     }
 
