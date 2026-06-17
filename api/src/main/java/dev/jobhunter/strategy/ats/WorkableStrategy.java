@@ -121,10 +121,15 @@ public class WorkableStrategy implements FetchStrategy {
             String createdAt = node.path("created_at").asText(null);
             LocalDate postedDate = parseDate(createdAt);
 
+            String descriptionHtml = node.path("description").asText(null);
+            String description = descriptionHtml != null
+                    ? HTML_TAG_PATTERN.matcher(descriptionHtml).replaceAll("").strip()
+                    : null;
+
             String rawJson = node.toString();
 
             return new RawAggregatorJob(
-                    shortcode, title, null, location, null, applyUrl,
+                    shortcode, title, null, location, description, applyUrl,
                     postedDate, null, null, null, rawJson
             );
         } catch (Exception e) {
