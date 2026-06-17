@@ -69,3 +69,4 @@ failsafe-reports/
 /.opencode/
 .opencode/worktrees/
 api/bin/
+/.worktrees
