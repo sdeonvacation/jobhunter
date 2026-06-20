@@ -51,11 +51,9 @@ fi
 BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
 log "Backup complete: $BACKUP_FILE ($BACKUP_SIZE)"
 
-# Delete backups older than retention period
-DELETED=0
-find "$BACKUP_DIR" -name "jobhunter_*.sql.gz" -mtime +${RETENTION_DAYS} -print -delete | while read -r f; do
+# Delete backups older than retention period (non-fatal — iCloud TCC may deny find -delete)
+find "$BACKUP_DIR" -name "jobhunter_*.sql.gz" -mtime +${RETENTION_DAYS} -print -delete 2>/dev/null | while read -r f; do
     log "Deleted old backup: $f"
-    DELETED=$((DELETED + 1))
-done
+done || true
 
-log "Cleanup done. Backup successful."
+log "Backup successful."
