@@ -8,6 +8,7 @@ import dev.jobhunter.filter.RoleRelevanceFilter;
 import dev.jobhunter.filter.YoeFilter;
 import dev.jobhunter.filter.visa.VisaFilterResult;
 import dev.jobhunter.filter.visa.VisaSponsorshipFilter;
+import dev.jobhunter.model.enums.VisaSponsorship;
 import dev.jobhunter.model.AggregatorRun;
 import dev.jobhunter.model.Company;
 import dev.jobhunter.model.JobPosting;
@@ -124,12 +125,18 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                     continue;
                 }
 
-                // Visa sponsorship filter (aggregator mode: defers to enrichment)
-                VisaFilterResult visaResult = visaSponsorshipFilter.filter(
-                        job.location(), job.description(), true);
-                if (visaResult.decision() == FilterDecision.SKIP) {
-                    filtered++;
-                    continue;
+                // Visa sponsorship filter — skip for visa-exempt sources (expat portals)
+                VisaSponsorship visaStatus = VisaSponsorship.UNKNOWN;
+                if (!source.visaExempt()) {
+                    VisaFilterResult visaResult = visaSponsorshipFilter.filter(
+                            job.location(), job.description(), true);
+                    if (visaResult.decision() == FilterDecision.SKIP) {
+                        filtered++;
+                        continue;
+                    }
+                    visaStatus = visaResult.visaSponsorship();
+                } else {
+                    visaStatus = VisaSponsorship.LIKELY;
                 }
 
                 // Resolve company
@@ -154,7 +161,7 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                         .requiredYoe(yoe)
                         .isActive(true)
                         .languageFilter(FilterDecision.KEEP)
-                        .visaSponsorship(visaResult.visaSponsorship())
+                        .visaSponsorship(visaStatus)
                         .build();
                 jobPostingRepository.save(posting);
                 created++;

@@ -20,4 +20,7 @@ public interface SourceConfig {
     int frequencyHours();
 
     boolean isEnabled();
+
+    /** Sources targeting expats/internationals skip visa sponsorship checks. */
+    default boolean visaExempt() { return false; }
 }

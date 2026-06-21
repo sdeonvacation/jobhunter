@@ -38,6 +38,7 @@ public class DynamicSourceConfigLoader {
                             entry.getUrl(),
                             entry.getFrequencyHours(),
                             entry.getMaxResults(),
+                            entry.isVisaExempt(),
                             config
                     );
                 })

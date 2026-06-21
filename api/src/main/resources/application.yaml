@@ -120,6 +120,7 @@ aggregator:
       url: "https://search.movetogbg.tenfifty.io"
       frequency-hours: 12
       max-results: 200
+      visa-exempt: true
       config:
         apiKey: "d0f1115ce0f71a8d890b7733f4e3e15c8e03682666eb72e320efb61a46cfda4c"
         index: "jobs"

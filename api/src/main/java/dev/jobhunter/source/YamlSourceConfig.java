@@ -16,6 +16,7 @@ public record YamlSourceConfig(
         String url,
         int frequencyHours,
         int maxResults,
+        boolean visaExempt,
         Map<String, Object> extraConfig
 ) implements SourceConfig {
 

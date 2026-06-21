@@ -253,7 +253,7 @@ filters:
       - "(eu|eea|european)\\s+(citizens?|nationals?|residents?)\\s+only"
       - "right\\s+to\\s+work\\s+(required|necessary|needed)"
       - "no\\s+relocation"
-    unknown-action: keep
+    unknown-action: skip
     ai-fallback:
       enabled: false
       max-description-chars: 4000

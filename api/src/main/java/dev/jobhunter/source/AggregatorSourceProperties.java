@@ -28,6 +28,7 @@ public class AggregatorSourceProperties {
         private int frequencyHours = 12;
         private int maxResults = 50;
         private boolean enabled = true;
+        private boolean visaExempt = false;
         private Map<String, String> config = new HashMap<>();
 
         public String getName() { return name; }
@@ -53,6 +54,9 @@ public class AggregatorSourceProperties {
 
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean enabled) { this.enabled = enabled; }
+
+        public boolean isVisaExempt() { return visaExempt; }
+        public void setVisaExempt(boolean visaExempt) { this.visaExempt = visaExempt; }
 
         public Map<String, String> getConfig() { return config; }
         public void setConfig(Map<String, String> config) { this.config = config; }
