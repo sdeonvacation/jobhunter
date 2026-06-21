@@ -12,5 +12,6 @@
     <include file="db/changelog/005-job-source-migration.sql"/>
     <include file="db/changelog/006-add-hidden-column.sql"/>
     <include file="db/changelog/007-people-module.sql"/>
+    <include file="db/changelog/008-visa-sponsorship.sql"/>
 
 </databaseChangeLog>

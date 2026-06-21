@@ -1,5 +1,6 @@
 import type { Job } from '../types';
 import ScoreBadge from './ScoreBadge';
+import VisaBadge from './VisaBadge';
 
 const SOURCE_BUTTON_CONFIG: Record<string, { label: string; color: string }> = {
   linkedin: { label: 'LinkedIn', color: 'bg-blue-500/10 text-blue-400 ring-blue-500/20' },
@@ -74,6 +75,9 @@ export default function JobCard({ job, index = 0, onMarkApplied, onUndoApplied, 
               <span className="bg-info/10 text-info text-xs px-2 py-0.5 rounded-full ring-1 ring-info/20">
                 {job.remoteType}
               </span>
+            )}
+            {job.visaSponsorship && (job.visaSponsorship === 'CONFIRMED' || job.visaSponsorship === 'LIKELY') && (
+              <VisaBadge status={job.visaSponsorship} />
             )}
             {salary && (
               <span className="text-xs text-text-secondary font-mono">

@@ -9,14 +9,15 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * Whitelist-based location filter. Only KEEP if location explicitly matches
- * configured target cities or whitelisted remote patterns. Everything else is SKIP.
+ * Whitelist-based location filter. KEEP if location matches configured target cities,
+ * whitelisted remote patterns, or target EU countries from visa config. Everything else is SKIP.
  */
 @Component
 public class LocationFilterImpl implements LocationFilter {
 
     private final Pattern targetCitiesPattern;
     private final Pattern genericRemotePattern;
+    private final Pattern euCountriesPattern;
 
     // Default target city patterns (used when config section is absent)
     private static final List<String> DEFAULT_TARGET_CITIES = List.of(
@@ -60,6 +61,20 @@ public class LocationFilterImpl implements LocationFilter {
                 String.join("|", remotePatterns),
                 Pattern.CASE_INSENSITIVE
         );
+
+        // Widen: also accept EU countries from visa sponsorship config
+        List<String> euCountries = List.of();
+        if (profile.filters() != null && profile.filters().visaSponsorship() != null) {
+            euCountries = profile.filters().visaSponsorship().targetCountries();
+        }
+        if (!euCountries.isEmpty()) {
+            String euRegex = euCountries.stream()
+                    .map(c -> c.startsWith("\\b") ? c : "\\b" + c + "\\b")
+                    .collect(Collectors.joining("|"));
+            this.euCountriesPattern = Pattern.compile(euRegex, Pattern.CASE_INSENSITIVE);
+        } else {
+            this.euCountriesPattern = null;
+        }
     }
 
     @Override
@@ -78,7 +93,12 @@ public class LocationFilterImpl implements LocationFilter {
             return FilterResult.keep();
         }
 
+        // Whitelist: EU country from visa sponsorship config
+        if (euCountriesPattern != null && euCountriesPattern.matcher(location).find()) {
+            return FilterResult.keep();
+        }
+
         // Everything else: SKIP
-        return FilterResult.skip("location: not Germany");
+        return FilterResult.skip("location: not in target locations");
     }
 }

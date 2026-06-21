@@ -56,7 +56,7 @@ class RoleRelevanceFilterConfigTest {
         when(loader.getProfile()).thenReturn(new PersonalProfile(
                 "", "", 0, List.of(),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
-                new PersonalProfile.FilterConfig(null, null, null, null),
+                new PersonalProfile.FilterConfig(null, null, null, null, null),
                 null, null, null));
 
         assertThatThrownBy(() -> new RoleRelevanceFilterImpl(loader))
@@ -71,7 +71,7 @@ class RoleRelevanceFilterConfigTest {
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
                 new PersonalProfile.FilterConfig(
                         new PersonalProfile.RoleFilterConfig(include, exclude),
-                        null, null, null),
+                        null, null, null, null),
                 null, null, null));
         return loader;
     }

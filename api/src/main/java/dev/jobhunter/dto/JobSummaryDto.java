@@ -23,5 +23,6 @@ public record JobSummaryDto(
         String source,
         String applyUrl,
         boolean applied,
-        Map<String, String> externalLinks
+        Map<String, String> externalLinks,
+        String visaSponsorship
 ) {}

@@ -299,6 +299,151 @@ class PersonalProfileLoaderTest {
         assertThat(profile.filters().language()).isNull();
     }
 
+    @Test
+    void load_parsesVisaSponsorshipFilterConfig() throws IOException {
+        String yaml = """
+                name: Test
+                title: Dev
+                years-of-experience: 3
+                skills: []
+                preferences:
+                  locations: []
+                  employment-type: FULL_TIME
+                  min-salary-eur: 0
+                  seniority: []
+                  languages: []
+                  excluded-industries: []
+                filters:
+                  visa-sponsorship:
+                    target-countries:
+                      - "netherlands"
+                      - "austria"
+                    de-patterns:
+                      - "\\\\bgermany\\\\b"
+                    remote-eu-patterns:
+                      - "remote.*europe"
+                    positive-patterns:
+                      - "visa\\\\s+sponsor"
+                      - "relocation\\\\s+support"
+                    negative-patterns:
+                      - "no\\\\s+sponsor"
+                    unknown-action: keep
+                    ai-fallback:
+                      enabled: true
+                      max-description-chars: 3000
+                      daily-limit: 25
+                """;
+
+        PersonalProfileLoader loader = createLoader(yaml);
+        PersonalProfile profile = loader.getProfile();
+
+        assertThat(profile.filters()).isNotNull();
+        assertThat(profile.filters().visaSponsorship()).isNotNull();
+
+        var visa = profile.filters().visaSponsorship();
+        assertThat(visa.targetCountries()).containsExactly("netherlands", "austria");
+        assertThat(visa.dePatterns()).containsExactly("\\bgermany\\b");
+        assertThat(visa.remoteEuPatterns()).containsExactly("remote.*europe");
+        assertThat(visa.positivePatterns()).containsExactly("visa\\s+sponsor", "relocation\\s+support");
+        assertThat(visa.negativePatterns()).containsExactly("no\\s+sponsor");
+        assertThat(visa.unknownAction()).isEqualTo("keep");
+        assertThat(visa.aiFallback()).isNotNull();
+        assertThat(visa.aiFallback().enabled()).isTrue();
+        assertThat(visa.aiFallback().maxDescriptionChars()).isEqualTo(3000);
+        assertThat(visa.aiFallback().dailyLimit()).isEqualTo(25);
+    }
+
+    @Test
+    void load_visaSponsorshipAbsent_returnsNull() throws IOException {
+        String yaml = """
+                name: Test
+                title: Dev
+                years-of-experience: 3
+                skills: []
+                preferences:
+                  locations: []
+                  employment-type: FULL_TIME
+                  min-salary-eur: 0
+                  seniority: []
+                  languages: []
+                  excluded-industries: []
+                filters:
+                  yoe:
+                    max-years: 5
+                """;
+
+        PersonalProfileLoader loader = createLoader(yaml);
+        PersonalProfile profile = loader.getProfile();
+
+        assertThat(profile.filters()).isNotNull();
+        assertThat(profile.filters().visaSponsorship()).isNull();
+    }
+
+    @Test
+    void load_visaSponsorshipDefaults_whenFieldsMissing() throws IOException {
+        String yaml = """
+                name: Test
+                title: Dev
+                years-of-experience: 3
+                skills: []
+                preferences:
+                  locations: []
+                  employment-type: FULL_TIME
+                  min-salary-eur: 0
+                  seniority: []
+                  languages: []
+                  excluded-industries: []
+                filters:
+                  visa-sponsorship:
+                    target-countries:
+                      - "spain"
+                """;
+
+        PersonalProfileLoader loader = createLoader(yaml);
+        PersonalProfile profile = loader.getProfile();
+
+        var visa = profile.filters().visaSponsorship();
+        assertThat(visa).isNotNull();
+        assertThat(visa.targetCountries()).containsExactly("spain");
+        assertThat(visa.dePatterns()).isEmpty();
+        assertThat(visa.remoteEuPatterns()).isEmpty();
+        assertThat(visa.positivePatterns()).isEmpty();
+        assertThat(visa.negativePatterns()).isEmpty();
+        assertThat(visa.unknownAction()).isEqualTo("skip");
+        assertThat(visa.aiFallback()).isNull();
+    }
+
+    @Test
+    void load_visaSponsorshipAiFallbackDefaults() throws IOException {
+        String yaml = """
+                name: Test
+                title: Dev
+                years-of-experience: 3
+                skills: []
+                preferences:
+                  locations: []
+                  employment-type: FULL_TIME
+                  min-salary-eur: 0
+                  seniority: []
+                  languages: []
+                  excluded-industries: []
+                filters:
+                  visa-sponsorship:
+                    target-countries: []
+                    ai-fallback:
+                      enabled: false
+                """;
+
+        PersonalProfileLoader loader = createLoader(yaml);
+        PersonalProfile profile = loader.getProfile();
+
+        var ai = profile.filters().visaSponsorship().aiFallback();
+        assertThat(ai).isNotNull();
+        assertThat(ai.enabled()).isFalse();
+        assertThat(ai.maxDescriptionChars()).isEqualTo(4000);
+        assertThat(ai.dailyLimit()).isEqualTo(50);
+    }
+
     private PersonalProfileLoader createLoader(String yamlContent) throws IOException {
         Path file = tempDir.resolve("profile.yaml");
         Files.writeString(file, yamlContent);

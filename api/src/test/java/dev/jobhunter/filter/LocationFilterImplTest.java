@@ -3,6 +3,7 @@ package dev.jobhunter.filter;
 import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.service.PersonalProfile;
 import dev.jobhunter.service.PersonalProfileLoader;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
@@ -61,7 +62,7 @@ class LocationFilterImplTest {
         assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
     }
 
-    // --- SKIP: Netherlands ---
+    // --- SKIP: Netherlands (no visa config = no EU widening) ---
 
     @ParameterizedTest
     @ValueSource(strings = {
@@ -78,7 +79,7 @@ class LocationFilterImplTest {
     void netherlandsLocations_skip(String location) {
         var result = filter.filter(location);
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        assertThat(result.reason()).isEqualTo("location: not Germany");
+        assertThat(result.reason()).isEqualTo("location: not in target locations");
     }
 
     // --- KEEP: Whitelisted remote patterns ---
@@ -132,7 +133,7 @@ class LocationFilterImplTest {
     void vagueOrNonWhitelisted_skip(String location) {
         var result = filter.filter(location);
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        assertThat(result.reason()).isEqualTo("location: not Germany");
+        assertThat(result.reason()).isEqualTo("location: not in target locations");
     }
 
     // --- SKIP: null/blank (empty location) ---
@@ -152,7 +153,7 @@ class LocationFilterImplTest {
     void unknownLocation_skip() {
         var result = filter.filter("Mars Colony");
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        assertThat(result.reason()).isEqualTo("location: not Germany");
+        assertThat(result.reason()).isEqualTo("location: not in target locations");
     }
 
     // --- SKIP: US locations ---
@@ -184,7 +185,7 @@ class LocationFilterImplTest {
     void usLocations_skip(String location) {
         var result = filter.filter(location);
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        assertThat(result.reason()).isEqualTo("location: not Germany");
+        assertThat(result.reason()).isEqualTo("location: not in target locations");
     }
 
     // --- SKIP: India locations ---
@@ -204,7 +205,7 @@ class LocationFilterImplTest {
     void indiaLocations_skip(String location) {
         var result = filter.filter(location);
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        assertThat(result.reason()).isEqualTo("location: not Germany");
+        assertThat(result.reason()).isEqualTo("location: not in target locations");
     }
 
     // --- SKIP: Non-whitelisted remote (region not in pattern) ---
@@ -223,7 +224,7 @@ class LocationFilterImplTest {
     void nonWhitelistedRemote_skip(String location) {
         var result = filter.filter(location);
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        assertThat(result.reason()).isEqualTo("location: not Germany");
+        assertThat(result.reason()).isEqualTo("location: not in target locations");
     }
 
     // --- SKIP: UK locations ---
@@ -242,7 +243,7 @@ class LocationFilterImplTest {
     void ukLocations_skip(String location) {
         var result = filter.filter(location);
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        assertThat(result.reason()).isEqualTo("location: not Germany");
+        assertThat(result.reason()).isEqualTo("location: not in target locations");
     }
 
     // --- SKIP: Other non-target countries ---
@@ -265,7 +266,7 @@ class LocationFilterImplTest {
     void otherNonTargetCountries_skip(String location) {
         var result = filter.filter(location);
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        assertThat(result.reason()).isEqualTo("location: not Germany");
+        assertThat(result.reason()).isEqualTo("location: not in target locations");
     }
 
     // --- Edge cases ---
@@ -274,12 +275,11 @@ class LocationFilterImplTest {
     void amsterdamHybrid_skip() {
         var result = filter.filter("Amsterdam, Hybrid");
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        assertThat(result.reason()).isEqualTo("location: not Germany");
+        assertThat(result.reason()).isEqualTo("location: not in target locations");
     }
 
     @Test
     void remoteEurope_keep() {
-        // Matches anchored pattern: ^remote\s*-\s*europe$
         var result = filter.filter("Remote - Europe");
         assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
     }
@@ -290,5 +290,61 @@ class LocationFilterImplTest {
         assertThat(filter.filter("AMSTERDAM").decision()).isEqualTo(FilterDecision.SKIP);
         assertThat(filter.filter("REMOTE").decision()).isEqualTo(FilterDecision.KEEP);
         assertThat(filter.filter("san francisco").decision()).isEqualTo(FilterDecision.SKIP);
+    }
+
+    // --- EU country widening via visa config ---
+
+    @Nested
+    class WithEuCountryConfig {
+
+        private final LocationFilterImpl filterWithEu;
+
+        WithEuCountryConfig() {
+            PersonalProfileLoader loader = mock(PersonalProfileLoader.class);
+            var visaConfig = new PersonalProfile.VisaSponsorshipFilterConfig(
+                    List.of("netherlands", "austria", "ireland"),
+                    List.of(), List.of(),
+                    List.of(), List.of(),
+                    "skip", null
+            );
+            var filterConfig = new PersonalProfile.FilterConfig(null, null, null, null, visaConfig);
+            when(loader.getProfile()).thenReturn(new PersonalProfile(
+                    "", "", 0, List.of(),
+                    new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
+                    filterConfig, null, null, null));
+            filterWithEu = new LocationFilterImpl(loader);
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "Amsterdam, Netherlands",
+                "Vienna, Austria",
+                "Dublin, Ireland",
+                "Netherlands",
+                "austria"
+        })
+        void euCountriesFromVisaConfig_keep(String location) {
+            var result = filterWithEu.filter(location);
+            assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+        }
+
+        @Test
+        void germanLocations_stillKeep() {
+            assertThat(filterWithEu.filter("Berlin, Germany").decision()).isEqualTo(FilterDecision.KEEP);
+            assertThat(filterWithEu.filter("Munich").decision()).isEqualTo(FilterDecision.KEEP);
+        }
+
+        @Test
+        void nonTargetCountry_stillSkip() {
+            var result = filterWithEu.filter("London, UK");
+            assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
+            assertThat(result.reason()).isEqualTo("location: not in target locations");
+        }
+
+        @Test
+        void caseInsensitive_euCountry() {
+            assertThat(filterWithEu.filter("NETHERLANDS").decision()).isEqualTo(FilterDecision.KEEP);
+            assertThat(filterWithEu.filter("Austria").decision()).isEqualTo(FilterDecision.KEEP);
+        }
     }
 }

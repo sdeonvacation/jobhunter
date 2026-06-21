@@ -12,6 +12,8 @@ import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.filter.LocationFilter;
 import dev.jobhunter.filter.RoleRelevanceFilter;
 import dev.jobhunter.filter.YoeFilter;
+import dev.jobhunter.filter.visa.VisaFilterResult;
+import dev.jobhunter.filter.visa.VisaSponsorshipFilter;
 import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.Company;
 import dev.jobhunter.model.JobPosting;
@@ -23,6 +25,7 @@ import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.CareerEndpointRepository;
 import dev.jobhunter.repository.JobPostingRepository;
 import dev.jobhunter.scheduler.ScoringScheduler;
+import dev.jobhunter.people.crawl.PostCrawlPipeline;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,8 +58,10 @@ class CrawlServiceTest {
     @Mock private LocationFilter locationFilter;
     @Mock private YoeFilter yoeFilter;
     @Mock private DeduplicationFilter deduplicationFilter;
+    @Mock private VisaSponsorshipFilter visaSponsorshipFilter;
     @Mock private FetchStrategy fetchStrategy;
     @Mock private ScoringScheduler scoringScheduler;
+    @Mock private PostCrawlPipeline postCrawlPipeline;
 
     private CrawlService crawlService;
 
@@ -64,7 +69,8 @@ class CrawlServiceTest {
     void setUp() {
         crawlService = new CrawlService(endpointRepository, jobPostingRepository,
                 strategyRegistry, smartRecruitersStrategy, languageFilter, roleRelevanceFilter,
-                locationFilter, yoeFilter, deduplicationFilter, scoringScheduler);
+                locationFilter, yoeFilter, deduplicationFilter, visaSponsorshipFilter,
+                scoringScheduler, postCrawlPipeline);
     }
 
     @Test
@@ -89,6 +95,7 @@ class CrawlServiceTest {
         when(languageFilter.filter("Engineer", "Java dev role")).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter("Engineer")).thenReturn(FilterResult.keep());
         when(locationFilter.filter("Berlin")).thenReturn(FilterResult.keep());
+        when(visaSponsorshipFilter.filter(anyString(), anyString(), eq(false))).thenReturn(VisaFilterResult.bypass());
         when(yoeFilter.extractYoe(anyString())).thenReturn(null);
         when(yoeFilter.filter(any())).thenReturn(FilterResult.keep());
         when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("test-fingerprint");
@@ -173,6 +180,7 @@ class CrawlServiceTest {
         when(languageFilter.filter(any(), any())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(any())).thenReturn(FilterResult.keep());
         when(locationFilter.filter(any())).thenReturn(FilterResult.keep());
+        when(visaSponsorshipFilter.filter(anyString(), anyString(), eq(false))).thenReturn(VisaFilterResult.bypass());
         when(yoeFilter.extractYoe(anyString())).thenReturn(null);
         when(yoeFilter.filter(any())).thenReturn(FilterResult.keep());
         when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("test-fingerprint");

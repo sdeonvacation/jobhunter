@@ -6,6 +6,8 @@ import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.filter.LocationFilter;
 import dev.jobhunter.filter.RoleRelevanceFilter;
 import dev.jobhunter.filter.YoeFilter;
+import dev.jobhunter.filter.visa.VisaFilterResult;
+import dev.jobhunter.filter.visa.VisaSponsorshipFilter;
 import dev.jobhunter.model.AggregatorRun;
 import dev.jobhunter.model.Company;
 import dev.jobhunter.model.JobPosting;
@@ -40,6 +42,7 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
     private final LocationFilter locationFilter;
     private final YoeFilter yoeFilter;
     private final DeduplicationFilter deduplicationFilter;
+    private final VisaSponsorshipFilter visaSponsorshipFilter;
     private final List<PostIngestionEnricher> postIngestionEnrichers;
 
     public AggregatorIngestionServiceImpl(JobPostingRepository jobPostingRepository,
@@ -50,6 +53,7 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                                           LocationFilter locationFilter,
                                           YoeFilter yoeFilter,
                                           DeduplicationFilter deduplicationFilter,
+                                          VisaSponsorshipFilter visaSponsorshipFilter,
                                           List<PostIngestionEnricher> postIngestionEnrichers) {
         this.jobPostingRepository = jobPostingRepository;
         this.companyRepository = companyRepository;
@@ -59,6 +63,7 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
         this.locationFilter = locationFilter;
         this.yoeFilter = yoeFilter;
         this.deduplicationFilter = deduplicationFilter;
+        this.visaSponsorshipFilter = visaSponsorshipFilter;
         this.postIngestionEnrichers = postIngestionEnrichers;
     }
 
@@ -119,6 +124,14 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                     continue;
                 }
 
+                // Visa sponsorship filter (aggregator mode: defers to enrichment)
+                VisaFilterResult visaResult = visaSponsorshipFilter.filter(
+                        job.location(), job.description(), true);
+                if (visaResult.decision() == FilterDecision.SKIP) {
+                    filtered++;
+                    continue;
+                }
+
                 // Resolve company
                 Company company = resolveCompany(job.companyName(), source);
 
@@ -141,6 +154,7 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                         .requiredYoe(yoe)
                         .isActive(true)
                         .languageFilter(FilterDecision.KEEP)
+                        .visaSponsorship(visaResult.visaSponsorship())
                         .build();
                 jobPostingRepository.save(posting);
                 created++;

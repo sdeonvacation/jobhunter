@@ -113,6 +113,10 @@ public class JobPosting {
     @Builder.Default
     private FilterDecision languageFilter = FilterDecision.KEEP;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "visa_sponsorship")
+    private VisaSponsorship visaSponsorship;
+
     @Column(name = "filter_reason")
     private String filterReason;
 

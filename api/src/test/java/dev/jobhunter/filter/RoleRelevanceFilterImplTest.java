@@ -29,7 +29,7 @@ class RoleRelevanceFilterImplTest {
                                 List.of("engineer", "developer", "\\bsre\\b", "\\bsdet?\\b", "\\bcto\\b"),
                                 List.of("\\bfront[\\s-]?end", "\\bqa\\b", "\\blead\\b", "devops",
                                         "sales", "manager", "architect", "analyst", "director")),
-                        null, null, null),
+                        null, null, null, null),
                 null, null, null));
         filter = new RoleRelevanceFilterImpl(loader);
     }

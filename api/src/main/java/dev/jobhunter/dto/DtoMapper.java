@@ -43,7 +43,8 @@ public final class DtoMapper {
                 job.getSource() != null ? job.getSource().name() : null,
                 job.getApplyUrl(),
                 job.isApplied(),
-                job.getExternalLinks()
+                job.getExternalLinks(),
+                job.getVisaSponsorship() != null ? job.getVisaSponsorship().name() : null
         );
     }
 
@@ -89,7 +90,8 @@ public final class DtoMapper {
                 techStack,
                 job.getRecruiterName(),
                 job.getRecruiterEmail(),
-                scoreBreakdown
+                scoreBreakdown,
+                job.getVisaSponsorship() != null ? job.getVisaSponsorship().name() : null
         );
     }
 

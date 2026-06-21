@@ -132,7 +132,32 @@ public class PersonalProfileLoader {
             language = new PersonalProfile.LanguageFilterConfig(target, excludePatterns);
         }
 
-        return new PersonalProfile.FilterConfig(role, location, yoe, language);
+        PersonalProfile.VisaSponsorshipFilterConfig visaSponsorship = null;
+        Map<String, Object> visaMap = (Map<String, Object>) filtersMap.get("visa-sponsorship");
+        if (visaMap != null) {
+            PersonalProfile.AiFallbackConfig aiFallback = null;
+            Map<String, Object> aiMap = (Map<String, Object>) visaMap.get("ai-fallback");
+            if (aiMap != null) {
+                aiFallback = new PersonalProfile.AiFallbackConfig(
+                        Boolean.TRUE.equals(aiMap.get("enabled")),
+                        aiMap.containsKey("max-description-chars")
+                                ? ((Number) aiMap.get("max-description-chars")).intValue() : 4000,
+                        aiMap.containsKey("daily-limit")
+                                ? ((Number) aiMap.get("daily-limit")).intValue() : 50
+                );
+            }
+            visaSponsorship = new PersonalProfile.VisaSponsorshipFilterConfig(
+                    (List<String>) visaMap.getOrDefault("target-countries", List.of()),
+                    (List<String>) visaMap.getOrDefault("de-patterns", List.of()),
+                    (List<String>) visaMap.getOrDefault("remote-eu-patterns", List.of()),
+                    (List<String>) visaMap.getOrDefault("positive-patterns", List.of()),
+                    (List<String>) visaMap.getOrDefault("negative-patterns", List.of()),
+                    (String) visaMap.getOrDefault("unknown-action", "skip"),
+                    aiFallback
+            );
+        }
+
+        return new PersonalProfile.FilterConfig(role, location, yoe, language, visaSponsorship);
     }
 
     @SuppressWarnings("unchecked")

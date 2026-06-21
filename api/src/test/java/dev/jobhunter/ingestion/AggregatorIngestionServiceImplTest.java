@@ -6,6 +6,8 @@ import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.filter.LocationFilter;
 import dev.jobhunter.filter.RoleRelevanceFilter;
 import dev.jobhunter.filter.YoeFilter;
+import dev.jobhunter.filter.visa.VisaFilterResult;
+import dev.jobhunter.filter.visa.VisaSponsorshipFilter;
 import dev.jobhunter.model.AggregatorRun;
 import dev.jobhunter.model.Company;
 import dev.jobhunter.model.JobPosting;
@@ -40,6 +42,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -53,6 +56,7 @@ class AggregatorIngestionServiceImplTest {
     @Mock private LocationFilter locationFilter;
     @Mock private YoeFilter yoeFilter;
     @Mock private DeduplicationFilter deduplicationFilter;
+    @Mock private VisaSponsorshipFilter visaSponsorshipFilter;
     @Mock private FetchStrategy fetchStrategy;
 
     private AggregatorIngestionServiceImpl service;
@@ -62,7 +66,7 @@ class AggregatorIngestionServiceImplTest {
         service = new AggregatorIngestionServiceImpl(
                 jobPostingRepository, companyRepository, aggregatorRunRepository,
                 languageFilter, roleRelevanceFilter, locationFilter,
-                yoeFilter, deduplicationFilter,
+                yoeFilter, deduplicationFilter, visaSponsorshipFilter,
                 List.of());
     }
 
@@ -101,6 +105,7 @@ class AggregatorIngestionServiceImplTest {
         when(locationFilter.filter("Berlin")).thenReturn(FilterResult.keep());
         when(yoeFilter.extractYoe(anyString())).thenReturn(null);
         when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
+        when(visaSponsorshipFilter.filter(anyString(), anyString(), eq(true))).thenReturn(VisaFilterResult.bypass());
 
         Company company = Company.builder().id(UUID.randomUUID()).name("Acme Corp")
                 .normalizedName("acme corp").status(CompanyStatus.DISCOVERED).isActive(true).build();
@@ -265,6 +270,7 @@ class AggregatorIngestionServiceImplTest {
         when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
         when(yoeFilter.extractYoe(anyString())).thenReturn(null);
         when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
+        when(visaSponsorshipFilter.filter(anyString(), anyString(), eq(true))).thenReturn(VisaFilterResult.bypass());
         when(companyRepository.findByNormalizedName("new startup gmbh")).thenReturn(Optional.empty());
 
         Company newCompany = Company.builder().id(UUID.randomUUID()).name("New Startup GmbH")
@@ -302,6 +308,7 @@ class AggregatorIngestionServiceImplTest {
         when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
         when(yoeFilter.extractYoe(anyString())).thenReturn(2);
         when(yoeFilter.filter(2)).thenReturn(FilterResult.keep());
+        when(visaSponsorshipFilter.filter(anyString(), anyString(), eq(true))).thenReturn(VisaFilterResult.bypass());
         when(companyRepository.findByNormalizedName("acme corp")).thenReturn(
                 Optional.of(Company.builder().id(UUID.randomUUID()).name("Acme Corp").normalizedName("acme corp").isActive(true).status(CompanyStatus.ACTIVE).build()));
         when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
@@ -338,6 +345,7 @@ class AggregatorIngestionServiceImplTest {
         when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
         when(yoeFilter.extractYoe(anyString())).thenReturn(null);
         when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
+        when(visaSponsorshipFilter.filter(anyString(), anyString(), eq(true))).thenReturn(VisaFilterResult.bypass());
 
         Company unknownCompany = Company.builder().id(UUID.randomUUID()).name("Unknown")
                 .normalizedName("unknown").status(CompanyStatus.DISCOVERED).isActive(true).build();
@@ -372,6 +380,7 @@ class AggregatorIngestionServiceImplTest {
         when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
         when(yoeFilter.extractYoe(anyString())).thenReturn(null);
         when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
+        when(visaSponsorshipFilter.filter(anyString(), anyString(), eq(true))).thenReturn(VisaFilterResult.bypass());
 
         Company unknownCompany = Company.builder().id(UUID.randomUUID()).name("Unknown")
                 .normalizedName("unknown").status(CompanyStatus.DISCOVERED).isActive(true).build();

@@ -3,6 +3,7 @@ package dev.jobhunter.scoring;
 import dev.jobhunter.model.Company;
 import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.MatchScore;
+import dev.jobhunter.model.enums.VisaSponsorship;
 import dev.jobhunter.service.PersonalProfile;
 import dev.jobhunter.service.PersonalProfileLoader;
 import lombok.extern.slf4j.Slf4j;
@@ -136,6 +137,15 @@ public class OpportunityScorer {
             if (loc.equalsIgnoreCase(country) || countryLower.contains(loc.toLowerCase())) {
                 return 100;
             }
+        }
+
+        // Visa-confirmed EU jobs get boosted location factor
+        if (isEuCountry(countryLower) && job.getVisaSponsorship() != null) {
+            return switch (job.getVisaSponsorship()) {
+                case CONFIRMED -> 100;
+                case LIKELY -> 85;
+                default -> 70;  // PENDING, REJECTED, UNKNOWN keep existing baseline
+            };
         }
 
         // EU countries get partial credit

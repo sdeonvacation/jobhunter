@@ -10,6 +10,7 @@ export type DiscoveryOutcome = 'REGISTERED' | 'ALREADY_EXISTS' | 'DETECTION_FAIL
 export type RemoteType = 'REMOTE' | 'HYBRID' | 'ONSITE' | null;
 export type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERNSHIP';
 export type SalaryPeriod = 'YEARLY' | 'MONTHLY' | 'HOURLY';
+export type VisaSponsorship = 'CONFIRMED' | 'LIKELY' | 'PENDING' | 'REJECTED' | 'UNKNOWN';
 
 // Domain models
 
@@ -63,6 +64,7 @@ export interface Job {
   recommendation?: Recommendation | null;
   source: AtsType;
   externalLinks?: Record<string, string>;
+  visaSponsorship?: VisaSponsorship | null;
   createdAt?: string;
 }
 

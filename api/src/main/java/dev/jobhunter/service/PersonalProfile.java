@@ -35,7 +35,8 @@ public record PersonalProfile(
             RoleFilterConfig role,
             LocationFilterConfig location,
             YoeFilterConfig yoe,
-            LanguageFilterConfig language
+            LanguageFilterConfig language,
+            VisaSponsorshipFilterConfig visaSponsorship
     ) {
     }
 
@@ -57,6 +58,24 @@ public record PersonalProfile(
     public record LanguageFilterConfig(
             String target,
             List<String> excludePatterns
+    ) {
+    }
+
+    public record VisaSponsorshipFilterConfig(
+            List<String> targetCountries,
+            List<String> dePatterns,
+            List<String> remoteEuPatterns,
+            List<String> positivePatterns,
+            List<String> negativePatterns,
+            String unknownAction,
+            AiFallbackConfig aiFallback
+    ) {
+    }
+
+    public record AiFallbackConfig(
+            boolean enabled,
+            int maxDescriptionChars,
+            int dailyLimit
     ) {
     }
 

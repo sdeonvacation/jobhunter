@@ -34,5 +34,6 @@ public record JobDetailDto(
         TechStackDto techStack,
         String recruiterName,
         String recruiterEmail,
-        ScoreBreakdownDto scoreBreakdown
+        ScoreBreakdownDto scoreBreakdown,
+        String visaSponsorship
 ) {}

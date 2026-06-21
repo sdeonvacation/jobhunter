@@ -12,12 +12,15 @@ import dev.jobhunter.filter.LocationFilter;
 import dev.jobhunter.filter.RoleRelevanceFilter;
 import dev.jobhunter.filter.YoeFilter;
 import dev.jobhunter.filter.DeduplicationFilter;
+import dev.jobhunter.filter.visa.VisaFilterResult;
+import dev.jobhunter.filter.visa.VisaSponsorshipFilter;
 import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.CrawlStatus;
 import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.model.enums.ExtractionStatus;
 import dev.jobhunter.model.enums.JobSource;
+import dev.jobhunter.model.enums.VisaSponsorship;
 import dev.jobhunter.repository.CareerEndpointRepository;
 import dev.jobhunter.repository.JobPostingRepository;
 import dev.jobhunter.scheduler.ScoringScheduler;
@@ -43,6 +46,7 @@ public class CrawlService {
     private final LocationFilter locationFilter;
     private final YoeFilter yoeFilter;
     private final DeduplicationFilter deduplicationFilter;
+    private final VisaSponsorshipFilter visaSponsorshipFilter;
     private final ScoringScheduler scoringScheduler;
     private final PostCrawlPipeline postCrawlPipeline;
 
@@ -55,6 +59,7 @@ public class CrawlService {
                         LocationFilter locationFilter,
                         YoeFilter yoeFilter,
                         DeduplicationFilter deduplicationFilter,
+                        VisaSponsorshipFilter visaSponsorshipFilter,
                         ScoringScheduler scoringScheduler,
                         PostCrawlPipeline postCrawlPipeline) {
         this.endpointRepository = endpointRepository;
@@ -66,6 +71,7 @@ public class CrawlService {
         this.locationFilter = locationFilter;
         this.yoeFilter = yoeFilter;
         this.deduplicationFilter = deduplicationFilter;
+        this.visaSponsorshipFilter = visaSponsorshipFilter;
         this.scoringScheduler = scoringScheduler;
         this.postCrawlPipeline = postCrawlPipeline;
     }
@@ -193,11 +199,12 @@ public class CrawlService {
                 }
                 jobPostingRepository.save(existing);
             } else {
-                // New job: apply filter cascade (language → role → location → yoe → dedup)
+                // New job: apply filter cascade (language → role → location → visa → yoe → dedup)
                 String companyName = endpoint.getCompany() != null ? endpoint.getCompany().getName() : "";
                 String fingerprint = deduplicationFilter.generateFingerprint(rawJob.title(), companyName, rawJob.location());
 
                 FilterResult filterResult = languageFilter.filter(rawJob.title(), rawJob.description());
+                VisaFilterResult visaResult = null;
                 if (filterResult.decision() == FilterDecision.KEEP) {
                     FilterResult roleResult = roleRelevanceFilter.filter(rawJob.title());
                     if (roleResult.decision() == FilterDecision.SKIP) {
@@ -207,17 +214,24 @@ public class CrawlService {
                         if (locationResult.decision() == FilterDecision.SKIP) {
                             filterResult = locationResult;
                         } else {
-                            // YOE filter
-                            Integer yoe = yoeFilter.extractYoe(rawJob.description());
-                            FilterResult yoeResult = yoeFilter.filter(yoe);
-                            if (yoeResult.decision() == FilterDecision.SKIP) {
-                                filterResult = yoeResult;
+                            // Visa sponsorship filter (direct endpoints = not aggregator)
+                            visaResult = visaSponsorshipFilter.filter(
+                                    rawJob.location(), rawJob.description(), false);
+                            if (visaResult.decision() == FilterDecision.SKIP) {
+                                filterResult = FilterResult.skip(visaResult.reason());
                             } else {
-                                // Deduplication: check if same title+company already exists
-                                Optional<JobPosting> duplicate = jobPostingRepository
-                                        .findFirstByFingerprintAndLanguageFilter(fingerprint, FilterDecision.KEEP);
-                                if (duplicate.isPresent()) {
-                                    filterResult = FilterResult.skip("duplicate of " + duplicate.get().getSource());
+                                // YOE filter
+                                Integer yoe = yoeFilter.extractYoe(rawJob.description());
+                                FilterResult yoeResult = yoeFilter.filter(yoe);
+                                if (yoeResult.decision() == FilterDecision.SKIP) {
+                                    filterResult = yoeResult;
+                                } else {
+                                    // Deduplication: check if same title+company already exists
+                                    Optional<JobPosting> duplicate = jobPostingRepository
+                                            .findFirstByFingerprintAndLanguageFilter(fingerprint, FilterDecision.KEEP);
+                                    if (duplicate.isPresent()) {
+                                        filterResult = FilterResult.skip("duplicate of " + duplicate.get().getSource());
+                                    }
                                 }
                             }
                         }
@@ -228,6 +242,10 @@ public class CrawlService {
                 JobPosting posting = buildJobPosting(endpoint, rawJob, filterResult);
                 posting.setRequiredYoe(yoe);
                 posting.setFingerprint(fingerprint);
+                // Set visa sponsorship status if visa filter was evaluated
+                if (visaResult != null) {
+                    posting.setVisaSponsorship(visaResult.visaSponsorship());
+                }
                 jobPostingRepository.save(posting);
 
                 // Run post-crawl hooks (poster extraction, etc.) for KEEP jobs

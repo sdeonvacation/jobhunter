@@ -194,6 +194,67 @@ filters:
       - "verhandlungssicher"
   yoe:
     max-years: 5
+  visa-sponsorship:
+    target-countries:
+      - "netherlands"
+      - "\\bnl\\b"
+      - "amsterdam"
+      - "rotterdam"
+      - "austria"
+      - "\\bat\\b"
+      - "vienna"
+      - "wien"
+      - "switzerland"
+      - "\\bch\\b"
+      - "zurich"
+      - "zürich"
+      - "ireland"
+      - "\\bie\\b"
+      - "dublin"
+      - "sweden"
+      - "\\bse\\b"
+      - "stockholm"
+      - "denmark"
+      - "\\bdk\\b"
+      - "copenhagen"
+      - "finland"
+      - "\\bfi\\b"
+      - "helsinki"
+      - "spain"
+      - "\\bes\\b"
+      - "barcelona"
+      - "madrid"
+    de-patterns:
+      - "\\bgermany\\b"
+      - "\\bdeutschland\\b"
+    remote-eu-patterns:
+      - "remote\\s*-\\s*(eu|europe|emea)"
+      - "remote.*europe"
+      - "europe.*remote"
+    positive-patterns:
+      - "visa\\s+sponsor"
+      - "sponsorship\\s+(available|provided|offered|included)"
+      - "relocation\\s+(package|support|assistance)"
+      - "we\\s+sponsor"
+      - "work\\s+permit\\s+(support|assist)"
+      - "visa\\s+assistance"
+      - "immigration\\s+support"
+      - "willing\\s+to\\s+sponsor"
+      - "\\bexpat(riate)?\\b"
+      - "(eu\\s+)?blue\\s+card"
+      - "open\\s+to\\s+international"
+    negative-patterns:
+      - "(no|not|cannot|can't|won't|unable\\s+to)\\s+sponsor"
+      - "must\\s+(have|hold|possess)\\s+(a\\s+)?(valid\\s+)?work\\s*(auth|permit|right)"
+      - "(already|currently)\\s+authorized"
+      - "(eu|eea|european)\\s+(citizens?|nationals?|residents?)\\s+only"
+      - "right\\s+to\\s+work\\s+(required|necessary|needed)"
+      - "no\\s+relocation"
+    unknown-action: skip
+    ai-fallback:
+      enabled: false
+      max-description-chars: 4000
+      daily-limit: 50
 
 scoring:
   benchmark-weight: 22.0
@@ -317,7 +378,7 @@ linkedin-search:
 
 # Indeed job search configuration
 indeed-search:
-  keywords: ["backend engineer", "Java developer", "Spring Boot"]
-  locations: ["Germany"]
+  keywords: ["backend engineer", "Java developer", "software engineer", "backend engineer"]
+  locations: ["Germany", "Netherlands", "Spain", "Sweden"]
   results-wanted: 25
   hours-old: 168

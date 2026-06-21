@@ -6,6 +6,8 @@ import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.filter.LocationFilter;
 import dev.jobhunter.filter.RoleRelevanceFilter;
 import dev.jobhunter.filter.YoeFilter;
+import dev.jobhunter.filter.visa.VisaFilterResult;
+import dev.jobhunter.filter.visa.VisaSponsorshipFilter;
 import dev.jobhunter.model.AggregatorRun;
 import dev.jobhunter.model.Company;
 import dev.jobhunter.model.JobPosting;
@@ -36,6 +38,8 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -52,6 +56,7 @@ class PostIngestionEnricherHookTest {
     @Mock private LocationFilter locationFilter;
     @Mock private YoeFilter yoeFilter;
     @Mock private DeduplicationFilter deduplicationFilter;
+    @Mock private VisaSponsorshipFilter visaSponsorshipFilter;
     @Mock private FetchStrategy fetchStrategy;
     @Mock private PostIngestionEnricher enricher1;
     @Mock private PostIngestionEnricher enricher2;
@@ -63,7 +68,7 @@ class PostIngestionEnricherHookTest {
         service = new AggregatorIngestionServiceImpl(
                 jobPostingRepository, companyRepository, aggregatorRunRepository,
                 languageFilter, roleRelevanceFilter, locationFilter,
-                yoeFilter, deduplicationFilter,
+                yoeFilter, deduplicationFilter, visaSponsorshipFilter,
                 List.of(enricher1, enricher2));
     }
 
@@ -96,6 +101,7 @@ class PostIngestionEnricherHookTest {
         when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
         when(yoeFilter.extractYoe(any())).thenReturn(null);
         when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
+        when(visaSponsorshipFilter.filter(anyString(), any(), eq(true))).thenReturn(VisaFilterResult.bypass());
         when(companyRepository.findByNormalizedName("testco")).thenReturn(Optional.of(
                 Company.builder().id(UUID.randomUUID()).name("TestCo").normalizedName("testco")
                         .status(CompanyStatus.DISCOVERED).isActive(true).build()));

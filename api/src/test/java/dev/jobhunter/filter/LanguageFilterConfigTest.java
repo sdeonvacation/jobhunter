@@ -122,7 +122,7 @@ class LanguageFilterConfigTest {
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
                 new PersonalProfile.FilterConfig(
                         null, null, null,
-                        new PersonalProfile.LanguageFilterConfig(target, excludePatterns)),
+                        new PersonalProfile.LanguageFilterConfig(target, excludePatterns), null),
                 null, null, null));
         return loader;
     }
@@ -141,7 +141,7 @@ class LanguageFilterConfigTest {
         when(loader.getProfile()).thenReturn(new PersonalProfile(
                 "", "", 0, List.of(),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
-                new PersonalProfile.FilterConfig(null, null, null, null),
+                new PersonalProfile.FilterConfig(null, null, null, null, null),
                 null, null, null));
         return loader;
     }

@@ -5,6 +5,7 @@ import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.filter.LocationFilter;
 import dev.jobhunter.filter.RoleRelevanceFilter;
 import dev.jobhunter.filter.YoeFilter;
+import dev.jobhunter.filter.visa.VisaSponsorshipFilter;
 import dev.jobhunter.model.AggregatorRun;
 import dev.jobhunter.model.enums.DiscoverySource;
 import dev.jobhunter.model.enums.ExtractionStatus;
@@ -44,6 +45,7 @@ class AggregatorIngestionErrorMessageTest {
     @Mock private LocationFilter locationFilter;
     @Mock private YoeFilter yoeFilter;
     @Mock private DeduplicationFilter deduplicationFilter;
+    @Mock private VisaSponsorshipFilter visaSponsorshipFilter;
     @Mock private FetchStrategy fetchStrategy;
 
     private AggregatorIngestionServiceImpl service;
@@ -53,7 +55,7 @@ class AggregatorIngestionErrorMessageTest {
         service = new AggregatorIngestionServiceImpl(
                 jobPostingRepository, companyRepository, aggregatorRunRepository,
                 languageFilter, roleRelevanceFilter, locationFilter,
-                yoeFilter, deduplicationFilter,
+                yoeFilter, deduplicationFilter, visaSponsorshipFilter,
                 List.of());
     }
 
