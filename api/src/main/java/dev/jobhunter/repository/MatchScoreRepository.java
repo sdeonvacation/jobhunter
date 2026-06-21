@@ -11,4 +11,6 @@ import java.util.UUID;
 public interface MatchScoreRepository extends JpaRepository<MatchScore, UUID> {
 
     Optional<MatchScore> findByJobId(UUID jobId);
+
+    void deleteByJobId(UUID jobId);
 }

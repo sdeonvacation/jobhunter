@@ -122,6 +122,12 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
                                             @Param("company") String company,
                                             Pageable pageable);
 
+    @Query("SELECT j FROM JobPosting j WHERE j.source IN :sources AND j.source != 'LINKEDIN' " +
+           "AND j.applyUrl IS NOT NULL AND j.isActive = true AND j.languageFilter = 'KEEP' " +
+           "AND (j.description IS NULL OR LENGTH(j.description) < :minLength)")
+    List<JobPosting> findAggregatorJobsNeedingDescription(@Param("sources") List<JobSource> sources,
+                                                          @Param("minLength") int minLength);
+
     List<JobPosting> findByPosterContactId(UUID posterContactId);
 
     @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.applied = false AND j.hidden = false " +

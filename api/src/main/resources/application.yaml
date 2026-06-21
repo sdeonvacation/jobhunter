@@ -93,6 +93,11 @@ gdpr:
   purge-schedule: "0 0 2 * * ?"
 
 aggregator:
+  enrichment:
+    enabled: true
+    batch-size: 5
+    delay-between-ms: 2000
+    min-description-length: 500
   sources:
     - name: berlinstartupjobs
       strategy: ai
