@@ -2,7 +2,9 @@ package dev.jobhunter.source;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @ConfigurationProperties(prefix = "aggregator")
 public class AggregatorSourceProperties {
@@ -26,6 +28,7 @@ public class AggregatorSourceProperties {
         private int frequencyHours = 12;
         private int maxResults = 50;
         private boolean enabled = true;
+        private Map<String, String> config = new HashMap<>();
 
         public String getName() { return name; }
         public void setName(String name) { this.name = name; }
@@ -50,5 +53,8 @@ public class AggregatorSourceProperties {
 
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean enabled) { this.enabled = enabled; }
+
+        public Map<String, String> getConfig() { return config; }
+        public void setConfig(Map<String, String> config) { this.config = config; }
     }
 }

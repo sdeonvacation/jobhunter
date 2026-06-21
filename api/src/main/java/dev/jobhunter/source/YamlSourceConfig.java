@@ -15,7 +15,8 @@ public record YamlSourceConfig(
         FetchStrategy strategy,
         String url,
         int frequencyHours,
-        int maxResults
+        int maxResults,
+        Map<String, Object> extraConfig
 ) implements SourceConfig {
 
     @Override
@@ -25,7 +26,7 @@ public record YamlSourceConfig(
                 List.of(),
                 maxResults,
                 3,
-                Map.of("url", url)
+                extraConfig != null ? extraConfig : Map.of("url", url)
         );
     }
 

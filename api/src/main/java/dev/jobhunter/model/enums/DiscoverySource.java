@@ -8,5 +8,6 @@ public enum DiscoverySource {
     LINKEDIN,
     JOBSPY,
     BERLIN_STARTUP_JOBS,
-    ARBEITNOW
+    ARBEITNOW,
+    CAREERS_IN_GOTHENBURG
 }

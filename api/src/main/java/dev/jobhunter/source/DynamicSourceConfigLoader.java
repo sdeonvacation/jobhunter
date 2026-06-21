@@ -9,7 +9,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Configuration
 @EnableConfigurationProperties(AggregatorSourceProperties.class)
@@ -26,6 +28,8 @@ public class DynamicSourceConfigLoader {
                             .orElseThrow(() -> new IllegalStateException(
                                     "No strategy named '%s' for source '%s'"
                                             .formatted(entry.getStrategy(), entry.getName())));
+                    Map<String, Object> config = new HashMap<>(entry.getConfig());
+                    config.put("url", entry.getUrl());
                     return (SourceConfig) new YamlSourceConfig(
                             entry.getName(),
                             JobSource.valueOf(entry.getJobSource()),
@@ -33,7 +37,8 @@ public class DynamicSourceConfigLoader {
                             strategy,
                             entry.getUrl(),
                             entry.getFrequencyHours(),
-                            entry.getMaxResults()
+                            entry.getMaxResults(),
+                            config
                     );
                 })
                 .toList();

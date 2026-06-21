@@ -93,6 +93,7 @@ filters:
   role:
     include-patterns:
       - "\\bjava\\b"
+      - "engineer"
       - "developer"
       - "programmer"
       - "\\bsre\\b"
@@ -214,6 +215,8 @@ filters:
       - "sweden"
       - "\\bse\\b"
       - "stockholm"
+      - "gothenburg"
+      - "göteborg"
       - "denmark"
       - "\\bdk\\b"
       - "copenhagen"
@@ -250,7 +253,7 @@ filters:
       - "(eu|eea|european)\\s+(citizens?|nationals?|residents?)\\s+only"
       - "right\\s+to\\s+work\\s+(required|necessary|needed)"
       - "no\\s+relocation"
-    unknown-action: skip
+    unknown-action: keep
     ai-fallback:
       enabled: false
       max-description-chars: 4000
