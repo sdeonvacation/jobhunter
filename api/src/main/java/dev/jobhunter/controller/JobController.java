@@ -19,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -120,8 +121,9 @@ public class JobController {
         };
         Pageable pageable = PageRequest.of(page, size, sortOrder);
         LocalDate yesterday = LocalDate.now().minusDays(1);
+        LocalDateTime sinceTime = LocalDate.now().atStartOfDay();
         Page<JobPosting> jobs = jobPostingRepository.findRecentlyPostedJobs(
-                FilterDecision.KEEP, yesterday, pageable);
+                FilterDecision.KEEP, yesterday, sinceTime, pageable);
         return jobs.map(DtoMapper::toJobSummary);
     }
 

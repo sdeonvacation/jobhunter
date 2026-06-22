@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -131,8 +132,9 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
     List<JobPosting> findByPosterContactId(UUID posterContactId);
 
     @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.applied = false AND j.hidden = false " +
-           "AND j.languageFilter = :filter AND j.postedDate >= :since")
+           "AND j.languageFilter = :filter AND (j.postedDate >= :since OR (j.postedDate IS NULL AND j.createdAt >= :sinceTime))")
     Page<JobPosting> findRecentlyPostedJobs(@Param("filter") FilterDecision filter,
                                            @Param("since") LocalDate since,
+                                           @Param("sinceTime") LocalDateTime sinceTime,
                                            Pageable pageable);
 }
