@@ -121,9 +121,8 @@ public class JobController {
         };
         Pageable pageable = PageRequest.of(page, size, sortOrder);
         LocalDate yesterday = LocalDate.now().minusDays(1);
-        LocalDateTime sinceTime = LocalDate.now().atStartOfDay();
         Page<JobPosting> jobs = jobPostingRepository.findRecentlyPostedJobs(
-                FilterDecision.KEEP, yesterday, sinceTime, pageable);
+                FilterDecision.KEEP, yesterday, pageable);
         return jobs.map(DtoMapper::toJobSummary);
     }
 
