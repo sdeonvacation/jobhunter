@@ -100,6 +100,7 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher {
                     FilterResult langResult = languageFilter.filter(job.getTitle(), description);
                     if (langResult.decision() == FilterDecision.SKIP) {
                         job.setLanguageFilter(FilterDecision.SKIP);
+                        job.setFilterReason(langResult.reason());
                         log.debug("LinkedIn job [{}] filtered by language after enrichment: {}",
                                 job.getExternalId(), langResult.reason());
                     } else {

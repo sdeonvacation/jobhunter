@@ -75,8 +75,8 @@ public class AiPageStrategy implements FetchStrategy {
         Instant start = Instant.now();
 
         if (!aiProvider.isAvailable()) {
-            log.warn("AI provider not available, skipping CUSTOM endpoint [{}]", endpoint.getId());
-            return FetchResult.error("AI provider not available", elapsed(start));
+            log.debug("AI provider not available, skipping CUSTOM endpoint [{}]", endpoint.getId());
+            return FetchResult.empty(elapsed(start));
         }
 
         try {

@@ -62,7 +62,8 @@ public class AiAggregatorStrategy implements FetchStrategy {
         }
 
         if (!aiProvider.isAvailable()) {
-            return FetchResult.error("AI provider not available", elapsed(start));
+            log.debug("AI provider not available, skipping aggregator endpoint");
+            return FetchResult.empty(elapsed(start));
         }
 
         try {
