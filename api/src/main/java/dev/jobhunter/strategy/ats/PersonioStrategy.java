@@ -9,6 +9,10 @@ import dev.jobhunter.strategy.FetchResult;
 import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -135,14 +139,53 @@ public class PersonioStrategy implements FetchStrategy {
 
             LocalDate postedDate = parseDate(node.path("createdAt").asText(null));
 
+            String description = fetchDescription(slug, externalId);
+
             return new RawAggregatorJob(
-                    externalId, title, null, location, null, applyUrl,
+                    externalId, title, null, location, description, applyUrl,
                     postedDate, null, null, null, rawJson
             );
         } catch (Exception e) {
             log.warn("Personio: failed to map job node: {}", e.getMessage());
             return null;
         }
+    }
+
+    private String fetchDescription(String slug, String jobId) {
+        String url = String.format(APPLY_URL_TEMPLATE, slug, jobId);
+        try {
+            String html = webClient.get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block(Duration.ofSeconds(15));
+            if (html == null || html.isBlank()) return null;
+            return parseDescription(html);
+        } catch (Exception e) {
+            log.debug("Personio [{}]: failed to fetch description for job {}: {}", slug, jobId, e.getMessage());
+            return null;
+        }
+    }
+
+    String parseDescription(String html) {
+        Document doc = Jsoup.parse(html);
+        Elements blocks = doc.select(".rich-text-content");
+        if (blocks.isEmpty()) {
+            // Fallback: try description item containers
+            blocks = doc.select(".jb-description-item");
+        }
+        if (blocks.isEmpty()) return null;
+
+        StringBuilder sb = new StringBuilder();
+        for (Element block : blocks) {
+            String text = block.text().trim();
+            if (!text.isBlank()) {
+                if (sb.length() > 0) sb.append("\n\n");
+                sb.append(text);
+            }
+        }
+        String result = sb.toString().trim();
+        return result.length() > 50 ? result : null;
     }
 
     private LocalDate parseDate(String dateStr) {
