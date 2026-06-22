@@ -3,11 +3,16 @@ package dev.jobhunter.controller;
 import dev.jobhunter.discovery.DiscoveryService;
 import dev.jobhunter.ingestion.AggregatorIngestionService;
 import dev.jobhunter.ingestion.IngestionStats;
+import dev.jobhunter.linkedin.HttpMcpClient;
 import dev.jobhunter.model.AggregatorRun;
 import dev.jobhunter.model.CareerEndpoint;
+import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.CrawlStatus;
+import dev.jobhunter.model.enums.FilterDecision;
+import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.AggregatorRunRepository;
 import dev.jobhunter.repository.CareerEndpointRepository;
+import dev.jobhunter.repository.JobPostingRepository;
 import dev.jobhunter.repository.MatchScoreRepository;
 import dev.jobhunter.repository.OpportunityScoreRepository;
 import dev.jobhunter.scheduler.PipelineScheduler;
@@ -19,10 +24,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -37,6 +47,8 @@ public class AdminController {
     private final AggregatorRunRepository aggregatorRunRepository;
     private final MatchScoreRepository matchScoreRepository;
     private final OpportunityScoreRepository opportunityScoreRepository;
+    private final JobPostingRepository jobPostingRepository;
+    private final Optional<HttpMcpClient> httpMcpClient;
     private final List<SourceConfig> sources;
 
     public AdminController(CrawlService crawlService, CareerEndpointRepository careerEndpointRepository,
@@ -46,6 +58,8 @@ public class AdminController {
                            AggregatorRunRepository aggregatorRunRepository,
                            MatchScoreRepository matchScoreRepository,
                            OpportunityScoreRepository opportunityScoreRepository,
+                           JobPostingRepository jobPostingRepository,
+                           Optional<HttpMcpClient> httpMcpClient,
                            @Qualifier("allSources") List<SourceConfig> sources) {
         this.crawlService = crawlService;
         this.careerEndpointRepository = careerEndpointRepository;
@@ -56,6 +70,8 @@ public class AdminController {
         this.aggregatorRunRepository = aggregatorRunRepository;
         this.matchScoreRepository = matchScoreRepository;
         this.opportunityScoreRepository = opportunityScoreRepository;
+        this.jobPostingRepository = jobPostingRepository;
+        this.httpMcpClient = httpMcpClient;
         this.sources = sources;
     }
 
@@ -218,6 +234,61 @@ public class AdminController {
                 .toList();
 
         return ResponseEntity.ok(new HealthReport(totalActive, totalErrored, totalEmpty, neverCrawled, errors, empties, aggregatorIssues));
+    }
+
+    private static final Pattern RELATIVE_TIME_PATTERN =
+            Pattern.compile("(\\d+)\\s+(second|minute|hour|day|week|month|year)s?\\s+ago");
+
+    @PostMapping("/backfill-linkedin-dates")
+    public ResponseEntity<Map<String, Integer>> backfillLinkedInDates() {
+        if (httpMcpClient.isEmpty()) {
+            return ResponseEntity.ok(Map.of("error", -1, "updated", 0, "skipped", 0));
+        }
+        HttpMcpClient mcp = httpMcpClient.get();
+
+        List<JobPosting> jobs = jobPostingRepository
+                .findBySourceAndLanguageFilterAndPostedDateIsNull(JobSource.LINKEDIN, FilterDecision.KEEP);
+
+        int updated = 0, skipped = 0, errors = 0;
+        for (JobPosting job : jobs) {
+            try {
+                var response = mcp.callTool("get_job_details", Map.of("job_id", job.getExternalId()));
+                LocalDate date = extractPostedDateFromMcpResponse(response);
+                if (date != null) {
+                    job.setPostedDate(date);
+                    jobPostingRepository.save(job);
+                    updated++;
+                } else {
+                    skipped++;
+                }
+                Thread.sleep(2000); // rate limit
+            } catch (Exception e) {
+                errors++;
+                if (errors > 5) break; // circuit breaker
+            }
+        }
+        return ResponseEntity.ok(Map.of("updated", updated, "skipped", skipped, "errors", errors, "total", jobs.size()));
+    }
+
+    private LocalDate extractPostedDateFromMcpResponse(com.fasterxml.jackson.databind.JsonNode response) {
+        if (response == null) return null;
+        // Search all text content for relative time patterns
+        String text = response.toString();
+        // Look for "posted X ago" or "reposted X ago" or just "X days/weeks ago" in the response
+        Matcher m = RELATIVE_TIME_PATTERN.matcher(text);
+        if (!m.find()) return null;
+
+        int amount = Integer.parseInt(m.group(1));
+        String unit = m.group(2);
+        LocalDate today = LocalDate.now();
+        return switch (unit) {
+            case "second", "minute", "hour" -> today;
+            case "day" -> today.minusDays(amount);
+            case "week" -> today.minusWeeks(amount);
+            case "month" -> today.minusMonths(amount);
+            case "year" -> today.minusYears(amount);
+            default -> null;
+        };
     }
 
     public record CrawlResult(int endpointsProcessed, int jobsFound, int errors) {}
