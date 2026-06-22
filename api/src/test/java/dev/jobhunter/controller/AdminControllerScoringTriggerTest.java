@@ -1,5 +1,6 @@
 package dev.jobhunter.controller;
 
+import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.ingestion.AggregatorIngestionService;
 import dev.jobhunter.ingestion.IngestionStats;
 import dev.jobhunter.repository.AggregatorRunRepository;
@@ -16,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -34,7 +36,8 @@ class AdminControllerScoringTriggerTest {
     @BeforeEach
     void setUp() {
         controller = new AdminController(crawlService, null, scoringScheduler, null,
-                null, aggregatorIngestionService, aggregatorRunRepository, null, null, List.of(sourceConfig));
+                null, aggregatorIngestionService, aggregatorRunRepository, null, null,
+                null, Optional.empty(), List.of(sourceConfig), mock(LanguageFilter.class));
     }
 
     @Test

@@ -1,6 +1,7 @@
 package dev.jobhunter.controller;
 
 import dev.jobhunter.controller.AdminController.ResolveResult;
+import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.discovery.DiscoveryService;
 import dev.jobhunter.repository.CareerEndpointRepository;
 import dev.jobhunter.scheduler.ScoringScheduler;
@@ -14,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -31,7 +33,7 @@ class AdminControllerResolveTest {
     @BeforeEach
     void setUp() {
         controller = new AdminController(crawlService, careerEndpointRepository, scoringScheduler, discoveryService,
-                null, null, null, null, null, List.of());
+                null, null, null, null, null, null, Optional.empty(), List.of(), mock(LanguageFilter.class));
     }
 
     @Test

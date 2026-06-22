@@ -1,6 +1,7 @@
 package dev.jobhunter.controller;
 
 import dev.jobhunter.controller.AdminController.AggregatorHealth;
+import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.controller.AdminController.HealthReport;
 import dev.jobhunter.discovery.DiscoveryService;
 import dev.jobhunter.ingestion.AggregatorIngestionService;
@@ -21,9 +22,11 @@ import org.springframework.http.ResponseEntity;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,7 +46,8 @@ class AdminControllerHealthTest {
     void setUp() {
         controller = new AdminController(crawlService, careerEndpointRepository, scoringScheduler,
                 discoveryService, pipelineScheduler, aggregatorIngestionService,
-                aggregatorRunRepository, null, null, List.of());
+                aggregatorRunRepository, null, null, null, Optional.empty(), List.of(),
+                mock(LanguageFilter.class));
     }
 
     @Test

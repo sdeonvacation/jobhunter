@@ -184,7 +184,32 @@ filters:
       - "^(remote|remote\\s*-\\s*(eu|europe|emea|global|worldwide|dach|ger(many)?))$"
   language:
     target: "en"
+    detect-languages:
+      - german
+      - dutch
+      - spanish
+      - swedish
+      - french
+      - italian
+      - portuguese
+      - polish
+    confidence-threshold: 0.85
+    soft-qualifier-patterns:
+      - "nice\\s+to\\s+have"
+      - "preferred"
+      - "von\\s+vorteil"
+      - "\\bB[12]\\b"
+      - "basic\\s+(german|dutch|french|spanish|swedish)"
+      - "bonus"
+      - "optional"
+      - "ideal(ly)?"
+      - "advantage"
+      - "wünschenswert"
+      - "een\\s+pré"
+      - "atout"
+      - "meriterande"
     exclude-patterns:
+      # German
       - "german\\s+c[12]"
       - "deutsch\\s+c[12]"
       - "flie[ßs]end\\s+deutsch"
@@ -193,6 +218,25 @@ filters:
       - "native\\s+german"
       - "german\\s+native"
       - "verhandlungssicher"
+      # Dutch
+      - "dutch\\s+c[12]"
+      - "\\bnederlands\\b"
+      - "vloeiend\\s+nederlands"
+      - "moedertaal"
+      # Spanish
+      - "spanish\\s+c[12]"
+      - "\\bespa[ñn]ol\\b"
+      - "castellano"
+      - "fluidez.*espa[ñn]ol"
+      # Swedish
+      - "swedish\\s+c[12]"
+      - "\\bsvenska\\b"
+      - "flytande\\s+svenska"
+      # French
+      - "french\\s+c[12]"
+      - "\\bfran[çc]ais\\b"
+      - "courant.*fran[çc]ais"
+      - "langue\\s+maternelle"
   yoe:
     max-years: 5
   visa-sponsorship:

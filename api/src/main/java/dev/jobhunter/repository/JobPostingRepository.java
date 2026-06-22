@@ -133,6 +133,9 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     List<JobPosting> findByPosterContactId(UUID posterContactId);
 
+    @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.languageFilter = 'KEEP' AND j.description IS NOT NULL AND j.description <> ''")
+    List<JobPosting> findActiveKeptJobsWithDescription();
+
     @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.applied = false AND j.hidden = false " +
            "AND j.languageFilter = :filter AND COALESCE(j.postedDate, j.discoveredDate) >= :since")
     Page<JobPosting> findRecentlyPostedJobs(@Param("filter") FilterDecision filter,

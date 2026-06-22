@@ -1,5 +1,6 @@
 package dev.jobhunter.controller;
 
+import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.ingestion.AggregatorIngestionService;
 import dev.jobhunter.ingestion.IngestionStats;
 import dev.jobhunter.model.AggregatorRun;
@@ -51,7 +52,8 @@ class AdminControllerAggregatorTest {
         controller = new AdminController(crawlService, careerEndpointRepository,
                 scoringScheduler, null, pipelineScheduler,
                 aggregatorIngestionService, aggregatorRunRepository,
-                null, null, List.of(linkedinSource, indeedSource));
+                null, null, null, Optional.empty(), List.of(linkedinSource, indeedSource),
+                mock(LanguageFilter.class));
     }
 
     @Test
@@ -128,7 +130,8 @@ class AdminControllerAggregatorTest {
     void listAggregators_noSources_returnsEmptyList() {
         AdminController emptyController = new AdminController(crawlService, careerEndpointRepository,
                 scoringScheduler, null, pipelineScheduler,
-                aggregatorIngestionService, aggregatorRunRepository, null, null, List.of());
+                aggregatorIngestionService, aggregatorRunRepository, null, null,
+                null, Optional.empty(), List.of(), mock(LanguageFilter.class));
 
         ResponseEntity<List<AdminController.AggregatorStatus>> response = emptyController.listAggregators();
 

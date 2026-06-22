@@ -20,12 +20,32 @@ class LanguageFilterImplTest {
 
     @BeforeAll
     static void setUp() {
-        // Null filters triggers default exclude patterns (backward compat)
+        // Full config with German detection and standard exclude patterns
         PersonalProfileLoader loader = mock(PersonalProfileLoader.class);
         when(loader.getProfile()).thenReturn(new PersonalProfile(
                 "", "", 0, List.of(),
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
-                null, null, null, null));
+                new PersonalProfile.FilterConfig(
+                        null, null, null,
+                        new PersonalProfile.LanguageFilterConfig(
+                                "en",
+                                List.of("german"),
+                                0.85,
+                                List.of(
+                                        "german\\s+c[12]",
+                                        "deutsch\\s+c[12]",
+                                        "flie[ßs]end\\s+deutsch",
+                                        "fluent\\s+german",
+                                        "muttersprache",
+                                        "native\\s+german",
+                                        "german\\s+native",
+                                        "verhandlungssicher"
+                                ),
+                                List.of("nice\\s+to\\s+have", "preferred", "von\\s+vorteil",
+                                        "\\bB[12]\\b", "basic\\s+german", "bonus", "optional",
+                                        "ideal(ly)?", "advantage")
+                        ), null),
+                null, null, null));
         filter = new LanguageFilterImpl(loader);
     }
 
@@ -49,7 +69,7 @@ class LanguageFilterImplTest {
                         "Gute Deutschkenntnisse sind erforderlich."
         );
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        assertThat(result.reason()).isEqualTo("German JD");
+        assertThat(result.reason()).isEqualTo("non-English JD (German)");
     }
 
     @ParameterizedTest
@@ -70,7 +90,7 @@ class LanguageFilterImplTest {
                 "We are looking for a software engineer. Requirements: 5+ years Java. " + requirement
         );
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        assertThat(result.reason()).isEqualTo("German C1/C2 required");
+        assertThat(result.reason()).isEqualTo("non-English language required");
     }
 
     @ParameterizedTest
@@ -108,6 +128,13 @@ class LanguageFilterImplTest {
                 null,
                 "We need a Java developer with strong Spring Boot experience and AWS knowledge."
         );
+        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+    }
+
+    @Test
+    void shortTextSkipsDetection_keep() {
+        // Under 100 chars — Lingua detection not triggered
+        var result = filter.filter("Dev", "Short text.");
         assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
     }
 

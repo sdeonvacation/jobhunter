@@ -17,6 +17,8 @@ import dev.jobhunter.repository.MatchScoreRepository;
 import dev.jobhunter.repository.OpportunityScoreRepository;
 import dev.jobhunter.scheduler.PipelineScheduler;
 import dev.jobhunter.scheduler.ScoringScheduler;
+import dev.jobhunter.filter.FilterResult;
+import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.service.CrawlService;
 import dev.jobhunter.source.SourceConfig;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -50,6 +52,7 @@ public class AdminController {
     private final JobPostingRepository jobPostingRepository;
     private final Optional<HttpMcpClient> httpMcpClient;
     private final List<SourceConfig> sources;
+    private final LanguageFilter languageFilter;
 
     public AdminController(CrawlService crawlService, CareerEndpointRepository careerEndpointRepository,
                            ScoringScheduler scoringScheduler, DiscoveryService discoveryService,
@@ -60,7 +63,8 @@ public class AdminController {
                            OpportunityScoreRepository opportunityScoreRepository,
                            JobPostingRepository jobPostingRepository,
                            Optional<HttpMcpClient> httpMcpClient,
-                           @Qualifier("allSources") List<SourceConfig> sources) {
+                           @Qualifier("allSources") List<SourceConfig> sources,
+                           LanguageFilter languageFilter) {
         this.crawlService = crawlService;
         this.careerEndpointRepository = careerEndpointRepository;
         this.scoringScheduler = scoringScheduler;
@@ -73,6 +77,7 @@ public class AdminController {
         this.jobPostingRepository = jobPostingRepository;
         this.httpMcpClient = httpMcpClient;
         this.sources = sources;
+        this.languageFilter = languageFilter;
     }
 
     @PostMapping("/pipeline")
@@ -129,6 +134,30 @@ public class AdminController {
         scoringScheduler.scoreAllUnscored();
         long rescored = matchScoreRepository.count();
         return ResponseEntity.ok(new RescoreResult(deleted, rescored));
+    }
+
+    @PostMapping("/refilter-language")
+    @Transactional
+    public ResponseEntity<RefilterResult> refilterLanguage(@RequestParam(defaultValue = "false") boolean dryRun) {
+        List<JobPosting> jobs = jobPostingRepository.findActiveKeptJobsWithDescription();
+        int evaluated = 0, filtered = 0, kept = 0;
+
+        for (JobPosting job : jobs) {
+            evaluated++;
+            FilterResult result = languageFilter.filter(job.getTitle(), job.getDescription());
+            if (result.decision() == FilterDecision.SKIP) {
+                if (!dryRun) {
+                    job.setLanguageFilter(FilterDecision.SKIP);
+                    job.setFilterReason(result.reason());
+                    jobPostingRepository.save(job);
+                }
+                filtered++;
+            } else {
+                kept++;
+            }
+        }
+
+        return ResponseEntity.ok(new RefilterResult(evaluated, filtered, kept, dryRun));
     }
 
     @PostMapping("/discover")
@@ -297,6 +326,7 @@ public class AdminController {
     public record RescoreResult(long deleted, long rescored) {}
     public record ResolveResult(int total, int resolved, int failed, int skipped) {}
     public record DiscoverResult(int providersQueried, int companiesFound, int newCompanies) {}
+    public record RefilterResult(int evaluated, int filtered, int kept, boolean dryRun) {}
 
     public record AggregatorStatus(
             String name, String sourceType, String strategyName,

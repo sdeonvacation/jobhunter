@@ -128,8 +128,12 @@ public class PersonalProfileLoader {
         Map<String, Object> languageMap = (Map<String, Object>) filtersMap.get("language");
         if (languageMap != null) {
             String target = (String) languageMap.getOrDefault("target", "en");
+            List<String> detectLanguages = (List<String>) languageMap.getOrDefault("detect-languages", List.of());
+            double confidenceThreshold = languageMap.containsKey("confidence-threshold")
+                    ? ((Number) languageMap.get("confidence-threshold")).doubleValue() : 0.85;
             List<String> excludePatterns = (List<String>) languageMap.getOrDefault("exclude-patterns", List.of());
-            language = new PersonalProfile.LanguageFilterConfig(target, excludePatterns);
+            List<String> softQualifierPatterns = (List<String>) languageMap.getOrDefault("soft-qualifier-patterns", List.of());
+            language = new PersonalProfile.LanguageFilterConfig(target, detectLanguages, confidenceThreshold, excludePatterns, softQualifierPatterns);
         }
 
         PersonalProfile.VisaSponsorshipFilterConfig visaSponsorship = null;

@@ -1,6 +1,7 @@
 package dev.jobhunter.controller;
 
 import dev.jobhunter.controller.AdminController.SingleCrawlResult;
+import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.discovery.DiscoveryService;
 import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.repository.CareerEndpointRepository;
@@ -34,7 +35,7 @@ class AdminControllerCrawlEndpointTest {
     @BeforeEach
     void setUp() {
         controller = new AdminController(crawlService, careerEndpointRepository, scoringScheduler, discoveryService,
-                null, null, null, null, null, List.of());
+                null, null, null, null, null, null, Optional.empty(), List.of(), mock(LanguageFilter.class));
     }
 
     @Test

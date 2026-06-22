@@ -57,7 +57,10 @@ public record PersonalProfile(
 
     public record LanguageFilterConfig(
             String target,
-            List<String> excludePatterns
+            List<String> detectLanguages,
+            double confidenceThreshold,
+            List<String> excludePatterns,
+            List<String> softQualifierPatterns
     ) {
     }
 
