@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.jobhunter.filter.FilterResult;
 import dev.jobhunter.filter.LanguageFilter;
+import dev.jobhunter.filter.YoeFilter;
 import dev.jobhunter.ingestion.PostIngestionEnricher;
 import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.FilterDecision;
@@ -31,17 +32,20 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher {
     private final LinkedInMcpProperties mcpProperties;
     private final JobPostingRepository jobPostingRepository;
     private final LanguageFilter languageFilter;
+    private final YoeFilter yoeFilter;
 
     public LinkedInDescriptionEnricher(HttpMcpClient httpMcpClient,
                                        Optional<LinkedInRateLimiter> rateLimiter,
                                        LinkedInMcpProperties mcpProperties,
                                        JobPostingRepository jobPostingRepository,
-                                       LanguageFilter languageFilter) {
+                                       LanguageFilter languageFilter,
+                                       YoeFilter yoeFilter) {
         this.httpMcpClient = httpMcpClient;
         this.rateLimiter = rateLimiter;
         this.mcpProperties = mcpProperties;
         this.jobPostingRepository = jobPostingRepository;
         this.languageFilter = languageFilter;
+        this.yoeFilter = yoeFilter;
     }
 
     @Override
@@ -76,6 +80,7 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher {
                 : jobsWithoutDescription;
 
         int enrichedCount = 0;
+        int yoeFiltered = 0;
 
         for (JobPosting job : batch) {
             try {
@@ -97,6 +102,17 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher {
                         job.setLanguageFilter(FilterDecision.SKIP);
                         log.debug("LinkedIn job [{}] filtered by language after enrichment: {}",
                                 job.getExternalId(), langResult.reason());
+                    } else {
+                        Integer yoe = yoeFilter.extractYoe(description);
+                        job.setRequiredYoe(yoe);
+                        FilterResult yoeResult = yoeFilter.filter(yoe);
+                        if (yoeResult.decision() == FilterDecision.SKIP) {
+                            job.setLanguageFilter(FilterDecision.SKIP);
+                            job.setFilterReason(yoeResult.reason());
+                            yoeFiltered++;
+                            log.debug("LinkedIn job [{}] YOE filter SKIP: yoe={} reason={}",
+                                    job.getExternalId(), yoe, yoeResult.reason());
+                        }
                     }
 
                     jobPostingRepository.save(job);
@@ -118,7 +134,7 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher {
             }
         }
 
-        log.info("Enriched LinkedIn job descriptions: {}/{}", enrichedCount, batch.size());
+        log.info("Enriched LinkedIn job descriptions: {}/{} (yoe-filtered: {})", enrichedCount, batch.size(), yoeFiltered);
     }
 
     /**

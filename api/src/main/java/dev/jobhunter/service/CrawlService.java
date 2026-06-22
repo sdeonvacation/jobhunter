@@ -1,5 +1,6 @@
 package dev.jobhunter.service;
 
+import dev.jobhunter.linkedin.LinkedInDescriptionEnricher;
 import dev.jobhunter.ingestion.StrategyRegistry;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
@@ -49,6 +50,7 @@ public class CrawlService {
     private final VisaSponsorshipFilter visaSponsorshipFilter;
     private final ScoringScheduler scoringScheduler;
     private final PostCrawlPipeline postCrawlPipeline;
+    private final Optional<LinkedInDescriptionEnricher> linkedInDescriptionEnricher;
 
     public CrawlService(CareerEndpointRepository endpointRepository,
                         JobPostingRepository jobPostingRepository,
@@ -61,7 +63,8 @@ public class CrawlService {
                         DeduplicationFilter deduplicationFilter,
                         VisaSponsorshipFilter visaSponsorshipFilter,
                         ScoringScheduler scoringScheduler,
-                        PostCrawlPipeline postCrawlPipeline) {
+                        PostCrawlPipeline postCrawlPipeline,
+                        Optional<LinkedInDescriptionEnricher> linkedInDescriptionEnricher) {
         this.endpointRepository = endpointRepository;
         this.jobPostingRepository = jobPostingRepository;
         this.strategyRegistry = strategyRegistry;
@@ -74,6 +77,7 @@ public class CrawlService {
         this.visaSponsorshipFilter = visaSponsorshipFilter;
         this.scoringScheduler = scoringScheduler;
         this.postCrawlPipeline = postCrawlPipeline;
+        this.linkedInDescriptionEnricher = linkedInDescriptionEnricher;
     }
 
     /**
@@ -120,6 +124,19 @@ public class CrawlService {
             backfillSmartRecruitersDescriptions();
         } catch (Exception e) {
             log.error("SmartRecruiters description backfill failed", e);
+        }
+
+        // Enrich LinkedIn descriptions and re-score (descriptions arrive after initial scoring)
+        try {
+            linkedInDescriptionEnricher.ifPresent(enricher -> {
+                // enrich() requires source=LINKEDIN and created>0 to proceed
+                enricher.enrich(JobSource.LINKEDIN, 1);
+                // Re-score jobs that now have descriptions
+                log.info("Re-scoring after LinkedIn description enrichment");
+                scoringScheduler.scoreAllUnscored();
+            });
+        } catch (Exception e) {
+            log.error("LinkedIn description enrichment failed", e);
         }
 
         return new int[]{endpointsCrawled, totalJobs, errors};
