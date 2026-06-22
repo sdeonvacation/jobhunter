@@ -115,9 +115,9 @@ public class JobController {
             @RequestParam(defaultValue = "50") int size) {
         Sort sortOrder = switch (sort) {
             case "date" -> Sort.by(Sort.Direction.DESC, "postedDate");
-            default -> Sort.by(Sort.Direction.DESC, "matchScore.overallScore")
-                    .and(Sort.by(Sort.Direction.DESC, "postedDate"))
-                    .and(Sort.by(Sort.Direction.DESC, "opportunityScore.score"));
+            default -> Sort.by(new Sort.Order(Sort.Direction.DESC, "matchScore.overallScore", Sort.NullHandling.NULLS_LAST))
+                    .and(Sort.by(new Sort.Order(Sort.Direction.DESC, "postedDate", Sort.NullHandling.NULLS_LAST)))
+                    .and(Sort.by(new Sort.Order(Sort.Direction.DESC, "opportunityScore.score", Sort.NullHandling.NULLS_LAST)));
         };
         Pageable pageable = PageRequest.of(page, size, sortOrder);
         LocalDate yesterday = LocalDate.now().minusDays(1);

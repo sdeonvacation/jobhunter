@@ -357,6 +357,18 @@ public class CrawlService {
                     filtered++;
                     log.debug("Post-backfill language filter SKIP: job={} reason={}",
                             job.getExternalId(), filterResult.reason());
+                } else {
+                    // Re-run YOE filter now that description is available
+                    Integer yoe = yoeFilter.extractYoe(description);
+                    job.setRequiredYoe(yoe);
+                    FilterResult yoeResult = yoeFilter.filter(yoe);
+                    if (yoeResult.decision() == FilterDecision.SKIP) {
+                        job.setLanguageFilter(FilterDecision.SKIP);
+                        job.setFilterReason(yoeResult.reason());
+                        filtered++;
+                        log.debug("Post-backfill YOE filter SKIP: job={} yoe={} reason={}",
+                                job.getExternalId(), yoe, yoeResult.reason());
+                    }
                 }
 
                 jobPostingRepository.save(job);
