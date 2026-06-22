@@ -1,6 +1,7 @@
 package dev.jobhunter.ingestion;
 
 import dev.jobhunter.filter.DeduplicationFilter;
+import dev.jobhunter.util.LocationCountryParser;
 import dev.jobhunter.filter.FilterResult;
 import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.filter.LocationFilter;
@@ -150,6 +151,8 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                         .title(job.title())
                         .company(company)
                         .location(job.location())
+                        .locationCountry(LocationCountryParser.extractCountry(job.location()))
+                        .locationCity(LocationCountryParser.extractCity(job.location()))
                         .description(job.description())
                         .applyUrl(job.applyUrl())
                         .fingerprint(fingerprint)

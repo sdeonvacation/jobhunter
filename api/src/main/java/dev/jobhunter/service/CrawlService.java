@@ -8,6 +8,7 @@ import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import dev.jobhunter.strategy.ats.SmartRecruitersStrategy;
 import dev.jobhunter.filter.FilterResult;
+import dev.jobhunter.util.LocationCountryParser;
 import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.filter.LocationFilter;
 import dev.jobhunter.filter.RoleRelevanceFilter;
@@ -178,7 +179,15 @@ public class CrawlService {
             endpoint.setLastCrawlStatus(CrawlStatus.ERROR);
             endpoint.setLastCrawledAt(LocalDateTime.now());
             endpoint.setLastErrorMessage(result.errorMessage());
-            endpoint.setConsecutiveErrors(endpoint.getConsecutiveErrors() + 1);
+            int newErrorCount = endpoint.getConsecutiveErrors() + 1;
+            endpoint.setConsecutiveErrors(newErrorCount);
+            if (newErrorCount >= 10) {
+                endpoint.setActive(false);
+                log.warn("Auto-deactivating endpoint [{}] (company: {}) after {} consecutive errors",
+                        endpoint.getId(),
+                        endpoint.getCompany() != null ? endpoint.getCompany().getName() : "unknown",
+                        newErrorCount);
+            }
             endpointRepository.save(endpoint);
             log.warn("Extraction error for endpoint [{}]: {}", endpoint.getId(), result.errorMessage());
             return 0;
@@ -210,6 +219,22 @@ public class CrawlService {
                 existing.setLastCrawledAt(LocalDateTime.now());
                 if (existing.getDescription() == null && rawJob.description() != null) {
                     existing.setDescription(rawJob.description());
+                    // Re-run filters now that description is available
+                    if (existing.getLanguageFilter() == FilterDecision.KEEP) {
+                        FilterResult langResult = languageFilter.filter(existing.getTitle(), rawJob.description());
+                        if (langResult.decision() == FilterDecision.SKIP) {
+                            existing.setLanguageFilter(FilterDecision.SKIP);
+                            existing.setFilterReason(langResult.reason());
+                        } else {
+                            Integer yoe = yoeFilter.extractYoe(rawJob.description());
+                            existing.setRequiredYoe(yoe);
+                            FilterResult yoeResult = yoeFilter.filter(yoe);
+                            if (yoeResult.decision() == FilterDecision.SKIP) {
+                                existing.setLanguageFilter(FilterDecision.SKIP);
+                                existing.setFilterReason(yoeResult.reason());
+                            }
+                        }
+                    }
                 }
                 if (existing.getApplyUrl() == null && rawJob.applyUrl() != null) {
                     existing.setApplyUrl(rawJob.applyUrl());
@@ -297,6 +322,8 @@ public class CrawlService {
                 .title(rawJob.title())
                 .company(endpoint.getCompany())
                 .location(rawJob.location())
+                .locationCountry(LocationCountryParser.extractCountry(rawJob.location()))
+                .locationCity(LocationCountryParser.extractCity(rawJob.location()))
                 .description(rawJob.description())
                 .applyUrl(rawJob.applyUrl())
                 .postedDate(rawJob.postedDate())
