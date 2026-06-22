@@ -77,6 +77,16 @@ public class LinkedInExtractor implements FetchStrategy {
             JsonNode response = httpMcpClient.callTool("search_jobs", params);
             List<RawAggregatorJob> jobs = parseJobResults(response);
 
+            // Filter out jobs from other companies (LinkedIn search returns mixed results)
+            String expectedCompany = endpoint.getCompany().getName().toLowerCase();
+            jobs = jobs.stream()
+                    .filter(job -> {
+                        if (job.companyName() == null || job.companyName().isBlank()) return true; // keep if unknown
+                        String actual = job.companyName().toLowerCase();
+                        return actual.contains(expectedCompany) || expectedCompany.contains(actual);
+                    })
+                    .toList();
+
             if (jobs.isEmpty()) {
                 return FetchResult.empty(elapsed(start));
             }
