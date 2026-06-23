@@ -71,7 +71,8 @@ public class PipelineScheduler implements Job {
             }
         }, PIPELINE_POOL);
 
-        // Step 2: Run each enabled aggregator source in parallel
+        // Step 2: Run each enabled aggregator source in parallel; score immediately after each
+        // completes so slow sources (e.g. LinkedIn ~100 min) don't block scoring for fast ones.
         List<CompletableFuture<IngestionStats>> sourceFutures = sources.stream()
                 .filter(SourceConfig::isEnabled)
                 .map(source -> CompletableFuture.supplyAsync(() -> {
@@ -85,16 +86,25 @@ public class PipelineScheduler implements Job {
                         log.error("[Pipeline] Source {} failed", source.name(), e);
                         return new IngestionStats(source.name(), 0, 0, 0, 0, 0, 1, 0);
                     }
-                }, PIPELINE_POOL))
+                }, PIPELINE_POOL).whenComplete((stats, err) -> {
+                    if (err == null && stats != null && stats.created() > 0) {
+                        try {
+                            log.info("[Pipeline] Scoring {} new jobs from source {}", stats.created(), stats.sourceName());
+                            scoringScheduler.scoreAllUnscored();
+                        } catch (Exception e) {
+                            log.error("[Pipeline] Post-source scoring failed for {}", stats.sourceName(), e);
+                        }
+                    }
+                }))
                 .toList();
 
         // Wait for crawl + all sources
         crawlFuture.join();
         sourceFutures.forEach(CompletableFuture::join);
 
-        // Step 3: Score all unscored jobs
+        // Step 3: Final scoring pass — catches any jobs created concurrently during the pipeline
         try {
-            log.info("[Pipeline] Scoring unscored jobs");
+            log.info("[Pipeline] Final scoring pass");
             scoringScheduler.scoreAllUnscored();
             log.info("[Pipeline] Scoring complete");
         } catch (Exception e) {

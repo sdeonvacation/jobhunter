@@ -14,9 +14,12 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Fetch strategy that uses the LinkedIn MCP server (via HTTP) to search for jobs.
@@ -25,6 +28,9 @@ import java.util.Map;
 @Slf4j
 @Component
 public class McpStrategy implements FetchStrategy {
+
+    private static final Pattern RELATIVE_TIME =
+            Pattern.compile("(\\d+)\\s+(second|minute|hour|day|week|month|year)s?\\s+ago", Pattern.CASE_INSENSITIVE);
 
     private final HttpMcpClient httpMcpClient;
     private final LinkedInRateLimiter rateLimiter;
@@ -155,7 +161,7 @@ public class McpStrategy implements FetchStrategy {
             String linkedinUrl = "https://www.linkedin.com/jobs/view/" + jobId + "/";
             jobs.add(new RawAggregatorJob(
                     jobId, pj.title(), pj.company(), pj.location(),
-                    null, linkedinUrl, null, null, null, null, null
+                    null, linkedinUrl, pj.postedDate(), null, null, null, null
             ));
         }
 
@@ -180,7 +186,7 @@ public class McpStrategy implements FetchStrategy {
     }
 
     /**
-     * Match reference jobs to text-parsed entries by title to get company/location.
+     * Match reference jobs to text-parsed entries by title to get company/location/date.
      * Uses consume-once matching to handle duplicate titles correctly.
      */
     List<RawAggregatorJob> alignReferencesWithText(List<ReferenceJob> refJobs, List<ParsedLinkedInJob> textParsed) {
@@ -190,6 +196,7 @@ public class McpStrategy implements FetchStrategy {
         for (ReferenceJob ref : refJobs) {
             String company = null;
             String location = null;
+            LocalDate postedDate = null;
 
             // Find matching text entry by title (consume-once)
             for (int i = 0; i < textParsed.size(); i++) {
@@ -197,6 +204,7 @@ public class McpStrategy implements FetchStrategy {
                 if (titlesMatch(ref.title(), textParsed.get(i).title())) {
                     company = textParsed.get(i).company();
                     location = textParsed.get(i).location();
+                    postedDate = textParsed.get(i).postedDate();
                     used[i] = true;
                     break;
                 }
@@ -205,7 +213,7 @@ public class McpStrategy implements FetchStrategy {
             String linkedinUrl = "https://www.linkedin.com/jobs/view/" + ref.jobId() + "/";
             jobs.add(new RawAggregatorJob(
                     ref.jobId(), ref.title(), company, location,
-                    null, linkedinUrl, null, null, null, null, null
+                    null, linkedinUrl, postedDate, null, null, null, null
             ));
         }
 
@@ -231,6 +239,7 @@ public class McpStrategy implements FetchStrategy {
 
     /**
      * Parse LinkedIn's text-based search results format: title, company, location(workType) lines.
+     * Also scans the 1-3 lines following the location line for a relative time string ("X days ago").
      */
     List<ParsedLinkedInJob> parseJobLines(String[] lines) {
         List<ParsedLinkedInJob> parsedJobs = new ArrayList<>();
@@ -248,12 +257,36 @@ public class McpStrategy implements FetchStrategy {
                 if (!company.isEmpty() && !title.isEmpty()
                         && !company.contains("results") && !company.startsWith("Set alert")
                         && !company.startsWith("Jump to") && !company.endsWith("with verification")) {
-                    parsedJobs.add(new ParsedLinkedInJob(title, company, line));
+
+                    // Scan next 1-3 lines for relative time ("2 days ago", "1 week ago")
+                    LocalDate postedDate = null;
+                    for (int j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
+                        postedDate = parseRelativeTime(lines[j].trim());
+                        if (postedDate != null) break;
+                    }
+
+                    parsedJobs.add(new ParsedLinkedInJob(title, company, line, postedDate));
                 }
             }
         }
 
         return parsedJobs;
+    }
+
+    private LocalDate parseRelativeTime(String text) {
+        Matcher m = RELATIVE_TIME.matcher(text);
+        if (!m.find()) return null;
+        int amount = Integer.parseInt(m.group(1));
+        String unit = m.group(2).toLowerCase();
+        LocalDate today = LocalDate.now();
+        return switch (unit) {
+            case "second", "minute", "hour" -> today;
+            case "day" -> today.minusDays(amount);
+            case "week" -> today.minusWeeks(amount);
+            case "month" -> today.minusMonths(amount);
+            case "year" -> today.minusYears(amount);
+            default -> null;
+        };
     }
 
     private boolean isLocationLine(String line) {
@@ -262,6 +295,6 @@ public class McpStrategy implements FetchStrategy {
                 || line.contains("(Onsite)");
     }
 
-    record ParsedLinkedInJob(String title, String company, String location) {}
+    record ParsedLinkedInJob(String title, String company, String location, LocalDate postedDate) {}
     record ReferenceJob(String jobId, String title) {}
 }
