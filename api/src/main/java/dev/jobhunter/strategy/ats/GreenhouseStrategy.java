@@ -6,7 +6,6 @@ import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
-import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -18,23 +17,12 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.util.*;
-import java.util.regex.Pattern;
 
 @Slf4j
 @Component
-public class GreenhouseStrategy implements FetchStrategy {
+public class GreenhouseStrategy extends AbstractAtsStrategy {
 
     private static final String API_URL = "https://boards-api.greenhouse.io/v1/boards/%s/jobs?content=true";
-    private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]*>");
-    private static final Map<String, String> HTML_ENTITIES = Map.of(
-            "&amp;", "&",
-            "&lt;", "<",
-            "&gt;", ">",
-            "&nbsp;", " ",
-            "&quot;", "\"",
-            "&#39;", "'",
-            "&apos;", "'"
-    );
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
@@ -45,8 +33,8 @@ public class GreenhouseStrategy implements FetchStrategy {
     }
 
     @Override
-    public boolean supports(AtsType type) {
-        return type == AtsType.GREENHOUSE;
+    public Set<AtsType> supportedTypes() {
+        return Set.of(AtsType.GREENHOUSE);
     }
 
     @Override
@@ -143,17 +131,6 @@ public class GreenhouseStrategy implements FetchStrategy {
         }
     }
 
-    private String stripHtml(String html) {
-        if (html == null || html.isBlank()) {
-            return "";
-        }
-        String text = HTML_TAG_PATTERN.matcher(html).replaceAll("");
-        for (Map.Entry<String, String> entry : HTML_ENTITIES.entrySet()) {
-            text = text.replace(entry.getKey(), entry.getValue());
-        }
-        return text.replaceAll("\\s+", " ").trim();
-    }
-
     private LocalDate parseDate(String dateStr) {
         if (dateStr == null || dateStr.isBlank()) {
             return null;
@@ -163,16 +140,5 @@ public class GreenhouseStrategy implements FetchStrategy {
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private Duration elapsed(Instant start) {
-        return Duration.between(start, Instant.now());
-    }
-
-    private String truncate(String value, int maxLength) {
-        if (value == null || value.length() <= maxLength) {
-            return value;
-        }
-        return value.substring(0, maxLength);
     }
 }

@@ -1,13 +1,8 @@
 package dev.jobhunter.ingestion;
 
 import dev.jobhunter.filter.DeduplicationFilter;
-import dev.jobhunter.filter.FilterResult;
-import dev.jobhunter.filter.LanguageFilter;
-import dev.jobhunter.filter.LocationFilter;
-import dev.jobhunter.filter.RoleRelevanceFilter;
-import dev.jobhunter.filter.YoeFilter;
-import dev.jobhunter.filter.visa.VisaFilterResult;
-import dev.jobhunter.filter.visa.VisaSponsorshipFilter;
+import dev.jobhunter.filter.FilterChainResult;
+import dev.jobhunter.filter.JobFilterChain;
 import dev.jobhunter.model.AggregatorRun;
 import dev.jobhunter.model.Company;
 import dev.jobhunter.model.JobPosting;
@@ -31,15 +26,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
@@ -51,12 +48,8 @@ class PostIngestionEnricherHookTest {
     @Mock private JobPostingRepository jobPostingRepository;
     @Mock private CompanyRepository companyRepository;
     @Mock private AggregatorRunRepository aggregatorRunRepository;
-    @Mock private LanguageFilter languageFilter;
-    @Mock private RoleRelevanceFilter roleRelevanceFilter;
-    @Mock private LocationFilter locationFilter;
-    @Mock private YoeFilter yoeFilter;
+    @Mock private JobFilterChain jobFilterChain;
     @Mock private DeduplicationFilter deduplicationFilter;
-    @Mock private VisaSponsorshipFilter visaSponsorshipFilter;
     @Mock private FetchStrategy fetchStrategy;
     @Mock private PostIngestionEnricher enricher1;
     @Mock private PostIngestionEnricher enricher2;
@@ -67,8 +60,7 @@ class PostIngestionEnricherHookTest {
     void setUp() {
         service = new AggregatorIngestionServiceImpl(
                 jobPostingRepository, companyRepository, aggregatorRunRepository,
-                languageFilter, roleRelevanceFilter, locationFilter,
-                yoeFilter, deduplicationFilter, visaSponsorshipFilter,
+                jobFilterChain, deduplicationFilter,
                 List.of(enricher1, enricher2));
     }
 
@@ -93,15 +85,10 @@ class PostIngestionEnricherHookTest {
         var fetchResult = FetchResult.success(List.of(job), Duration.ofMillis(100));
 
         when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
-        when(jobPostingRepository.findBySourceAndExternalId(JobSource.LINKEDIN, "li-001")).thenReturn(Optional.empty());
-        when(deduplicationFilter.generateFingerprint("Backend Dev", "TestCo", "Berlin")).thenReturn("fp");
-        when(jobPostingRepository.findAtsJobByFingerprint("fp", JobSource.aggregators())).thenReturn(Optional.empty());
-        when(languageFilter.filter(anyString(), any())).thenReturn(FilterResult.keep());
-        when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(yoeFilter.extractYoe(any())).thenReturn(null);
-        when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
-        when(visaSponsorshipFilter.filter(anyString(), any(), eq(true))).thenReturn(VisaFilterResult.bypass());
+        when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.LINKEDIN)).thenReturn(new HashSet<>());
+        when(jobPostingRepository.findAtsFingerprintsExcludingSources(any())).thenReturn(new HashSet<>());
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean()))
+                .thenReturn(FilterChainResult.keep(null, null));
         when(companyRepository.findByNormalizedName("testco")).thenReturn(Optional.of(
                 Company.builder().id(UUID.randomUUID()).name("TestCo").normalizedName("testco")
                         .status(CompanyStatus.DISCOVERED).isActive(true).build()));
@@ -124,9 +111,10 @@ class PostIngestionEnricherHookTest {
         var fetchResult = FetchResult.success(List.of(job), Duration.ofMillis(100));
 
         when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
-        // Duplicate - already exists
-        when(jobPostingRepository.findBySourceAndExternalId(JobSource.ARBEITNOW, "arb-001"))
-                .thenReturn(Optional.of(JobPosting.builder().build()));
+        // Pre-loaded set already contains the externalId — job is a duplicate
+        when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.ARBEITNOW))
+                .thenReturn(new HashSet<>(Set.of("arb-001")));
+        when(jobPostingRepository.findAtsFingerprintsExcludingSources(any())).thenReturn(new HashSet<>());
         when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
         when(aggregatorRunRepository.save(any(AggregatorRun.class))).thenAnswer(i -> i.getArgument(0));
 

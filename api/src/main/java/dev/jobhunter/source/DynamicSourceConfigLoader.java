@@ -23,11 +23,16 @@ public class DynamicSourceConfigLoader {
     public List<SourceConfig> dynamicSources(AggregatorSourceProperties props, StrategyRegistry registry) {
         List<SourceConfig> sources = props.getSources().stream()
                 .filter(AggregatorSourceProperties.SourceEntry::isEnabled)
+                .filter(entry -> {
+                    if (registry.getStrategy(entry.getStrategy()).isEmpty()) {
+                        log.warn("Skipping source '{}': strategy '{}' not found in registry",
+                                entry.getName(), entry.getStrategy());
+                        return false;
+                    }
+                    return true;
+                })
                 .map(entry -> {
-                    var strategy = registry.getStrategy(entry.getStrategy())
-                            .orElseThrow(() -> new IllegalStateException(
-                                    "No strategy named '%s' for source '%s'"
-                                            .formatted(entry.getStrategy(), entry.getName())));
+                    var strategy = registry.getStrategy(entry.getStrategy()).orElseThrow();
                     Map<String, Object> config = new HashMap<>(entry.getConfig());
                     config.put("url", entry.getUrl());
                     return (SourceConfig) new YamlSourceConfig(

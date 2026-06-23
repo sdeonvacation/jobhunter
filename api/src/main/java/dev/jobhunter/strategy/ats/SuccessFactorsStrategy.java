@@ -4,7 +4,6 @@ import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
-import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -23,7 +22,7 @@ import java.util.regex.Pattern;
 
 @Slf4j
 @Component
-public class SuccessFactorsStrategy implements FetchStrategy {
+public class SuccessFactorsStrategy extends AbstractAtsStrategy {
 
     private static final int PAGE_SIZE = 25;
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(45);
@@ -40,8 +39,8 @@ public class SuccessFactorsStrategy implements FetchStrategy {
     }
 
     @Override
-    public boolean supports(AtsType type) {
-        return type == AtsType.SUCCESSFACTORS;
+    public Set<AtsType> supportedTypes() {
+        return Set.of(AtsType.SUCCESSFACTORS);
     }
 
     @Override
@@ -348,15 +347,6 @@ public class SuccessFactorsStrategy implements FetchStrategy {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
         return normalized;
-    }
-
-    private String truncate(String value, int maxLength) {
-        if (value == null || value.length() <= maxLength) return value;
-        return value.substring(0, maxLength);
-    }
-
-    private Duration elapsed(Instant start) {
-        return Duration.between(start, Instant.now());
     }
 
     private void sleep(long millis) {

@@ -30,7 +30,7 @@ class BreezyStrategyTest {
 
     @Test
     void supportedTypes_returnsBreezy() {
-        assertThat(extractor.supports(AtsType.BREEZY)).isTrue();
+        assertThat(extractor.supportedTypes()).contains(AtsType.BREEZY);
     }
 
     @Test

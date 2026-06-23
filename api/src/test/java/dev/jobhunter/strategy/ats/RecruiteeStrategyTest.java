@@ -34,7 +34,7 @@ class RecruiteeStrategyTest {
 
     @Test
     void supportedTypes_returnsRecruitee() {
-        assertThat(extractor.supports(AtsType.RECRUITEE)).isTrue();
+        assertThat(extractor.supportedTypes()).contains(AtsType.RECRUITEE);
     }
 
     @Test

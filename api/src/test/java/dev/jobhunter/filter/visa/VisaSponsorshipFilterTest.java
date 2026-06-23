@@ -29,7 +29,7 @@ class VisaSponsorshipFilterTest {
         PersonalProfileLoader loader = mockLoader(unknownAction);
         VisaDetectionChain chain = mock(VisaDetectionChain.class);
         when(chain.evaluate(anyString())).thenReturn(detectionResult);
-        return new VisaSponsorshipFilter(chain, loader);
+        return new VisaSponsorshipFilterImpl(chain, loader);
     }
 
     private VisaSponsorshipFilter createFilter(String unknownAction) {
@@ -214,7 +214,7 @@ class VisaSponsorshipFilterTest {
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
                 null, null, null, null));
         VisaDetectionChain chain = mock(VisaDetectionChain.class);
-        var filter = new VisaSponsorshipFilter(chain, loader);
+        var filter = new VisaSponsorshipFilterImpl(chain, loader);
 
         var result = filter.filter("Berlin, Germany", "desc", false);
         assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
@@ -230,7 +230,7 @@ class VisaSponsorshipFilterTest {
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
                 null, null, null, null));
         VisaDetectionChain chain = mock(VisaDetectionChain.class);
-        var filter = new VisaSponsorshipFilter(chain, loader);
+        var filter = new VisaSponsorshipFilterImpl(chain, loader);
 
         // With no target countries configured, non-German locations bypass
         var result = filter.filter("Amsterdam, Netherlands", "desc", false);

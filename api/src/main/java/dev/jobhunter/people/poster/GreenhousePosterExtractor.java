@@ -22,7 +22,7 @@ public class GreenhousePosterExtractor implements PosterExtractor {
             Pattern.compile("https?://(?:www\\.)?linkedin\\.com/in/[\\w-]+/?");
 
     private static final Pattern NAME_NEAR_LINKEDIN_PATTERN =
-            Pattern.compile("(?:posted\\s+by|recruiter|hiring\\s+manager|contact)[:\\s]*([A-Z][a-z]+(?:\\s+[A-Z][a-z]+){1,2})",
+            Pattern.compile("(?:posted\\s+by|recruiter|hiring\\s+manager|contact)[:\\s]+(?:(?:recruiter|hiring\\s+manager|posted\\s+by)[:\\s]+)?((?-i:[A-Z])[a-z]+(?:\\s+(?-i:[A-Z])[a-z]+){1,2})",
                     Pattern.CASE_INSENSITIVE);
 
     @Override

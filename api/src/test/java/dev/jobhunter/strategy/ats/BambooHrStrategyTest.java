@@ -32,7 +32,7 @@ class BambooHrStrategyTest {
 
     @Test
     void supportedTypes_returnsBambooHr() {
-        assertThat(extractor.supports(AtsType.BAMBOOHR)).isTrue();
+        assertThat(extractor.supportedTypes()).contains(AtsType.BAMBOOHR);
     }
 
     @Test

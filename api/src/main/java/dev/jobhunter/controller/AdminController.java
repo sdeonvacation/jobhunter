@@ -1,5 +1,7 @@
 package dev.jobhunter.controller;
 
+import dev.jobhunter.ingestion.BackfillPostProcessor;
+import dev.jobhunter.ingestion.DescriptionBackfiller;
 import dev.jobhunter.discovery.DiscoveryService;
 import dev.jobhunter.ingestion.AggregatorIngestionService;
 import dev.jobhunter.ingestion.IngestionStats;
@@ -53,6 +55,8 @@ public class AdminController {
     private final Optional<HttpMcpClient> httpMcpClient;
     private final List<SourceConfig> sources;
     private final LanguageFilter languageFilter;
+    private final List<DescriptionBackfiller> descriptionBackfillers;
+    private final List<BackfillPostProcessor> backfillPostProcessors;
 
     public AdminController(CrawlService crawlService, CareerEndpointRepository careerEndpointRepository,
                            ScoringScheduler scoringScheduler, DiscoveryService discoveryService,
@@ -64,7 +68,9 @@ public class AdminController {
                            JobPostingRepository jobPostingRepository,
                            Optional<HttpMcpClient> httpMcpClient,
                            @Qualifier("allSources") List<SourceConfig> sources,
-                           LanguageFilter languageFilter) {
+                           LanguageFilter languageFilter,
+                           List<DescriptionBackfiller> descriptionBackfillers,
+                           List<BackfillPostProcessor> backfillPostProcessors) {
         this.crawlService = crawlService;
         this.careerEndpointRepository = careerEndpointRepository;
         this.scoringScheduler = scoringScheduler;
@@ -78,6 +84,8 @@ public class AdminController {
         this.httpMcpClient = httpMcpClient;
         this.sources = sources;
         this.languageFilter = languageFilter;
+        this.descriptionBackfillers = descriptionBackfillers;
+        this.backfillPostProcessors = backfillPostProcessors;
     }
 
     @PostMapping("/pipeline")
@@ -114,9 +122,10 @@ public class AdminController {
     }
 
     @PostMapping("/backfill-descriptions")
-    public ResponseEntity<BackfillResult> backfillDescriptions() {
-        int[] result = crawlService.backfillSmartRecruitersDescriptions();
-        return ResponseEntity.ok(new BackfillResult(result[0], result[1]));
+    public ResponseEntity<String> backfillDescriptions() {
+        descriptionBackfillers.forEach(DescriptionBackfiller::backfill);
+        backfillPostProcessors.forEach(BackfillPostProcessor::process);
+        return ResponseEntity.ok("Backfill complete");
     }
 
     @PostMapping("/score")

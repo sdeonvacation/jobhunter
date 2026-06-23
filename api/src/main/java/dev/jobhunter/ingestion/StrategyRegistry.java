@@ -23,8 +23,8 @@ public class StrategyRegistry {
             .collect(Collectors.toMap(FetchStrategy::name, s -> s));
         this.byType = new HashMap<>();
         for (FetchStrategy s : strategies) {
-            for (AtsType t : AtsType.values()) {
-                if (s.supports(t)) byType.put(t, s);
+            for (AtsType t : s.supportedTypes()) {
+                byType.put(t, s);
             }
         }
     }

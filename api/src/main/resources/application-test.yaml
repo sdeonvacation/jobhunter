@@ -1,19 +1,29 @@
 spring:
   datasource:
-    url: jdbc:tc:postgresql:16-alpine:///jobhub
-    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5435}/jobhunter
+    username: ${DB_USER:jobhunter}
+    password: ${DB_PASSWORD:jobhunter}
   jpa:
     hibernate:
       ddl-auto: validate
   quartz:
+    auto-startup: false
     job-store-type: memory
     jdbc:
       initialize-schema: never
   liquibase:
     change-log: classpath:db/changelog/master.xml
+    enabled: false
+
+profile:
+  path: file:../profile.yaml
 
 crawl:
+  concurrency: 4
   timeout-seconds: 5
+
+ai:
+  provider: none
 
 logging:
   level:

@@ -32,7 +32,7 @@ class WorkdayStrategyTest {
 
     @Test
     void supportedTypes_returnsWorkday() {
-        assertThat(extractor.supports(AtsType.WORKDAY)).isTrue();
+        assertThat(extractor.supportedTypes()).contains(AtsType.WORKDAY);
     }
 
     @Test

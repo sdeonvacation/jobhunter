@@ -16,7 +16,7 @@ class YoeFilterConfigTest {
     @Test
     void usesConfiguredMaxYears() {
         PersonalProfileLoader loader = loaderWithYoeConfig(3);
-        YoeFilter filter = new YoeFilter(loader);
+        YoeFilter filter = new YoeFilterImpl(loader);
 
         assertThat(filter.filter(3).decision()).isEqualTo(FilterDecision.KEEP);
         assertThat(filter.filter(4).decision()).isEqualTo(FilterDecision.SKIP);
@@ -25,7 +25,7 @@ class YoeFilterConfigTest {
     @Test
     void fallsBackToDefaultMaxYearsWhenConfigNull() {
         PersonalProfileLoader loader = loaderWithNullFilters();
-        YoeFilter filter = new YoeFilter(loader);
+        YoeFilter filter = new YoeFilterImpl(loader);
 
         // Default is 5
         assertThat(filter.filter(5).decision()).isEqualTo(FilterDecision.KEEP);
@@ -40,7 +40,7 @@ class YoeFilterConfigTest {
                 new PersonalProfile.Preferences(List.of(), "FULL_TIME", 0, List.of(), List.of(), List.of()),
                 new PersonalProfile.FilterConfig(null, null, null, null, null),
                 null, null, null));
-        YoeFilter filter = new YoeFilter(loader);
+        YoeFilter filter = new YoeFilterImpl(loader);
 
         assertThat(filter.filter(5).decision()).isEqualTo(FilterDecision.KEEP);
         assertThat(filter.filter(6).decision()).isEqualTo(FilterDecision.SKIP);
@@ -49,7 +49,7 @@ class YoeFilterConfigTest {
     @Test
     void extractYoe_unchanged() {
         PersonalProfileLoader loader = loaderWithNullFilters();
-        YoeFilter filter = new YoeFilter(loader);
+        YoeFilter filter = new YoeFilterImpl(loader);
 
         assertThat(filter.extractYoe("5+ years of experience")).isEqualTo(5);
         assertThat(filter.extractYoe("3 years experience in Java")).isEqualTo(3);
@@ -61,7 +61,7 @@ class YoeFilterConfigTest {
     @Test
     void filterNull_keeps() {
         PersonalProfileLoader loader = loaderWithNullFilters();
-        YoeFilter filter = new YoeFilter(loader);
+        YoeFilter filter = new YoeFilterImpl(loader);
 
         assertThat(filter.filter(null).decision()).isEqualTo(FilterDecision.KEEP);
     }

@@ -1,14 +1,10 @@
 package dev.jobhunter.ingestion;
 
 import dev.jobhunter.filter.DeduplicationFilter;
+import dev.jobhunter.filter.FilterChainResult;
+import dev.jobhunter.filter.JobFilterChain;
+import dev.jobhunter.filter.RawJobInput;
 import dev.jobhunter.util.LocationCountryParser;
-import dev.jobhunter.filter.FilterResult;
-import dev.jobhunter.filter.LanguageFilter;
-import dev.jobhunter.filter.LocationFilter;
-import dev.jobhunter.filter.RoleRelevanceFilter;
-import dev.jobhunter.filter.YoeFilter;
-import dev.jobhunter.filter.visa.VisaFilterResult;
-import dev.jobhunter.filter.visa.VisaSponsorshipFilter;
 import dev.jobhunter.model.enums.VisaSponsorship;
 import dev.jobhunter.model.AggregatorRun;
 import dev.jobhunter.model.Company;
@@ -31,6 +27,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -39,33 +36,21 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
     private final JobPostingRepository jobPostingRepository;
     private final CompanyRepository companyRepository;
     private final AggregatorRunRepository aggregatorRunRepository;
-    private final LanguageFilter languageFilter;
-    private final RoleRelevanceFilter roleRelevanceFilter;
-    private final LocationFilter locationFilter;
-    private final YoeFilter yoeFilter;
+    private final JobFilterChain jobFilterChain;
     private final DeduplicationFilter deduplicationFilter;
-    private final VisaSponsorshipFilter visaSponsorshipFilter;
     private final List<PostIngestionEnricher> postIngestionEnrichers;
 
     public AggregatorIngestionServiceImpl(JobPostingRepository jobPostingRepository,
                                           CompanyRepository companyRepository,
                                           AggregatorRunRepository aggregatorRunRepository,
-                                          LanguageFilter languageFilter,
-                                          RoleRelevanceFilter roleRelevanceFilter,
-                                          LocationFilter locationFilter,
-                                          YoeFilter yoeFilter,
+                                          JobFilterChain jobFilterChain,
                                           DeduplicationFilter deduplicationFilter,
-                                          VisaSponsorshipFilter visaSponsorshipFilter,
                                           List<PostIngestionEnricher> postIngestionEnrichers) {
         this.jobPostingRepository = jobPostingRepository;
         this.companyRepository = companyRepository;
         this.aggregatorRunRepository = aggregatorRunRepository;
-        this.languageFilter = languageFilter;
-        this.roleRelevanceFilter = roleRelevanceFilter;
-        this.locationFilter = locationFilter;
-        this.yoeFilter = yoeFilter;
+        this.jobFilterChain = jobFilterChain;
         this.deduplicationFilter = deduplicationFilter;
-        this.visaSponsorshipFilter = visaSponsorshipFilter;
         this.postIngestionEnrichers = postIngestionEnrichers;
     }
 
@@ -76,6 +61,9 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
         int created = 0, enriched = 0, filtered = 0, duplicates = 0, errors = 0;
 
         FetchResult result;
+        // NOTE: fetch() is called before any DB access. Despite @Transactional, HikariCP does not
+        // acquire a connection from the pool until the first JDBC operation, so no connection is
+        // held during the HTTP fetch. This is safe with Spring Boot's default HikariCP configuration.
         try {
             result = source.strategy().fetch(source.buildContext());
         } catch (Exception e) {
@@ -94,11 +82,24 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
 
         JobSource jobSource = source.sourceType();
 
+        // Pre-load known external IDs and fingerprints for this source (batch dedup)
+        Set<String> knownExternalIds = jobPostingRepository.findExternalIdsBySourceAsSet(jobSource);
+        // Load fingerprints from ATS (non-aggregator) sources for cross-source enrichment matching
+        Set<String> knownFingerprints = jobPostingRepository.findAtsFingerprintsExcludingSources(JobSource.aggregators());
+
         for (RawAggregatorJob job : result.jobs()) {
             try {
-                // Skip if exact source+externalId already exists
-                if (jobPostingRepository.findBySourceAndExternalId(jobSource, job.externalId()).isPresent()) {
+                // Skip if exact source+externalId already known (in-memory check)
+                if (knownExternalIds.contains(job.externalId())) {
                     duplicates++;
+                    continue;
+                }
+
+                // Guard: null/blank externalId would violate the DB not-null constraint and poison the transaction
+                if (job.externalId() == null || job.externalId().isBlank()) {
+                    log.warn("Skipping job with null/blank externalId from source [{}]: title='{}'",
+                            source.name(), job.title());
+                    errors++;
                     continue;
                 }
 
@@ -108,7 +109,9 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
 
                 // Check if an ATS job with same fingerprint exists — enrich it
                 // Only attempt ATS matching when company name is known (avoids false positives)
-                if (job.companyName() != null && !job.companyName().isBlank()) {
+                if (job.companyName() != null && !job.companyName().isBlank()
+                        && knownFingerprints.contains(fingerprint)) {
+                    // Enrich existing ATS job if possible (best-effort lookup)
                     Optional<JobPosting> atsMatch = jobPostingRepository.findAtsJobByFingerprint(fingerprint, JobSource.aggregators());
                     if (atsMatch.isPresent()) {
                         JobPosting existing = atsMatch.get();
@@ -119,32 +122,22 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                     }
                 }
 
-                // Apply filter cascade
-                FilterResult filterResult = applyFilters(job);
-                if (filterResult.decision() == FilterDecision.SKIP) {
+                // Unified filter chain (isAggregator=true; visaExempt from source config)
+                RawJobInput filterInput = new RawJobInput(job.title(), job.description(), job.location(),
+                        job.companyName() != null ? job.companyName() : "");
+                FilterChainResult chainResult = jobFilterChain.apply(filterInput, true, source.visaExempt());
+
+                if (chainResult.decision() == FilterDecision.SKIP) {
                     filtered++;
                     continue;
                 }
-
-                // Visa sponsorship filter — skip for visa-exempt sources (expat portals)
-                VisaSponsorship visaStatus = VisaSponsorship.UNKNOWN;
-                if (!source.visaExempt()) {
-                    VisaFilterResult visaResult = visaSponsorshipFilter.filter(
-                            job.location(), job.description(), true);
-                    if (visaResult.decision() == FilterDecision.SKIP) {
-                        filtered++;
-                        continue;
-                    }
-                    visaStatus = visaResult.visaSponsorship();
-                } else {
-                    visaStatus = VisaSponsorship.LIKELY;
-                }
+                VisaSponsorship visaStatus = chainResult.visaSponsorship() != null
+                        ? chainResult.visaSponsorship() : VisaSponsorship.UNKNOWN;
 
                 // Resolve company
                 Company company = resolveCompany(job.companyName(), source);
 
                 // Build and save JobPosting
-                Integer yoe = yoeFilter.extractYoe(job.description());
                 JobPosting posting = JobPosting.builder()
                         .source(jobSource)
                         .externalId(job.externalId())
@@ -161,12 +154,14 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                         .salaryMin(job.salaryMin())
                         .salaryMax(job.salaryMax())
                         .salaryCurrency(job.salaryCurrency())
-                        .requiredYoe(yoe)
+                        .requiredYoe(chainResult.extractedYoe())
                         .isActive(true)
                         .languageFilter(FilterDecision.KEEP)
                         .visaSponsorship(visaStatus)
                         .build();
                 jobPostingRepository.save(posting);
+                knownExternalIds.add(job.externalId());  // prevent duplicates within same batch
+                knownFingerprints.add(fingerprint);       // prevent duplicate enrichment
                 created++;
             } catch (Exception e) {
                 log.warn("Error processing job [{}] from source [{}]: {}",
@@ -187,23 +182,6 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                 source.name(), result.jobs().size(), created, enriched, filtered, duplicates, errors, elapsedMs);
 
         return new IngestionStats(source.name(), result.jobs().size(), enriched, created, filtered, duplicates, errors, elapsedMs);
-    }
-
-    private FilterResult applyFilters(RawAggregatorJob job) {
-        FilterResult langResult = languageFilter.filter(job.title(), job.description());
-        if (langResult.decision() == FilterDecision.SKIP) return langResult;
-
-        FilterResult roleResult = roleRelevanceFilter.filter(job.title());
-        if (roleResult.decision() == FilterDecision.SKIP) return roleResult;
-
-        FilterResult locationResult = locationFilter.filter(job.location());
-        if (locationResult.decision() == FilterDecision.SKIP) return locationResult;
-
-        Integer yoe = yoeFilter.extractYoe(job.description());
-        FilterResult yoeResult = yoeFilter.filter(yoe);
-        if (yoeResult.decision() == FilterDecision.SKIP) return yoeResult;
-
-        return FilterResult.keep();
     }
 
     private Company resolveCompany(String companyName, SourceConfig source) {

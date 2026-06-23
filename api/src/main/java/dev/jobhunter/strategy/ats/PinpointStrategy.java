@@ -6,7 +6,6 @@ import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
-import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -18,6 +17,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Fetches jobs from Pinpoint ATS.
@@ -25,7 +25,7 @@ import java.util.List;
  */
 @Slf4j
 @Component
-public class PinpointStrategy implements FetchStrategy {
+public class PinpointStrategy extends AbstractAtsStrategy {
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
@@ -36,8 +36,8 @@ public class PinpointStrategy implements FetchStrategy {
     }
 
     @Override
-    public boolean supports(AtsType type) {
-        return type == AtsType.PINPOINT;
+    public Set<AtsType> supportedTypes() {
+        return Set.of(AtsType.PINPOINT);
     }
 
     @Override
@@ -162,24 +162,5 @@ public class PinpointStrategy implements FetchStrategy {
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private String stripHtml(String html) {
-        if (html == null || html.isBlank()) return "";
-        return html
-                .replaceAll("<[^>]+>", " ")
-                .replaceAll("&amp;", "&")
-                .replaceAll("&lt;", "<")
-                .replaceAll("&gt;", ">")
-                .replaceAll("&nbsp;", " ")
-                .replaceAll("&quot;", "\"")
-                .replaceAll("&#39;", "'")
-                .replaceAll("<!--.*?-->", "")
-                .replaceAll("\\s+", " ")
-                .trim();
-    }
-
-    private Duration elapsed(Instant start) {
-        return Duration.between(start, Instant.now());
     }
 }

@@ -6,7 +6,6 @@ import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
-import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -20,7 +19,7 @@ import java.util.regex.Pattern;
 
 @Slf4j
 @Component
-public class WorkableStrategy implements FetchStrategy {
+public class WorkableStrategy extends AbstractAtsStrategy {
 
     private static final String DEFAULT_BASE_URL = "https://apply.workable.com";
     private static final String LIST_PATH_TEMPLATE = "/api/v1/widget/accounts/%s?details=true";
@@ -44,8 +43,8 @@ public class WorkableStrategy implements FetchStrategy {
     }
 
     @Override
-    public boolean supports(AtsType type) {
-        return type == AtsType.WORKABLE;
+    public Set<AtsType> supportedTypes() {
+        return Set.of(AtsType.WORKABLE);
     }
 
     @Override
@@ -164,14 +163,5 @@ public class WorkableStrategy implements FetchStrategy {
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private String truncate(String value, int maxLength) {
-        if (value == null || value.length() <= maxLength) return value;
-        return value.substring(0, maxLength);
-    }
-
-    private Duration elapsed(Instant start) {
-        return Duration.between(start, Instant.now());
     }
 }

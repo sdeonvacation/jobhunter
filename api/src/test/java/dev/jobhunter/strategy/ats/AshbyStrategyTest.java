@@ -34,7 +34,7 @@ class AshbyStrategyTest {
 
     @Test
     void supportedTypes_returnsAshby() {
-        assertThat(extractor.supports(AtsType.ASHBY)).isTrue();
+        assertThat(extractor.supportedTypes()).contains(AtsType.ASHBY);
     }
 
     @Test

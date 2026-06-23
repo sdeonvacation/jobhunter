@@ -51,30 +51,14 @@ class CompanyEnrichmentServiceTest {
     }
 
     @Test
-    void enrich_rateLimited_returnsFailure() {
-        UUID companyId = UUID.randomUUID();
-        Company company = Company.builder()
-                .id(companyId)
-                .name("TestCo")
-                .linkedinUrl("https://linkedin.com/company/testco")
-                .build();
-        when(companyRepository.findById(companyId)).thenReturn(Optional.of(company));
-        when(rateLimiter.acquire(ToolCategory.PROFILE)).thenReturn(false);
-
-        var result = service.enrich(companyId);
-
-        assertThat(result.success()).isFalse();
-        assertThat(result.failureReason()).isEqualTo("Rate limit reached");
-    }
-
-    @Test
-    void enrich_noLinkedinUrl_returnsFailure() {
+    void enrich_noLinkedInUrl_returnsFailure() {
         UUID companyId = UUID.randomUUID();
         Company company = Company.builder()
                 .id(companyId)
                 .name("TestCo")
                 .linkedinUrl(null)
                 .build();
+
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(company));
         when(rateLimiter.acquire(ToolCategory.PROFILE)).thenReturn(true);
 
@@ -85,13 +69,32 @@ class CompanyEnrichmentServiceTest {
     }
 
     @Test
-    void enrich_profileReturnsNull_returnsFailure() {
+    void enrich_rateLimitExceeded_returnsFailure() {
         UUID companyId = UUID.randomUUID();
         Company company = Company.builder()
                 .id(companyId)
                 .name("TestCo")
                 .linkedinUrl("https://linkedin.com/company/testco")
                 .build();
+
+        when(companyRepository.findById(companyId)).thenReturn(Optional.of(company));
+        when(rateLimiter.acquire(ToolCategory.PROFILE)).thenReturn(false);
+
+        var result = service.enrich(companyId);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.failureReason()).isEqualTo("Rate limit reached");
+    }
+
+    @Test
+    void enrich_linkedInReturnsNoData_returnsFailure() {
+        UUID companyId = UUID.randomUUID();
+        Company company = Company.builder()
+                .id(companyId)
+                .name("TestCo")
+                .linkedinUrl("https://linkedin.com/company/testco")
+                .build();
+
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(company));
         when(rateLimiter.acquire(ToolCategory.PROFILE)).thenReturn(true);
         when(linkedInProfileService.getProfile("https://linkedin.com/company/testco")).thenReturn(null);
@@ -103,43 +106,21 @@ class CompanyEnrichmentServiceTest {
     }
 
     @Test
-    void enrich_success_updatesFieldsAndSaves() {
+    void enrich_success_updatesCompany() {
         UUID companyId = UUID.randomUUID();
         Company company = Company.builder()
                 .id(companyId)
                 .name("TestCo")
                 .linkedinUrl("https://linkedin.com/company/testco")
                 .build();
-        var profileData = new LinkedInProfileService.ProfileData(
-                "Test Company", "Technology", "TestCo",
-                List.of(), List.of("Java", "Spring Boot"), List.of()
-        );
 
-        when(companyRepository.findById(companyId)).thenReturn(Optional.of(company));
-        when(rateLimiter.acquire(ToolCategory.PROFILE)).thenReturn(true);
-        when(linkedInProfileService.getProfile("https://linkedin.com/company/testco")).thenReturn(profileData);
-
-        var result = service.enrich(companyId);
-
-        assertThat(result.success()).isTrue();
-        assertThat(result.fieldsUpdated()).contains("specialties", "linkedinEnrichedAt");
-        assertThat(company.getSpecialties()).isEqualTo("Java, Spring Boot");
-        assertThat(company.getLinkedinEnrichedAt()).isNotNull();
-        verify(companyRepository).save(company);
-    }
-
-    @Test
-    void enrich_success_setsIndustryFromHeadlineWhenNull() {
-        UUID companyId = UUID.randomUUID();
-        Company company = Company.builder()
-                .id(companyId)
-                .name("TestCo")
-                .linkedinUrl("https://linkedin.com/company/testco")
-                .industry(null)
-                .build();
-        var profileData = new LinkedInProfileService.ProfileData(
-                "Test Company", "Enterprise Software", "TestCo",
-                List.of(), List.of(), List.of()
+        LinkedInProfileService.ProfileData profileData = new LinkedInProfileService.ProfileData(
+                "TestCo Inc",
+                "Enterprise Software",
+                "TestCo",
+                List.of(),
+                List.of("Java", "Spring", "Cloud"),
+                List.of()
         );
 
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(company));
@@ -161,6 +142,7 @@ class CompanyEnrichmentServiceTest {
 
         // All companies not found -> quick failures, but still limited
         when(companyRepository.findById(any())).thenReturn(Optional.empty());
+        when(rateLimiter.acquire(ToolCategory.PROFILE)).thenReturn(true);
 
         var results = service.enrichBatch(List.of(id1, id2, id3), 2);
 
@@ -180,14 +162,13 @@ class CompanyEnrichmentServiceTest {
                 .build();
 
         when(companyRepository.findById(id1)).thenReturn(Optional.of(company));
-        // First acquire in enrichBatch returns true, but enrich() also acquires -> false
-        when(rateLimiter.acquire(ToolCategory.PROFILE)).thenReturn(false);
+        // First acquire in enrichBatch returns true, enrich() also acquires -> true, then id2 batch-acquire -> false
+        when(rateLimiter.acquire(ToolCategory.PROFILE)).thenReturn(true, true, false);
 
         var results = service.enrichBatch(List.of(id1, id2), 10);
 
-        // Stops on first rate limit
-        assertThat(results).hasSize(1);
-        assertThat(results.get(0).success()).isFalse();
-        assertThat(results.get(0).failureReason()).isEqualTo("Rate limit reached");
+        assertThat(results).hasSize(2);
+        assertThat(results.get(0).failureReason()).isEqualTo("LinkedIn returned no data");
+        assertThat(results.get(1).failureReason()).isEqualTo("Rate limit reached");
     }
 }

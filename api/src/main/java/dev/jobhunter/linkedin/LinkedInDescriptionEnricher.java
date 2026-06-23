@@ -2,9 +2,8 @@ package dev.jobhunter.linkedin;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.jobhunter.filter.FilterResult;
-import dev.jobhunter.filter.LanguageFilter;
-import dev.jobhunter.filter.YoeFilter;
+import dev.jobhunter.filter.DescriptionFilterChain;
+import dev.jobhunter.ingestion.DescriptionBackfiller;
 import dev.jobhunter.ingestion.PostIngestionEnricher;
 import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.FilterDecision;
@@ -21,31 +20,31 @@ import java.util.Optional;
 /**
  * Enriches LinkedIn job postings that were ingested without a description
  * by fetching details from the LinkedIn MCP server.
+ *
+ * Implements PostIngestionEnricher (triggered after each aggregator ingest)
+ * and DescriptionBackfiller (triggered by CrawlService after each crawl cycle).
  */
 @Slf4j
 @Component
 @ConditionalOnProperty(prefix = "linkedin-mcp", name = "enabled", havingValue = "true")
-public class LinkedInDescriptionEnricher implements PostIngestionEnricher {
+public class LinkedInDescriptionEnricher implements PostIngestionEnricher, DescriptionBackfiller {
 
     private final HttpMcpClient httpMcpClient;
     private final Optional<LinkedInRateLimiter> rateLimiter;
     private final LinkedInMcpProperties mcpProperties;
     private final JobPostingRepository jobPostingRepository;
-    private final LanguageFilter languageFilter;
-    private final YoeFilter yoeFilter;
+    private final DescriptionFilterChain descriptionFilterChain;
 
     public LinkedInDescriptionEnricher(HttpMcpClient httpMcpClient,
                                        Optional<LinkedInRateLimiter> rateLimiter,
                                        LinkedInMcpProperties mcpProperties,
                                        JobPostingRepository jobPostingRepository,
-                                       LanguageFilter languageFilter,
-                                       YoeFilter yoeFilter) {
+                                       DescriptionFilterChain descriptionFilterChain) {
         this.httpMcpClient = httpMcpClient;
         this.rateLimiter = rateLimiter;
         this.mcpProperties = mcpProperties;
         this.jobPostingRepository = jobPostingRepository;
-        this.languageFilter = languageFilter;
-        this.yoeFilter = yoeFilter;
+        this.descriptionFilterChain = descriptionFilterChain;
     }
 
     @Override
@@ -53,14 +52,11 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher {
         if (source != JobSource.LINKEDIN || created <= 0) {
             return;
         }
-        enrichDescriptions();
+        backfill();
     }
 
-    /**
-     * Fetches job descriptions from LinkedIn MCP for jobs that were ingested without one.
-     * Gated by enrichment.enabled config.
-     */
-    void enrichDescriptions() {
+    @Override
+    public void backfill() {
         LinkedInMcpProperties.EnrichmentConfig enrichment = mcpProperties.enrichment();
         if (!enrichment.enabled()) {
             return;
@@ -80,13 +76,12 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher {
                 : jobsWithoutDescription;
 
         int enrichedCount = 0;
-        int yoeFiltered = 0;
 
         for (JobPosting job : batch) {
             try {
-                // Respect rate limits if limiter is available
                 if (rateLimiter.isPresent() && !rateLimiter.get().acquire(ToolCategory.PROFILE)) {
-                    log.warn("Rate limit reached for PROFILE, stopping LinkedIn description enrichment at {}/{}", enrichedCount, batch.size());
+                    log.warn("Rate limit reached for PROFILE, stopping LinkedIn description enrichment at {}/{}",
+                            enrichedCount, batch.size());
                     break;
                 }
 
@@ -95,32 +90,11 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher {
 
                 if (description != null && !description.isBlank()) {
                     job.setDescription(description);
-
-                    // Re-apply language filter now that description is available
-                    FilterResult langResult = languageFilter.filter(job.getTitle(), description);
-                    if (langResult.decision() == FilterDecision.SKIP) {
-                        job.setLanguageFilter(FilterDecision.SKIP);
-                        job.setFilterReason(langResult.reason());
-                        log.debug("LinkedIn job [{}] filtered by language after enrichment: {}",
-                                job.getExternalId(), langResult.reason());
-                    } else {
-                        Integer yoe = yoeFilter.extractYoe(description);
-                        job.setRequiredYoe(yoe);
-                        FilterResult yoeResult = yoeFilter.filter(yoe);
-                        if (yoeResult.decision() == FilterDecision.SKIP) {
-                            job.setLanguageFilter(FilterDecision.SKIP);
-                            job.setFilterReason(yoeResult.reason());
-                            yoeFiltered++;
-                            log.debug("LinkedIn job [{}] YOE filter SKIP: yoe={} reason={}",
-                                    job.getExternalId(), yoe, yoeResult.reason());
-                        }
-                    }
-
+                    descriptionFilterChain.refilter(job);
                     jobPostingRepository.save(job);
                     enrichedCount++;
                 }
 
-                // Delay between calls to avoid hammering the MCP server
                 if (delayBetweenMs > 0) {
                     Thread.sleep(delayBetweenMs);
                 }
@@ -135,7 +109,7 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher {
             }
         }
 
-        log.info("Enriched LinkedIn job descriptions: {}/{} (yoe-filtered: {})", enrichedCount, batch.size(), yoeFiltered);
+        log.info("LinkedIn description backfill: {}/{} enriched", enrichedCount, batch.size());
     }
 
     /**
@@ -167,23 +141,19 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher {
                 try {
                     ObjectMapper mapper = new ObjectMapper();
                     JsonNode parsed = mapper.readTree(textNode.asText());
-                    // Try sections.description (legacy format)
                     JsonNode desc = parsed.path("sections").path("description");
                     if (desc.isTextual() && !desc.asText().isBlank()) {
                         return desc.asText();
                     }
-                    // Try sections.job_posting (linkedin-scraper-mcp format)
                     desc = parsed.path("sections").path("job_posting");
                     if (desc.isTextual() && !desc.asText().isBlank()) {
                         return desc.asText();
                     }
-                    // Fallback: description at top level of parsed content
                     desc = parsed.path("description");
                     if (desc.isTextual() && !desc.asText().isBlank()) {
                         return desc.asText();
                     }
                 } catch (Exception e) {
-                    // If text is not JSON, use it directly as description
                     String text = textNode.asText();
                     if (!text.isBlank() && text.length() > 50) {
                         return text;

@@ -30,18 +30,18 @@ class GreenhouseStrategyTest {
     }
 
     @Test
-    void supportedTypes_returnsGreenhouse() {
-        assertThat(extractor.supports(AtsType.GREENHOUSE)).isTrue();
+    void supportedTypes_containsGreenhouse() {
+        assertThat(extractor.supportedTypes()).contains(AtsType.GREENHOUSE);
     }
 
     @Test
-    void supports_returnsTrue_forSupportedType() {
-        assertThat(extractor.supports(AtsType.GREENHOUSE)).isTrue();
+    void supportedTypes_returnsTrue_forSupportedType() {
+        assertThat(extractor.supportedTypes()).contains(AtsType.GREENHOUSE);
     }
 
     @Test
-    void supports_returnsFalse_forUnsupportedType() {
-        assertThat(extractor.supports(AtsType.ICIMS)).isFalse();
+    void supportedTypes_doesNotContainUnsupportedType() {
+        assertThat(extractor.supportedTypes()).doesNotContain(AtsType.ICIMS);
     }
 
     @Test
@@ -234,10 +234,6 @@ class GreenhouseStrategyTest {
             } catch (Exception e) {
                 return FetchResult.error(e.getMessage(), elapsed(start));
             }
-        }
-
-        private java.time.Duration elapsed(java.time.Instant start) {
-            return java.time.Duration.between(start, java.time.Instant.now());
         }
     }
 }

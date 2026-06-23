@@ -38,24 +38,24 @@ class LeverStrategyTest {
     }
 
     @Test
-    void supports_leverAndLeverEu() {
-        assertThat(extractor.supports(AtsType.LEVER)).isTrue();
-        assertThat(extractor.supports(AtsType.LEVER_EU)).isTrue();
+    void supportedTypes_leverAndLeverEu() {
+        assertThat(extractor.supportedTypes()).contains(AtsType.LEVER);
+        assertThat(extractor.supportedTypes()).contains(AtsType.LEVER_EU);
     }
 
     @Test
-    void supports_returnsTrue_forLever() {
-        assertThat(extractor.supports(AtsType.LEVER)).isTrue();
+    void supportedTypes_containsLever() {
+        assertThat(extractor.supportedTypes()).contains(AtsType.LEVER);
     }
 
     @Test
-    void supports_returnsTrue_forLeverEu() {
-        assertThat(extractor.supports(AtsType.LEVER_EU)).isTrue();
+    void supportedTypes_containsLeverEu() {
+        assertThat(extractor.supportedTypes()).contains(AtsType.LEVER_EU);
     }
 
     @Test
-    void supports_returnsFalse_forUnsupportedType() {
-        assertThat(extractor.supports(AtsType.GREENHOUSE)).isFalse();
+    void supportedTypes_doesNotContainUnsupportedType() {
+        assertThat(extractor.supportedTypes()).doesNotContain(AtsType.GREENHOUSE);
     }
 
     @Test
@@ -280,10 +280,6 @@ class LeverStrategyTest {
             } catch (Exception e) {
                 return FetchResult.error(e.getMessage(), elapsed(start));
             }
-        }
-
-        private Duration elapsed(Instant start) {
-            return Duration.between(start, Instant.now());
         }
     }
 }

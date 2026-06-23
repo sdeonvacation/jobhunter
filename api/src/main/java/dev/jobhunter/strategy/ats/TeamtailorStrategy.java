@@ -4,7 +4,6 @@ import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
-import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -29,22 +28,20 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
-public class TeamtailorStrategy implements FetchStrategy {
+public class TeamtailorStrategy extends AbstractAtsStrategy {
 
     private static final Pattern JOB_ID_PATTERN = Pattern.compile("/jobs/(\\d+)-");
     private static final DateTimeFormatter RSS_DATE_FORMAT = DateTimeFormatter.RFC_1123_DATE_TIME;
-    private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]*>");
 
     private final WebClient webClient;
 
-    @org.springframework.beans.factory.annotation.Autowired
     public TeamtailorStrategy(WebClient webClient) {
         this.webClient = webClient;
     }
 
     @Override
-    public boolean supports(AtsType type) {
-        return type == AtsType.TEAMTAILOR;
+    public Set<AtsType> supportedTypes() {
+        return Set.of(AtsType.TEAMTAILOR);
     }
 
     @Override
@@ -215,28 +212,10 @@ public class TeamtailorStrategy implements FetchStrategy {
         }
     }
 
-    private String stripHtml(String html) {
-        if (html == null || html.isBlank()) {
-            return null;
-        }
-        return HTML_TAG_PATTERN.matcher(html).replaceAll("").replaceAll("\\s+", " ").trim();
-    }
-
     private String textOf(Element parent, String tagName) {
         Element el = parent.getElementsByTag(tagName).first();
         if (el == null) return null;
         String text = el.text();
         return text.isBlank() ? null : text;
-    }
-
-    private String truncate(String value, int maxLength) {
-        if (value == null || value.length() <= maxLength) {
-            return value;
-        }
-        return value.substring(0, maxLength);
-    }
-
-    private Duration elapsed(Instant start) {
-        return Duration.between(start, Instant.now());
     }
 }

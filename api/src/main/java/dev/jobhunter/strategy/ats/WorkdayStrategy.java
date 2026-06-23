@@ -6,7 +6,6 @@ import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
-import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -24,7 +23,7 @@ import java.util.regex.Pattern;
 
 @Slf4j
 @Component
-public class WorkdayStrategy implements FetchStrategy {
+public class WorkdayStrategy extends AbstractAtsStrategy {
 
     private static final String DEFAULT_BASE_URL = "https://%s.wd%s.myworkdayjobs.com";
     private static final String API_PATH = "/wday/cxs/%s/%s/jobs";
@@ -51,8 +50,8 @@ public class WorkdayStrategy implements FetchStrategy {
     }
 
     @Override
-    public boolean supports(AtsType type) {
-        return type == AtsType.WORKDAY;
+    public Set<AtsType> supportedTypes() {
+        return Set.of(AtsType.WORKDAY);
     }
 
     @Override
@@ -253,16 +252,5 @@ public class WorkdayStrategy implements FetchStrategy {
             return matcher.group(1);
         }
         return null;
-    }
-
-    private Duration elapsed(Instant start) {
-        return Duration.between(start, Instant.now());
-    }
-
-    private String truncate(String value, int maxLength) {
-        if (value == null || value.length() <= maxLength) {
-            return value;
-        }
-        return value.substring(0, maxLength);
     }
 }

@@ -8,29 +8,34 @@ import dev.jobhunter.model.enums.VisaSponsorship;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
 public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
-    @Query("SELECT j FROM JobPosting j LEFT JOIN FETCH j.company WHERE j.isActive = true AND j.languageFilter = :filter " +
-           "AND j.id NOT IN (SELECT ms.job.id FROM MatchScore ms)")
+    @Query("SELECT j FROM JobPosting j LEFT JOIN FETCH j.company LEFT JOIN MatchScore ms ON ms.job.id = j.id " +
+           "WHERE j.isActive = true AND j.languageFilter = :filter AND ms.id IS NULL")
     Page<JobPosting> findUnscoredActiveJobs(@Param("filter") FilterDecision filter, Pageable pageable);
 
-    @Query("SELECT j FROM JobPosting j LEFT JOIN FETCH j.company WHERE j.isActive = true AND j.languageFilter = :filter " +
-           "AND j.endpoint.id = :endpointId AND j.id NOT IN (SELECT ms.job.id FROM MatchScore ms)")
+    @Query("SELECT j FROM JobPosting j LEFT JOIN FETCH j.company LEFT JOIN MatchScore ms ON ms.job.id = j.id " +
+           "WHERE j.isActive = true AND j.languageFilter = :filter AND j.endpoint.id = :endpointId AND ms.id IS NULL")
     List<JobPosting> findUnscoredActiveJobsByEndpoint(@Param("endpointId") UUID endpointId,
                                                       @Param("filter") FilterDecision filter);
 
-    @Query("SELECT j FROM JobPosting j LEFT JOIN FETCH j.company WHERE j.isActive = true AND j.languageFilter = :filter " +
-           "AND j.source = :source AND j.id NOT IN (SELECT ms.job.id FROM MatchScore ms)")
+    @Query("SELECT j FROM JobPosting j LEFT JOIN FETCH j.company LEFT JOIN MatchScore ms ON ms.job.id = j.id " +
+           "WHERE j.isActive = true AND j.languageFilter = :filter AND j.source = :source AND ms.id IS NULL")
     List<JobPosting> findUnscoredActiveJobsBySource(@Param("source") JobSource source,
                                                     @Param("filter") FilterDecision filter);
 
@@ -104,6 +109,25 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     @Query("SELECT j.externalId FROM JobPosting j WHERE j.source = :source")
     List<String> findExternalIdsBySource(@Param("source") JobSource source);
+
+    @Query("SELECT j.externalId FROM JobPosting j WHERE j.source = :source")
+    Set<String> findExternalIdsBySourceAsSet(@Param("source") JobSource source);
+
+    @Query("SELECT j.fingerprint FROM JobPosting j WHERE j.source = :source AND j.fingerprint IS NOT NULL")
+    Set<String> findFingerprintsBySource(@Param("source") JobSource source);
+
+    // Load fingerprints from all non-aggregator (ATS direct) sources for cross-source dedup matching
+    @Query("SELECT DISTINCT j.fingerprint FROM JobPosting j WHERE j.fingerprint IS NOT NULL AND j.source NOT IN :aggregatorSources AND j.isActive = true")
+    Set<String> findAtsFingerprintsExcludingSources(@Param("aggregatorSources") List<JobSource> aggregatorSources);
+
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query("UPDATE JobPosting j SET j.isActive = false, j.deactivatedAt = :now " +
+           "WHERE j.endpoint.id = :endpointId AND j.isActive = true AND j.externalId NOT IN :seenExternalIds")
+    int bulkDeactivateByEndpointExcluding(
+        @Param("endpointId") UUID endpointId,
+        @Param("seenExternalIds") Collection<String> seenExternalIds,
+        @Param("now") LocalDateTime now);
 
     Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndSource(
             FilterDecision languageFilter, JobSource source, Pageable pageable);

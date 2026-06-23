@@ -6,7 +6,6 @@ import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
-import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -22,7 +21,7 @@ import java.util.*;
 
 @Slf4j
 @Component
-public class PersonioStrategy implements FetchStrategy {
+public class PersonioStrategy extends AbstractAtsStrategy {
 
     private static final String DE_BASE_URL = "https://%s.jobs.personio.de";
     private static final String COM_BASE_URL = "https://%s.jobs.personio.com";
@@ -49,8 +48,8 @@ public class PersonioStrategy implements FetchStrategy {
     }
 
     @Override
-    public boolean supports(AtsType type) {
-        return type == AtsType.PERSONIO;
+    public Set<AtsType> supportedTypes() {
+        return Set.of(AtsType.PERSONIO);
     }
 
     @Override
@@ -205,16 +204,5 @@ public class PersonioStrategy implements FetchStrategy {
                 }
             }
         }
-    }
-
-    private String truncate(String value, int maxLength) {
-        if (value == null || value.length() <= maxLength) {
-            return value;
-        }
-        return value.substring(0, maxLength);
-    }
-
-    private Duration elapsed(Instant start) {
-        return Duration.between(start, Instant.now());
     }
 }

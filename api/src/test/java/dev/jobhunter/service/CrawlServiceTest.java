@@ -5,26 +5,20 @@ import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
 import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.RawAggregatorJob;
-import dev.jobhunter.strategy.ats.SmartRecruitersStrategy;
 import dev.jobhunter.filter.DeduplicationFilter;
-import dev.jobhunter.filter.FilterResult;
-import dev.jobhunter.filter.LanguageFilter;
-import dev.jobhunter.filter.LocationFilter;
-import dev.jobhunter.filter.RoleRelevanceFilter;
-import dev.jobhunter.filter.YoeFilter;
-import dev.jobhunter.filter.visa.VisaFilterResult;
-import dev.jobhunter.filter.visa.VisaSponsorshipFilter;
+import dev.jobhunter.filter.DescriptionFilterChain;
+import dev.jobhunter.filter.FilterChainResult;
+import dev.jobhunter.filter.JobFilterChain;
+import dev.jobhunter.filter.RawJobInput;
 import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.Company;
 import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.model.enums.CrawlStatus;
-import dev.jobhunter.model.enums.ExtractionStatus;
 import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.CareerEndpointRepository;
 import dev.jobhunter.repository.JobPostingRepository;
-import dev.jobhunter.scheduler.ScoringScheduler;
 import dev.jobhunter.people.crawl.PostCrawlPipeline;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +26,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -42,6 +37,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -52,25 +48,23 @@ class CrawlServiceTest {
     @Mock private CareerEndpointRepository endpointRepository;
     @Mock private JobPostingRepository jobPostingRepository;
     @Mock private StrategyRegistry strategyRegistry;
-    @Mock private SmartRecruitersStrategy smartRecruitersStrategy;
-    @Mock private LanguageFilter languageFilter;
-    @Mock private RoleRelevanceFilter roleRelevanceFilter;
-    @Mock private LocationFilter locationFilter;
-    @Mock private YoeFilter yoeFilter;
+    @Mock private JobFilterChain jobFilterChain;
     @Mock private DeduplicationFilter deduplicationFilter;
-    @Mock private VisaSponsorshipFilter visaSponsorshipFilter;
+    @Mock private DescriptionFilterChain descriptionFilterChain;
+    @Mock private ScoringService scoringService;
     @Mock private FetchStrategy fetchStrategy;
-    @Mock private ScoringScheduler scoringScheduler;
     @Mock private PostCrawlPipeline postCrawlPipeline;
 
     private CrawlService crawlService;
 
     @BeforeEach
     void setUp() {
-        crawlService = new CrawlService(endpointRepository, jobPostingRepository,
-                strategyRegistry, smartRecruitersStrategy, languageFilter, roleRelevanceFilter,
-                locationFilter, yoeFilter, deduplicationFilter, visaSponsorshipFilter,
-                scoringScheduler, postCrawlPipeline);
+        crawlService = new CrawlService(
+                endpointRepository, jobPostingRepository, strategyRegistry,
+                jobFilterChain, deduplicationFilter, descriptionFilterChain,
+                List.of(), List.of(), scoringService, postCrawlPipeline);
+        // @Value field not set by Spring in unit tests; set manually
+        ReflectionTestUtils.setField(crawlService, "crawlConcurrency", 10);
     }
 
     @Test
@@ -92,16 +86,13 @@ class CrawlServiceTest {
         when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-1"))
                 .thenReturn(Optional.empty());
         when(jobPostingRepository.findByEndpointIdAndIsActiveTrue(endpoint.getId())).thenReturn(List.of());
-        when(languageFilter.filter("Engineer", "Java dev role")).thenReturn(FilterResult.keep());
-        when(roleRelevanceFilter.filter("Engineer")).thenReturn(FilterResult.keep());
-        when(locationFilter.filter("Berlin")).thenReturn(FilterResult.keep());
-        when(visaSponsorshipFilter.filter(anyString(), anyString(), eq(false))).thenReturn(VisaFilterResult.bypass());
-        when(yoeFilter.extractYoe(anyString())).thenReturn(null);
-        when(yoeFilter.filter(any())).thenReturn(FilterResult.keep());
-        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("test-fingerprint");
-        when(jobPostingRepository.findFirstByFingerprintAndLanguageFilter(anyString(), any(FilterDecision.class))).thenReturn(Optional.empty());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
+                .thenReturn("test-fingerprint");
+        when(jobFilterChain.apply(any(RawJobInput.class), anyBoolean(), anyBoolean()))
+                .thenReturn(FilterChainResult.keep(null, null));
         when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
         when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+        when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(0);
 
         int newJobs = crawlService.crawlEndpoint(endpoint);
 
@@ -141,18 +132,58 @@ class CrawlServiceTest {
         when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(result);
         when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-1"))
                 .thenReturn(Optional.of(existingPosting));
-        when(jobPostingRepository.findByEndpointIdAndIsActiveTrue(endpoint.getId())).thenReturn(List.of(existingPosting));
+        when(jobPostingRepository.findByEndpointIdAndIsActiveTrue(endpoint.getId()))
+                .thenReturn(List.of(existingPosting));
         when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
         when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+        when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(0);
 
         int newJobs = crawlService.crawlEndpoint(endpoint);
 
         assertThat(newJobs).isZero();
-        verify(languageFilter, never()).filter(any(), any());
+        verify(jobFilterChain, never()).apply(any(), anyBoolean(), anyBoolean());
     }
 
     @Test
-    void crawlEndpoint_missingJobs_deactivated() {
+    void crawlEndpoint_existingJob_backfillsDescription_callsRefilter() {
+        var company = Company.builder().id(UUID.randomUUID()).name("TestCo").build();
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("testco")
+                .company(company)
+                .build();
+
+        // rawJob has a description that the existing posting lacks
+        var rawJob = new RawAggregatorJob("ext-1", "Engineer", null, "Berlin",
+                "Exciting Java role with Spring Boot", "url", null, null, null, null, "{}");
+        var result = FetchResult.success(List.of(rawJob), Duration.ofMillis(100));
+
+        var existingPosting = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .externalId("ext-1")
+                .source(JobSource.GREENHOUSE)
+                .languageFilter(FilterDecision.KEEP)
+                .build();
+
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(result);
+        when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-1"))
+                .thenReturn(Optional.of(existingPosting));
+        when(jobPostingRepository.findByEndpointIdAndIsActiveTrue(endpoint.getId())).thenReturn(List.of());
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+        when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(0);
+
+        crawlService.crawlEndpoint(endpoint);
+
+        // descriptionFilterChain.refilter() must be called when description is backfilled
+        verify(descriptionFilterChain).refilter(existingPosting);
+        assertThat(existingPosting.getDescription()).isEqualTo("Exciting Java role with Spring Boot");
+    }
+
+    @Test
+    void crawlEndpoint_missingJobs_bulkDeactivated() {
         var company = Company.builder().id(UUID.randomUUID()).name("TestCo").build();
         var endpoint = CareerEndpoint.builder()
                 .id(UUID.randomUUID())
@@ -165,39 +196,25 @@ class CrawlServiceTest {
                 "url", null, null, null, null, "{}");
         var result = FetchResult.success(List.of(rawJob), Duration.ofMillis(100));
 
-        var staleJob = JobPosting.builder()
-                .id(UUID.randomUUID())
-                .externalId("ext-1")
-                .source(JobSource.GREENHOUSE)
-                .isActive(true)
-                .build();
-
         when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
         when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(result);
         when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-2"))
                 .thenReturn(Optional.empty());
-        when(jobPostingRepository.findByEndpointIdAndIsActiveTrue(endpoint.getId())).thenReturn(List.of(staleJob));
-        when(languageFilter.filter(any(), any())).thenReturn(FilterResult.keep());
-        when(roleRelevanceFilter.filter(any())).thenReturn(FilterResult.keep());
-        when(locationFilter.filter(any())).thenReturn(FilterResult.keep());
-        when(visaSponsorshipFilter.filter(anyString(), anyString(), eq(false))).thenReturn(VisaFilterResult.bypass());
-        when(yoeFilter.extractYoe(anyString())).thenReturn(null);
-        when(yoeFilter.filter(any())).thenReturn(FilterResult.keep());
-        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("test-fingerprint");
-        when(jobPostingRepository.findFirstByFingerprintAndLanguageFilter(anyString(), any(FilterDecision.class))).thenReturn(Optional.empty());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
+                .thenReturn("fp");
+        when(jobFilterChain.apply(any(RawJobInput.class), anyBoolean(), anyBoolean()))
+                .thenReturn(FilterChainResult.keep(null, null));
         when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
         when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+        when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(1);
 
         crawlService.crawlEndpoint(endpoint);
 
-        var captor = ArgumentCaptor.forClass(JobPosting.class);
-        verify(jobPostingRepository, atLeast(2)).save(captor.capture());
-        var savedJobs = captor.getAllValues();
-        var deactivated = savedJobs.stream()
-                .filter(j -> "ext-1".equals(j.getExternalId()))
-                .findFirst().orElseThrow();
-        assertThat(deactivated.isActive()).isFalse();
-        assertThat(deactivated.getDeactivatedAt()).isNotNull();
+        // bulkDeactivate called with endpoint ID and seen IDs containing ext-2
+        var idCaptor = ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(jobPostingRepository).bulkDeactivateByEndpointExcluding(
+                eq(endpoint.getId()), idCaptor.capture(), any(LocalDateTime.class));
+        assertThat(idCaptor.getValue()).contains("ext-2");
     }
 
     @Test
@@ -238,7 +255,26 @@ class CrawlServiceTest {
     }
 
     @Test
-    void crawlEndpoint_germanJob_savedWithSkipDecision() {
+    void crawlEndpoint_noStrategy_setsSkippedAndUpdatesLastCrawledAt() {
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("testco")
+                .build();
+
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.empty());
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+
+        int result = crawlService.crawlEndpoint(endpoint);
+
+        assertThat(result).isZero();
+        assertThat(endpoint.getLastCrawlStatus()).isEqualTo(CrawlStatus.SKIPPED);
+        assertThat(endpoint.getLastCrawledAt()).isNotNull();
+        verify(endpointRepository).save(endpoint);
+    }
+
+    @Test
+    void crawlEndpoint_filteredJob_savedWithSkipDecision() {
         var company = Company.builder().id(UUID.randomUUID()).name("TestCo").build();
         var endpoint = CareerEndpoint.builder()
                 .id(UUID.randomUUID())
@@ -256,10 +292,13 @@ class CrawlServiceTest {
         when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-1"))
                 .thenReturn(Optional.empty());
         when(jobPostingRepository.findByEndpointIdAndIsActiveTrue(endpoint.getId())).thenReturn(List.of());
-        when(languageFilter.filter("Entwickler", "Wir suchen einen Entwickler"))
-                .thenReturn(FilterResult.skip("German JD"));
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
+                .thenReturn("fp-de");
+        when(jobFilterChain.apply(any(RawJobInput.class), anyBoolean(), anyBoolean()))
+                .thenReturn(FilterChainResult.skip("German JD"));
         when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
         when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+        when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(0);
 
         crawlService.crawlEndpoint(endpoint);
 
@@ -268,6 +307,8 @@ class CrawlServiceTest {
         var saved = captor.getValue();
         assertThat(saved.getLanguageFilter()).isEqualTo(FilterDecision.SKIP);
         assertThat(saved.getFilterReason()).isEqualTo("German JD");
+        // postCrawlPipeline must NOT be called for SKIP jobs
+        verify(postCrawlPipeline, never()).run(any(), any(), any());
     }
 
     @Test
@@ -307,219 +348,276 @@ class CrawlServiceTest {
     }
 
     @Test
-    void crawlEndpoint_noStrategy_setsSkippedAndUpdatesLastCrawledAt() {
+    void crawlEndpoint_keepJob_postCrawlPipelineInvoked() {
+        var company = Company.builder().id(UUID.randomUUID()).name("AcmeCo").build();
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("acme")
+                .company(company)
+                .build();
+
+        var rawJob = new RawAggregatorJob("ext-5", "Backend Dev", null, "Berlin", "Good role",
+                "https://apply.com/5", LocalDate.now(), null, null, null, "{\"k\":\"v\"}");
+        var result = FetchResult.success(List.of(rawJob), Duration.ofMillis(50));
+
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(result);
+        when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-5"))
+                .thenReturn(Optional.empty());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
+                .thenReturn("fp-5");
+        when(jobFilterChain.apply(any(RawJobInput.class), anyBoolean(), anyBoolean()))
+                .thenReturn(FilterChainResult.keep(null, 3));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+        when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(0);
+
+        crawlService.crawlEndpoint(endpoint);
+
+        verify(postCrawlPipeline).run(any(JobPosting.class), anyString(), any());
+    }
+
+    @Test
+    void crawlEndpoint_filterChainResultFieldsStoredOnPosting() {
+        var company = Company.builder().id(UUID.randomUUID()).name("TestCo").build();
         var endpoint = CareerEndpoint.builder()
                 .id(UUID.randomUUID())
                 .atsType(AtsType.GREENHOUSE)
                 .atsSlug("testco")
+                .company(company)
                 .build();
 
-        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.empty());
+        var rawJob = new RawAggregatorJob("ext-9", "Engineer", null, "Amsterdam", "desc",
+                "url", null, null, null, null, "{}");
+        var result = FetchResult.success(List.of(rawJob), Duration.ofMillis(50));
+        var chainResult = FilterChainResult.keep(
+                dev.jobhunter.model.enums.VisaSponsorship.LIKELY, 4);
+
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(result);
+        when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-9"))
+                .thenReturn(Optional.empty());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
+                .thenReturn("fp-9");
+        when(jobFilterChain.apply(any(RawJobInput.class), anyBoolean(), anyBoolean()))
+                .thenReturn(chainResult);
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+        when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(0);
+
+        crawlService.crawlEndpoint(endpoint);
+
+        var captor = ArgumentCaptor.forClass(JobPosting.class);
+        verify(jobPostingRepository).save(captor.capture());
+        var saved = captor.getValue();
+        assertThat(saved.getRequiredYoe()).isEqualTo(4);
+        assertThat(saved.getVisaSponsorship()).isEqualTo(dev.jobhunter.model.enums.VisaSponsorship.LIKELY);
+        assertThat(saved.getFingerprint()).isEqualTo("fp-9");
+    }
+
+    // ── crawlAllDueEndpoints() ────────────────────────────────────────────────
+
+    @Test
+    void crawlAllDueEndpoints_noEndpoints_returnsZeros() {
+        when(endpointRepository.findAllActiveNonCustom()).thenReturn(List.of());
+
+        int[] stats = crawlService.crawlAllDueEndpoints();
+
+        assertThat(stats).containsExactly(0, 0, 0);
+        verifyNoInteractions(strategyRegistry);
+    }
+
+    @Test
+    void crawlAllDueEndpoints_singleEndpointNewJob_scoredAfterCrawl() {
+        var company = Company.builder().id(UUID.randomUUID()).name("TestCo").build();
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("testco")
+                .company(company)
+                .build();
+
+        var rawJob = new RawAggregatorJob("ext-x", "Engineer", null, "Berlin", "desc",
+                "url", LocalDate.now(), null, null, null, "{}");
+        var fetchResult = FetchResult.success(List.of(rawJob), Duration.ofMillis(100));
+
+        when(endpointRepository.findAllActiveNonCustom()).thenReturn(List.of(endpoint));
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(fetchResult);
+        when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-x"))
+                .thenReturn(Optional.empty());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
+                .thenReturn("fp-x");
+        when(jobFilterChain.apply(any(RawJobInput.class), anyBoolean(), anyBoolean()))
+                .thenReturn(FilterChainResult.keep(null, null));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+        when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(0);
+
+        int[] stats = crawlService.crawlAllDueEndpoints();
+
+        assertThat(stats[0]).isEqualTo(1); // endpointsCrawled
+        assertThat(stats[1]).isEqualTo(1); // totalJobs
+        assertThat(stats[2]).isEqualTo(0); // errors
+        verify(scoringService).scoreJobsForEndpoint(endpoint.getId());
+    }
+
+    @Test
+    void crawlAllDueEndpoints_endpointWithZeroJobs_noScoringTriggered() {
+        var company = Company.builder().id(UUID.randomUUID()).name("TestCo").build();
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("testco")
+                .company(company)
+                .build();
+
+        var fetchResult = FetchResult.empty(Duration.ofMillis(50));
+
+        when(endpointRepository.findAllActiveNonCustom()).thenReturn(List.of(endpoint));
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(fetchResult);
         when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
 
-        int result = crawlService.crawlEndpoint(endpoint);
+        int[] stats = crawlService.crawlAllDueEndpoints();
 
-        assertThat(result).isZero();
-        assertThat(endpoint.getLastCrawlStatus()).isEqualTo(CrawlStatus.SKIPPED);
-        assertThat(endpoint.getLastCrawledAt()).isNotNull();
-        verify(endpointRepository).save(endpoint);
-    }
-
-    // --- Backfill + language re-filter tests ---
-
-    @Test
-    void backfillDescriptions_noJobs_returnsZeros() {
-        when(jobPostingRepository.findBySourceAndLanguageFilterAndDescriptionIsNull(
-                JobSource.SMARTRECRUITERS, FilterDecision.KEEP))
-                .thenReturn(List.of());
-
-        int[] result = crawlService.backfillSmartRecruitersDescriptions();
-
-        assertThat(result[0]).isZero();
-        assertThat(result[1]).isZero();
-        verify(smartRecruitersStrategy, never()).fetchDescription(any(), any());
+        assertThat(stats[0]).isEqualTo(1); // endpointsCrawled
+        assertThat(stats[1]).isEqualTo(0); // no new jobs
+        assertThat(stats[2]).isEqualTo(0); // no errors
+        verify(scoringService, never()).scoreJobsForEndpoint(any());
     }
 
     @Test
-    void backfillDescriptions_englishJob_keepsFilterStatus() {
+    void crawlAllDueEndpoints_fetchThrows_countedAsError_pipelineContinues() {
+        var company = Company.builder().id(UUID.randomUUID()).name("TestCo").build();
         var endpoint = CareerEndpoint.builder()
                 .id(UUID.randomUUID())
-                .atsSlug("company-slug")
-                .build();
-        var job = JobPosting.builder()
-                .id(UUID.randomUUID())
-                .externalId("sr-123")
-                .title("Software Engineer")
-                .source(JobSource.SMARTRECRUITERS)
-                .languageFilter(FilterDecision.KEEP)
-                .endpoint(endpoint)
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("testco")
+                .company(company)
                 .build();
 
-        when(jobPostingRepository.findBySourceAndLanguageFilterAndDescriptionIsNull(
-                JobSource.SMARTRECRUITERS, FilterDecision.KEEP))
-                .thenReturn(List.of(job));
-        when(smartRecruitersStrategy.fetchDescription("company-slug", "sr-123"))
-                .thenReturn("We are looking for a Java engineer");
-        when(languageFilter.filter("Software Engineer", "We are looking for a Java engineer"))
-                .thenReturn(FilterResult.keep());
-        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(endpointRepository.findAllActiveNonCustom()).thenReturn(List.of(endpoint));
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenThrow(new RuntimeException("timeout"));
+        lenient().when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
 
-        int[] result = crawlService.backfillSmartRecruitersDescriptions();
+        int[] stats = crawlService.crawlAllDueEndpoints();
 
-        assertThat(result[0]).isEqualTo(1); // filled
-        assertThat(result[1]).isZero();     // none filtered
-
-        var captor = ArgumentCaptor.forClass(JobPosting.class);
-        verify(jobPostingRepository).save(captor.capture());
-        var saved = captor.getValue();
-        assertThat(saved.getDescription()).isEqualTo("We are looking for a Java engineer");
-        assertThat(saved.getLanguageFilter()).isEqualTo(FilterDecision.KEEP);
-        assertThat(saved.getFilterReason()).isNull();
+        assertThat(stats[0]).isEqualTo(0); // not counted as crawled
+        assertThat(stats[2]).isEqualTo(1); // error counted
+        verify(scoringService, never()).scoreJobsForEndpoint(any());
     }
 
     @Test
-    void backfillDescriptions_germanJob_marksSkip() {
+    void crawlAllDueEndpoints_multipleEndpoints_allProcessed() {
+        var company = Company.builder().id(UUID.randomUUID()).name("Co").build();
+        var ep1 = CareerEndpoint.builder().id(UUID.randomUUID()).atsType(AtsType.GREENHOUSE)
+                .atsSlug("co1").company(company).build();
+        var ep2 = CareerEndpoint.builder().id(UUID.randomUUID()).atsType(AtsType.GREENHOUSE)
+                .atsSlug("co2").company(company).build();
+
+        var emptyResult = FetchResult.empty(Duration.ofMillis(30));
+
+        when(endpointRepository.findAllActiveNonCustom()).thenReturn(List.of(ep1, ep2));
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(emptyResult);
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+
+        int[] stats = crawlService.crawlAllDueEndpoints();
+
+        assertThat(stats[0]).isEqualTo(2); // both endpoints crawled
+        assertThat(stats[1]).isEqualTo(0);
+        assertThat(stats[2]).isEqualTo(0);
+    }
+
+    @Test
+    void crawlAllDueEndpoints_withBackfillPostProcessor_processCalledAfterCrawl() {
+        var backfillProcessor = mock(dev.jobhunter.ingestion.BackfillPostProcessor.class);
+        var serviceWithProcessor = new CrawlService(
+                endpointRepository, jobPostingRepository, strategyRegistry,
+                jobFilterChain, deduplicationFilter, descriptionFilterChain,
+                List.of(), List.of(backfillProcessor), scoringService, postCrawlPipeline);
+        ReflectionTestUtils.setField(serviceWithProcessor, "crawlConcurrency", 10);
+
+        when(endpointRepository.findAllActiveNonCustom()).thenReturn(List.of());
+
+        serviceWithProcessor.crawlAllDueEndpoints();
+
+        verify(backfillProcessor).process();
+    }
+
+    // ── Fix 2: SUCCESS + empty jobs should not deactivate existing postings ──
+
+    @Test
+    void crawlEndpoint_successStatusWithEmptyJobList_setsEmptyStatus_noDeactivation() {
+        var company = Company.builder().id(UUID.randomUUID()).name("TestCo").build();
         var endpoint = CareerEndpoint.builder()
                 .id(UUID.randomUUID())
-                .atsSlug("firma-slug")
-                .build();
-        var job = JobPosting.builder()
-                .id(UUID.randomUUID())
-                .externalId("sr-456")
-                .title("Entwickler")
-                .source(JobSource.SMARTRECRUITERS)
-                .languageFilter(FilterDecision.KEEP)
-                .endpoint(endpoint)
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("testco")
+                .company(company)
                 .build();
 
-        String germanDesc = "Wir suchen einen erfahrenen Softwareentwickler mit Java-Kenntnissen";
+        // SUCCESS status but with an empty jobs list
+        var result = FetchResult.success(List.of(), Duration.ofMillis(100));
 
-        when(jobPostingRepository.findBySourceAndLanguageFilterAndDescriptionIsNull(
-                JobSource.SMARTRECRUITERS, FilterDecision.KEEP))
-                .thenReturn(List.of(job));
-        when(smartRecruitersStrategy.fetchDescription("firma-slug", "sr-456"))
-                .thenReturn(germanDesc);
-        when(languageFilter.filter("Entwickler", germanDesc))
-                .thenReturn(FilterResult.skip("German JD"));
-        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(result);
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
 
-        int[] result = crawlService.backfillSmartRecruitersDescriptions();
+        int newJobs = crawlService.crawlEndpoint(endpoint);
 
-        assertThat(result[0]).isEqualTo(1); // filled
-        assertThat(result[1]).isEqualTo(1); // filtered
-
-        var captor = ArgumentCaptor.forClass(JobPosting.class);
-        verify(jobPostingRepository).save(captor.capture());
-        var saved = captor.getValue();
-        assertThat(saved.getDescription()).isEqualTo(germanDesc);
-        assertThat(saved.getLanguageFilter()).isEqualTo(FilterDecision.SKIP);
-        assertThat(saved.getFilterReason()).isEqualTo("German JD");
+        assertThat(newJobs).isZero();
+        assertThat(endpoint.getLastCrawlStatus()).isEqualTo(CrawlStatus.EMPTY);
+        // deactivation logic must NOT run — no existing postings wiped
+        verify(jobPostingRepository, never()).findByEndpointIdAndIsActiveTrue(any());
+        verify(jobPostingRepository, never()).bulkDeactivateByEndpointExcluding(any(), any(), any());
     }
 
-    @Test
-    void backfillDescriptions_nullSlug_skipsJob() {
-        var job = JobPosting.builder()
-                .id(UUID.randomUUID())
-                .externalId("sr-789")
-                .title("Engineer")
-                .source(JobSource.SMARTRECRUITERS)
-                .languageFilter(FilterDecision.KEEP)
-                .endpoint(null)
-                .build();
-
-        when(jobPostingRepository.findBySourceAndLanguageFilterAndDescriptionIsNull(
-                JobSource.SMARTRECRUITERS, FilterDecision.KEEP))
-                .thenReturn(List.of(job));
-
-        int[] result = crawlService.backfillSmartRecruitersDescriptions();
-
-        assertThat(result[0]).isZero();
-        assertThat(result[1]).isZero();
-        verify(smartRecruitersStrategy, never()).fetchDescription(any(), any());
-        verify(jobPostingRepository, never()).save(any(JobPosting.class));
-    }
+    // ── Fix 3: markEndpointError increments consecutiveErrors ────────────────
 
     @Test
-    void backfillDescriptions_fetchReturnsNull_doesNotSave() {
+    void crawlAllDueEndpoints_fetchThrows_incrementsConsecutiveErrors() {
+        var company = Company.builder().id(UUID.randomUUID()).name("TestCo").build();
         var endpoint = CareerEndpoint.builder()
                 .id(UUID.randomUUID())
-                .atsSlug("slug")
-                .build();
-        var job = JobPosting.builder()
-                .id(UUID.randomUUID())
-                .externalId("sr-000")
-                .title("Engineer")
-                .source(JobSource.SMARTRECRUITERS)
-                .languageFilter(FilterDecision.KEEP)
-                .endpoint(endpoint)
-                .build();
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("testco")
+                .company(company)
+                .build(); // consecutiveErrors defaults to 0
 
-        when(jobPostingRepository.findBySourceAndLanguageFilterAndDescriptionIsNull(
-                JobSource.SMARTRECRUITERS, FilterDecision.KEEP))
-                .thenReturn(List.of(job));
-        when(smartRecruitersStrategy.fetchDescription("slug", "sr-000"))
-                .thenReturn(null);
+        when(endpointRepository.findAllActiveNonCustom()).thenReturn(List.of(endpoint));
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenThrow(new RuntimeException("timeout"));
+        lenient().when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
 
-        int[] result = crawlService.backfillSmartRecruitersDescriptions();
+        crawlService.crawlAllDueEndpoints();
 
-        assertThat(result[0]).isZero();
-        assertThat(result[1]).isZero();
-        verify(jobPostingRepository, never()).save(any(JobPosting.class));
-        verify(languageFilter, never()).filter(any(), any());
+        assertThat(endpoint.getConsecutiveErrors()).isEqualTo(1);
+        assertThat(endpoint.getLastCrawlStatus()).isEqualTo(CrawlStatus.ERROR);
     }
 
     @Test
-    void backfillDescriptions_mixedJobs_countsCorrectly() {
+    void crawlAllDueEndpoints_tenConsecutiveFetchErrors_autoDeactivatesEndpoint() {
+        var company = Company.builder().id(UUID.randomUUID()).name("TestCo").build();
         var endpoint = CareerEndpoint.builder()
                 .id(UUID.randomUUID())
-                .atsSlug("mixed-co")
-                .build();
-        var englishJob = JobPosting.builder()
-                .id(UUID.randomUUID())
-                .externalId("en-1")
-                .title("Engineer")
-                .source(JobSource.SMARTRECRUITERS)
-                .languageFilter(FilterDecision.KEEP)
-                .endpoint(endpoint)
-                .build();
-        var germanJob = JobPosting.builder()
-                .id(UUID.randomUUID())
-                .externalId("de-1")
-                .title("Entwickler")
-                .source(JobSource.SMARTRECRUITERS)
-                .languageFilter(FilterDecision.KEEP)
-                .endpoint(endpoint)
-                .build();
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("testco")
+                .company(company)
+                .consecutiveErrors(9) // one more will hit the threshold
+                .build();             // isActive defaults to true
 
-        when(jobPostingRepository.findBySourceAndLanguageFilterAndDescriptionIsNull(
-                JobSource.SMARTRECRUITERS, FilterDecision.KEEP))
-                .thenReturn(List.of(englishJob, germanJob));
-        when(smartRecruitersStrategy.fetchDescription("mixed-co", "en-1"))
-                .thenReturn("English description");
-        when(smartRecruitersStrategy.fetchDescription("mixed-co", "de-1"))
-                .thenReturn("Deutsche Beschreibung mit fließend Deutsch C1 erforderlich");
-        when(languageFilter.filter("Engineer", "English description"))
-                .thenReturn(FilterResult.keep());
-        when(languageFilter.filter("Entwickler", "Deutsche Beschreibung mit fließend Deutsch C1 erforderlich"))
-                .thenReturn(FilterResult.skip("German C1/C2 required"));
-        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(endpointRepository.findAllActiveNonCustom()).thenReturn(List.of(endpoint));
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenThrow(new RuntimeException("timeout"));
+        lenient().when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
 
-        int[] result = crawlService.backfillSmartRecruitersDescriptions();
+        crawlService.crawlAllDueEndpoints();
 
-        assertThat(result[0]).isEqualTo(2); // both filled
-        assertThat(result[1]).isEqualTo(1); // one filtered
-
-        var captor = ArgumentCaptor.forClass(JobPosting.class);
-        verify(jobPostingRepository, times(2)).save(captor.capture());
-        var saved = captor.getAllValues();
-
-        var savedEnglish = saved.stream()
-                .filter(j -> "en-1".equals(j.getExternalId())).findFirst().orElseThrow();
-        assertThat(savedEnglish.getLanguageFilter()).isEqualTo(FilterDecision.KEEP);
-
-        var savedGerman = saved.stream()
-                .filter(j -> "de-1".equals(j.getExternalId())).findFirst().orElseThrow();
-        assertThat(savedGerman.getLanguageFilter()).isEqualTo(FilterDecision.SKIP);
-        assertThat(savedGerman.getFilterReason()).isEqualTo("German C1/C2 required");
+        assertThat(endpoint.getConsecutiveErrors()).isEqualTo(10);
+        assertThat(endpoint.isActive()).isFalse();
     }
 }

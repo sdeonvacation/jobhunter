@@ -3,6 +3,7 @@ package dev.jobhunter.scheduler;
 import dev.jobhunter.ingestion.AggregatorIngestionService;
 import dev.jobhunter.ingestion.IngestionStats;
 import dev.jobhunter.service.CrawlService;
+import dev.jobhunter.service.ScoringService;
 import dev.jobhunter.source.SourceConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -16,8 +17,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * Unified pipeline scheduler: [crawl + aggregator sources] in parallel → scoring.
@@ -28,19 +27,17 @@ import java.util.concurrent.Executors;
 @DisallowConcurrentExecution
 public class PipelineScheduler implements Job {
 
-    private static final ExecutorService PIPELINE_POOL = Executors.newFixedThreadPool(3);
-
     private final CrawlService crawlService;
-    private final ScoringScheduler scoringScheduler;
+    private final ScoringService scoringService;
     private final AggregatorIngestionService aggregatorIngestionService;
     private final List<SourceConfig> sources;
 
     public PipelineScheduler(CrawlService crawlService,
-                             ScoringScheduler scoringScheduler,
+                             ScoringService scoringService,
                              AggregatorIngestionService aggregatorIngestionService,
                              @Qualifier("allSources") List<SourceConfig> sources) {
         this.crawlService = crawlService;
-        this.scoringScheduler = scoringScheduler;
+        this.scoringService = scoringService;
         this.aggregatorIngestionService = aggregatorIngestionService;
         this.sources = sources;
     }
@@ -57,7 +54,7 @@ public class PipelineScheduler implements Job {
         log.info("Pipeline starting: [crawl + {} aggregator sources] parallel → scoring", sources.size());
         Instant start = Instant.now();
 
-        // Step 1: Crawl ATS endpoints
+        // Step 1: Crawl ATS endpoints (crawlAllDueEndpoints() is itself parallelized internally)
         CompletableFuture<int[]> crawlFuture = CompletableFuture.supplyAsync(() -> {
             try {
                 log.info("[Pipeline] Crawling ATS endpoints");
@@ -69,7 +66,7 @@ public class PipelineScheduler implements Job {
                 log.error("[Pipeline] Crawl failed", e);
                 return new int[]{0, 0, 0};
             }
-        }, PIPELINE_POOL);
+        });
 
         // Step 2: Run each enabled aggregator source in parallel; score immediately after each
         // completes so slow sources (e.g. LinkedIn ~100 min) don't block scoring for fast ones.
@@ -86,11 +83,11 @@ public class PipelineScheduler implements Job {
                         log.error("[Pipeline] Source {} failed", source.name(), e);
                         return new IngestionStats(source.name(), 0, 0, 0, 0, 0, 1, 0);
                     }
-                }, PIPELINE_POOL).whenComplete((stats, err) -> {
+                }).whenComplete((stats, err) -> {
                     if (err == null && stats != null && stats.created() > 0) {
                         try {
                             log.info("[Pipeline] Scoring {} new jobs from source {}", stats.created(), stats.sourceName());
-                            scoringScheduler.scoreJobsForSource(source.sourceType());
+                            scoringService.scoreJobsForSource(source.sourceType());
                         } catch (Exception e) {
                             log.error("[Pipeline] Post-source scoring failed for {}", stats.sourceName(), e);
                         }
@@ -105,7 +102,7 @@ public class PipelineScheduler implements Job {
         // Step 3: Final scoring pass — catches any jobs created concurrently during the pipeline
         try {
             log.info("[Pipeline] Final scoring pass");
-            scoringScheduler.scoreAllUnscored();
+            scoringService.scoreAllUnscored();
             log.info("[Pipeline] Scoring complete");
         } catch (Exception e) {
             log.error("[Pipeline] Scoring failed", e);

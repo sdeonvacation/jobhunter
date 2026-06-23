@@ -6,7 +6,6 @@ import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
-import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -19,7 +18,7 @@ import java.util.*;
 
 @Slf4j
 @Component
-public class SmartRecruitersStrategy implements FetchStrategy {
+public class SmartRecruitersStrategy extends AbstractAtsStrategy {
 
     private static final String API_URL = "https://api.smartrecruiters.com/v1/companies/%s/postings";
     private static final String DETAIL_URL = "https://api.smartrecruiters.com/v1/companies/%s/postings/%s";
@@ -36,8 +35,8 @@ public class SmartRecruitersStrategy implements FetchStrategy {
     }
 
     @Override
-    public boolean supports(AtsType type) {
-        return type == AtsType.SMARTRECRUITERS;
+    public Set<AtsType> supportedTypes() {
+        return Set.of(AtsType.SMARTRECRUITERS);
     }
 
     @Override
@@ -198,14 +197,5 @@ public class SmartRecruitersStrategy implements FetchStrategy {
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private String truncate(String value, int maxLength) {
-        if (value == null || value.length() <= maxLength) return value;
-        return value.substring(0, maxLength);
-    }
-
-    private Duration elapsed(Instant start) {
-        return Duration.between(start, Instant.now());
     }
 }

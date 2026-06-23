@@ -45,13 +45,13 @@ class SuccessFactorsStrategyTest {
     }
 
     @Test
-    void supports_returnsTrue_forSuccessFactors() {
-        assertTrue(extractor.supports(AtsType.SUCCESSFACTORS));
+    void supportedTypes_containsSuccessFactors() {
+        assertTrue(extractor.supportedTypes().contains(AtsType.SUCCESSFACTORS));
     }
 
     @Test
-    void supports_returnsFalse_forOtherType() {
-        assertFalse(extractor.supports(AtsType.GREENHOUSE));
+    void supportedTypes_doesNotContainOtherType() {
+        assertFalse(extractor.supportedTypes().contains(AtsType.GREENHOUSE));
     }
 
     @Test

@@ -1,14 +1,9 @@
 package dev.jobhunter.ingestion;
 
 import dev.jobhunter.filter.DeduplicationFilter;
-import dev.jobhunter.filter.LanguageFilter;
-import dev.jobhunter.filter.LocationFilter;
-import dev.jobhunter.filter.RoleRelevanceFilter;
-import dev.jobhunter.filter.YoeFilter;
-import dev.jobhunter.filter.visa.VisaSponsorshipFilter;
+import dev.jobhunter.filter.JobFilterChain;
 import dev.jobhunter.model.AggregatorRun;
 import dev.jobhunter.model.enums.DiscoverySource;
-import dev.jobhunter.model.enums.ExtractionStatus;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.AggregatorRunRepository;
 import dev.jobhunter.repository.CompanyRepository;
@@ -40,12 +35,8 @@ class AggregatorIngestionErrorMessageTest {
     @Mock private JobPostingRepository jobPostingRepository;
     @Mock private CompanyRepository companyRepository;
     @Mock private AggregatorRunRepository aggregatorRunRepository;
-    @Mock private LanguageFilter languageFilter;
-    @Mock private RoleRelevanceFilter roleRelevanceFilter;
-    @Mock private LocationFilter locationFilter;
-    @Mock private YoeFilter yoeFilter;
+    @Mock private JobFilterChain jobFilterChain;
     @Mock private DeduplicationFilter deduplicationFilter;
-    @Mock private VisaSponsorshipFilter visaSponsorshipFilter;
     @Mock private FetchStrategy fetchStrategy;
 
     private AggregatorIngestionServiceImpl service;
@@ -54,8 +45,7 @@ class AggregatorIngestionErrorMessageTest {
     void setUp() {
         service = new AggregatorIngestionServiceImpl(
                 jobPostingRepository, companyRepository, aggregatorRunRepository,
-                languageFilter, roleRelevanceFilter, locationFilter,
-                yoeFilter, deduplicationFilter, visaSponsorshipFilter,
+                jobFilterChain, deduplicationFilter,
                 List.of());
     }
 

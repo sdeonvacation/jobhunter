@@ -31,7 +31,7 @@ class JoinStrategyTest {
 
     @Test
     void supportedTypes_returnsJoin() {
-        assertThat(extractor.supports(AtsType.JOIN)).isTrue();
+        assertThat(extractor.supportedTypes()).contains(AtsType.JOIN);
     }
 
     @Test

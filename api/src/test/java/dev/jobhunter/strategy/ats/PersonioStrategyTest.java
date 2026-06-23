@@ -36,7 +36,7 @@ class PersonioStrategyTest {
 
     @Test
     void supportedTypes_returnsPersonio() {
-        assertThat(extractor.supports(AtsType.PERSONIO)).isTrue();
+        assertThat(extractor.supportedTypes()).contains(AtsType.PERSONIO);
     }
 
     @Test

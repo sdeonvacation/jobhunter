@@ -3,6 +3,9 @@ spring:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5435}/jobhunter
     username: ${DB_USER:jobhunter}
     password: ${DB_PASSWORD:jobhunter}
+    hikari:
+      maximum-pool-size: 20
+      connection-timeout: 30000
   jpa:
     hibernate:
       ddl-auto: none
@@ -34,6 +37,9 @@ ai-crawl:
   batch-size: 150
   max-content-chars: 8000
   enabled: ${AI_CRAWL_ENABLED:true}
+
+crawl:
+  concurrency: 20
 
 pipeline:
   schedule: "0 0 */4 * * ?"
@@ -150,6 +156,15 @@ aggregator:
       config:
         delayBetweenMs: "400"
         maxScrapePerRun: "50"
+    - name: builtineurope
+      strategy: builtineurope
+      job-source: BUILTIN_EUROPE
+      discovery-source: BUILTIN_EUROPE
+      url: "https://api.builtineurope.com/search"
+      frequency-hours: 6 # informational only
+      max-results: 500
+      config:
+        queries: "engineer,developer"
 
 server:
   port: 8080

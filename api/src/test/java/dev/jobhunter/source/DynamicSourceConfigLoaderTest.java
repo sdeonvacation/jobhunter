@@ -96,8 +96,8 @@ class DynamicSourceConfigLoaderTest {
     }
 
     @Test
-    @DisplayName("throws when strategy not found in registry")
-    void throwsWhenStrategyNotFound() {
+    @DisplayName("skips source when strategy not found in registry (warn, don't throw)")
+    void skipsSourceWhenStrategyNotFound() {
         when(registry.getStrategy("nonexistent")).thenReturn(Optional.empty());
 
         AggregatorSourceProperties props = new AggregatorSourceProperties();
@@ -106,10 +106,9 @@ class DynamicSourceConfigLoaderTest {
                         "https://example.com", 12, 50, true)
         ));
 
-        assertThatThrownBy(() -> loader.dynamicSources(props, registry))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("No strategy named 'nonexistent'")
-                .hasMessageContaining("bad");
+        // No exception thrown; source is silently skipped
+        List<SourceConfig> result = loader.dynamicSources(props, registry);
+        assertThat(result).isEmpty();
     }
 
     @Test

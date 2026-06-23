@@ -6,7 +6,6 @@ import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
-import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -18,7 +17,7 @@ import java.util.*;
 
 @Slf4j
 @Component
-public class LeverStrategy implements FetchStrategy {
+public class LeverStrategy extends AbstractAtsStrategy {
 
     private static final String API_URL = "https://api.lever.co/v0/postings/%s?mode=json";
     private static final String API_URL_EU = "https://api.eu.lever.co/v0/postings/%s?mode=json";
@@ -32,8 +31,8 @@ public class LeverStrategy implements FetchStrategy {
     }
 
     @Override
-    public boolean supports(AtsType type) {
-        return type == AtsType.LEVER || type == AtsType.LEVER_EU;
+    public Set<AtsType> supportedTypes() {
+        return Set.of(AtsType.LEVER, AtsType.LEVER_EU);
     }
 
     @Override
@@ -55,7 +54,7 @@ public class LeverStrategy implements FetchStrategy {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block(Duration.ofSeconds(45));
 
             if (responseBody == null || responseBody.isBlank()) {
                 return FetchResult.empty(elapsed(start));
@@ -121,16 +120,5 @@ public class LeverStrategy implements FetchStrategy {
             return null;
         }
         return Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate();
-    }
-
-    private Duration elapsed(Instant start) {
-        return Duration.between(start, Instant.now());
-    }
-
-    private String truncate(String value, int maxLength) {
-        if (value == null || value.length() <= maxLength) {
-            return value;
-        }
-        return value.substring(0, maxLength);
     }
 }

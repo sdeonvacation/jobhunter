@@ -6,7 +6,6 @@ import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
-import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -18,7 +17,7 @@ import java.util.*;
 
 @Slf4j
 @Component
-public class JoinStrategy implements FetchStrategy {
+public class JoinStrategy extends AbstractAtsStrategy {
 
     private static final String DEFAULT_BASE_URL = "https://api.join.com";
     private static final String PATH_TEMPLATE = "/v1/companies/%s/jobs";
@@ -40,8 +39,8 @@ public class JoinStrategy implements FetchStrategy {
     }
 
     @Override
-    public boolean supports(AtsType type) {
-        return type == AtsType.JOIN;
+    public Set<AtsType> supportedTypes() {
+        return Set.of(AtsType.JOIN);
     }
 
     @Override
@@ -147,9 +146,5 @@ public class JoinStrategy implements FetchStrategy {
                 return null;
             }
         }
-    }
-
-    private Duration elapsed(Instant start) {
-        return Duration.between(start, Instant.now());
     }
 }

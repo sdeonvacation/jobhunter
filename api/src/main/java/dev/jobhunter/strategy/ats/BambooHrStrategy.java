@@ -6,7 +6,6 @@ import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
-import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -19,7 +18,7 @@ import java.util.*;
 
 @Slf4j
 @Component
-public class BambooHrStrategy implements FetchStrategy {
+public class BambooHrStrategy extends AbstractAtsStrategy {
 
     private static final String DEFAULT_BASE_URL = "https://%s.bamboohr.com";
     private static final String PATH = "/careers/list";
@@ -41,8 +40,8 @@ public class BambooHrStrategy implements FetchStrategy {
     }
 
     @Override
-    public boolean supports(AtsType type) {
-        return type == AtsType.BAMBOOHR;
+    public Set<AtsType> supportedTypes() {
+        return Set.of(AtsType.BAMBOOHR);
     }
 
     @Override
@@ -139,9 +138,5 @@ public class BambooHrStrategy implements FetchStrategy {
             return city;
         }
         return city + ", " + country;
-    }
-
-    private Duration elapsed(Instant start) {
-        return Duration.between(start, Instant.now());
     }
 }

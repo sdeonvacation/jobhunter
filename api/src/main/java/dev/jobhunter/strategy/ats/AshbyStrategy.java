@@ -6,7 +6,6 @@ import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
-import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -19,24 +18,12 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static java.util.Map.entry;
-
 @Slf4j
 @Component
-public class AshbyStrategy implements FetchStrategy {
+public class AshbyStrategy extends AbstractAtsStrategy {
 
     private static final String DEFAULT_BASE_URL = "https://api.ashbyhq.com";
     private static final String PATH_TEMPLATE = "/posting-api/job-board/%s?includeCompensation=true";
-    private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]*>");
-    private static final Map<String, String> HTML_ENTITIES = Map.ofEntries(
-            entry("&amp;", "&"),
-            entry("&lt;", "<"),
-            entry("&gt;", ">"),
-            entry("&nbsp;", " "),
-            entry("&quot;", "\""),
-            entry("&#39;", "'"),
-            entry("&apos;", "'")
-    );
     private static final Pattern COMPENSATION_RANGE_PATTERN = Pattern.compile(
             "[^\\d]*(\\d[\\d,.]*)\\s*[-–]\\s*[^\\d]*(\\d[\\d,.]*)"
     );
@@ -58,8 +45,8 @@ public class AshbyStrategy implements FetchStrategy {
     }
 
     @Override
-    public boolean supports(AtsType type) {
-        return type == AtsType.ASHBY;
+    public Set<AtsType> supportedTypes() {
+        return Set.of(AtsType.ASHBY);
     }
 
     @Override
@@ -189,27 +176,5 @@ public class AshbyStrategy implements FetchStrategy {
                 return null;
             }
         }
-    }
-
-    private String stripHtml(String html) {
-        if (html == null || html.isBlank()) {
-            return "";
-        }
-        String text = HTML_TAG_PATTERN.matcher(html).replaceAll("");
-        for (Map.Entry<String, String> entry : HTML_ENTITIES.entrySet()) {
-            text = text.replace(entry.getKey(), entry.getValue());
-        }
-        return text.replaceAll("\\s+", " ").trim();
-    }
-
-    private String truncate(String value, int maxLength) {
-        if (value == null || value.length() <= maxLength) {
-            return value;
-        }
-        return value.substring(0, maxLength);
-    }
-
-    private Duration elapsed(Instant start) {
-        return Duration.between(start, Instant.now());
     }
 }

@@ -3,6 +3,7 @@ package dev.jobhunter.scheduler;
 import dev.jobhunter.ingestion.AggregatorIngestionService;
 import dev.jobhunter.ingestion.IngestionStats;
 import dev.jobhunter.service.CrawlService;
+import dev.jobhunter.service.ScoringService;
 import dev.jobhunter.source.SourceConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,7 +20,7 @@ import static org.mockito.Mockito.*;
 class PipelineSchedulerTest {
 
     @Mock private CrawlService crawlService;
-    @Mock private ScoringScheduler scoringScheduler;
+    @Mock private ScoringService scoringService;
     @Mock private AggregatorIngestionService aggregatorIngestionService;
     @Mock private SourceConfig enabledSource;
     @Mock private SourceConfig disabledSource;
@@ -34,7 +35,7 @@ class PipelineSchedulerTest {
         lenient().when(disabledSource.isEnabled()).thenReturn(false);
         lenient().when(disabledSource.name()).thenReturn("disabled-source");
 
-        scheduler = new PipelineScheduler(crawlService, scoringScheduler,
+        scheduler = new PipelineScheduler(crawlService, scoringService,
                 aggregatorIngestionService, List.of(enabledSource, disabledSource));
     }
 
@@ -49,12 +50,12 @@ class PipelineSchedulerTest {
         verify(crawlService).crawlAllDueEndpoints();
         verify(aggregatorIngestionService).ingest(enabledSource);
         verify(aggregatorIngestionService, never()).ingest(disabledSource);
-        verify(scoringScheduler).scoreAllUnscored();
+        verify(scoringService).scoreAllUnscored();
     }
 
     @Test
     void runPipeline_noSources_stillCrawlsAndScores() {
-        PipelineScheduler emptyScheduler = new PipelineScheduler(crawlService, scoringScheduler,
+        PipelineScheduler emptyScheduler = new PipelineScheduler(crawlService, scoringService,
                 aggregatorIngestionService, List.of());
         when(crawlService.crawlAllDueEndpoints()).thenReturn(new int[]{3, 10, 0});
 
@@ -62,7 +63,7 @@ class PipelineSchedulerTest {
 
         verify(crawlService).crawlAllDueEndpoints();
         verify(aggregatorIngestionService, never()).ingest(any());
-        verify(scoringScheduler).scoreAllUnscored();
+        verify(scoringService).scoreAllUnscored();
     }
 
     @Test
@@ -73,7 +74,7 @@ class PipelineSchedulerTest {
 
         assertThatCode(() -> scheduler.runPipeline()).doesNotThrowAnyException();
 
-        verify(scoringScheduler).scoreAllUnscored();
+        verify(scoringService).scoreAllUnscored();
     }
 
     @Test
@@ -84,7 +85,7 @@ class PipelineSchedulerTest {
 
         assertThatCode(() -> scheduler.runPipeline()).doesNotThrowAnyException();
 
-        verify(scoringScheduler).scoreAllUnscored();
+        verify(scoringService).scoreAllUnscored();
     }
 
     @Test
@@ -92,7 +93,7 @@ class PipelineSchedulerTest {
         when(crawlService.crawlAllDueEndpoints()).thenReturn(new int[]{1, 1, 0});
         when(aggregatorIngestionService.ingest(enabledSource))
                 .thenReturn(new IngestionStats("linkedin", 5, 2, 2, 1, 0, 0, 800));
-        doThrow(new RuntimeException("Scoring error")).when(scoringScheduler).scoreAllUnscored();
+        doThrow(new RuntimeException("Scoring error")).when(scoringService).scoreAllUnscored();
 
         assertThatCode(() -> scheduler.runPipeline()).doesNotThrowAnyException();
     }
@@ -106,6 +107,6 @@ class PipelineSchedulerTest {
         assertThatCode(() -> scheduler.execute(null)).doesNotThrowAnyException();
 
         verify(crawlService).crawlAllDueEndpoints();
-        verify(scoringScheduler).scoreAllUnscored();
+        verify(scoringService).scoreAllUnscored();
     }
 }

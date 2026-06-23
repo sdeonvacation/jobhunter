@@ -31,7 +31,7 @@ class WorkableStrategyTest {
 
     @Test
     void supportedTypes_returnsWorkable() {
-        assertThat(extractor.supports(AtsType.WORKABLE)).isTrue();
+        assertThat(extractor.supportedTypes()).contains(AtsType.WORKABLE);
     }
 
     @Test
