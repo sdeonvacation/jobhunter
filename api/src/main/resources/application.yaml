@@ -21,6 +21,12 @@ ai:
   base-url: ${JOBHUNTER_AI_BASE_URL:}
   extraction-model: ${JOBHUNTER_AI_EXTRACTION_MODEL:claude-haiku-4-5}
   tailoring-model: ${JOBHUNTER_AI_TAILORING_MODEL:claude-sonnet-4-5}
+  fallback:
+    provider: ${JOBHUNTER_AI_FALLBACK_PROVIDER:openai}
+    api-key: ${JOBHUNTER_AI_FALLBACK_API_KEY:}
+    base-url: ${JOBHUNTER_AI_FALLBACK_BASE_URL:}
+    extraction-model: ${JOBHUNTER_AI_FALLBACK_EXTRACTION_MODEL:gemini-2.0-flash-lite}
+    tailoring-model: ${JOBHUNTER_AI_FALLBACK_TAILORING_MODEL:gemini-2.0-flash}
 
 ai-crawl:
   schedule: "0 0 */8 * * ?"

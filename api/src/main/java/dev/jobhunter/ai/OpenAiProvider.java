@@ -113,7 +113,6 @@ public class OpenAiProvider implements AiProvider {
         responseFormat.put("type", "json_schema");
         ObjectNode jsonSchema = responseFormat.putObject("json_schema");
         jsonSchema.put("name", "extraction_result");
-        jsonSchema.put("strict", true);
         jsonSchema.set("schema", generateJsonSchema(outputType));
 
         return requestBody;

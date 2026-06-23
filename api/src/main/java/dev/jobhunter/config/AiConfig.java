@@ -2,6 +2,7 @@ package dev.jobhunter.config;
 
 import dev.jobhunter.ai.AiProvider;
 import dev.jobhunter.ai.AnthropicProvider;
+import dev.jobhunter.ai.FallbackAiProvider;
 import dev.jobhunter.ai.OpenAiProvider;
 import lombok.Getter;
 import lombok.Setter;
@@ -24,6 +25,18 @@ public class AiConfig {
     private String extractionModel = "claude-haiku-4-5";
     private String tailoringModel = "claude-sonnet-4-5";
 
+    private FallbackConfig fallback;
+
+    @Getter
+    @Setter
+    public static class FallbackConfig {
+        private String provider = "openai";
+        private String apiKey = "";
+        private String baseUrl = "";
+        private String extractionModel = "claude-haiku-4-5";
+        private String tailoringModel = "claude-sonnet-4-5";
+    }
+
     @Bean
     public WebClient aiWebClient() {
         return WebClient.builder()
@@ -33,14 +46,30 @@ public class AiConfig {
 
     @Bean
     public AiProvider aiProvider(WebClient aiWebClient) {
-        return switch (provider.toLowerCase()) {
+        AiProvider primary = buildProvider(aiWebClient, provider, apiKey, baseUrl, extractionModel, tailoringModel);
+
+        if (fallback != null && fallback.getApiKey() != null && !fallback.getApiKey().isBlank()) {
+            AiProvider secondary = buildProvider(aiWebClient,
+                    fallback.getProvider(), fallback.getApiKey(), fallback.getBaseUrl(),
+                    fallback.getExtractionModel(), fallback.getTailoringModel());
+            log.info("AI provider: primary=[{}], fallback=[{}]", primary.name(), secondary.name());
+            return new FallbackAiProvider(primary, secondary);
+        }
+
+        log.info("AI provider: [{}] (no fallback configured)", primary.name());
+        return primary;
+    }
+
+    private AiProvider buildProvider(WebClient webClient, String providerName, String key,
+                                     String url, String extractModel, String tailorModel) {
+        return switch (providerName.toLowerCase()) {
             case "openai" -> {
-                log.info("Using OpenAI provider with baseUrl={}, extraction={}, tailoring={}", baseUrl, extractionModel, tailoringModel);
-                yield new OpenAiProvider(aiWebClient, apiKey, baseUrl, extractionModel, tailoringModel);
+                log.debug("Building OpenAI provider: baseUrl={}, extraction={}, tailoring={}", url, extractModel, tailorModel);
+                yield new OpenAiProvider(webClient, key, url, extractModel, tailorModel);
             }
             default -> {
-                log.info("Using Anthropic provider with baseUrl={}, extraction={}, tailoring={}", baseUrl, extractionModel, tailoringModel);
-                yield new AnthropicProvider(aiWebClient, apiKey, baseUrl, extractionModel, tailoringModel);
+                log.debug("Building Anthropic provider: baseUrl={}, extraction={}, tailoring={}", url, extractModel, tailorModel);
+                yield new AnthropicProvider(webClient, key, url, extractModel, tailorModel);
             }
         };
     }
