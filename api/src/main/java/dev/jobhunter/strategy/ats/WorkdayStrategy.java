@@ -32,6 +32,9 @@ public class WorkdayStrategy extends AbstractAtsStrategy {
     private static final Duration PAGE_DELAY = Duration.ofMillis(300);
     private static final Pattern POSTED_DAYS_PATTERN = Pattern.compile("Posted (\\d+) Days? Ago");
     private static final Pattern SITE_PATH_PATTERN = Pattern.compile("/([^/]+)/?$");
+    // Fallback: extract tenant + shard from URL when atsSlug/atsShardId not stored in DB
+    private static final Pattern WORKDAY_URL_PATTERN = Pattern.compile(
+            "https?://([\\w-]+)\\.wd(\\d+)\\.myworkdayjobs\\.com.*");
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
@@ -66,6 +69,22 @@ public class WorkdayStrategy extends AbstractAtsStrategy {
         String tenant = endpoint.getAtsSlug();
         String shardId = endpoint.getAtsShardId();
         String site = extractSite(endpoint.getUrl());
+
+        // Fallback: parse tenant and shardId from the URL when not stored in DB.
+        // URL format: https://{tenant}.wd{shard}.myworkdayjobs.com/{site}
+        if ((tenant == null || shardId == null) && endpoint.getUrl() != null) {
+            Matcher m = WORKDAY_URL_PATTERN.matcher(endpoint.getUrl());
+            if (m.matches()) {
+                if (tenant == null) tenant = m.group(1);
+                if (shardId == null) shardId = m.group(2);
+                log.debug("Workday [{}]: resolved tenant='{}' shardId='{}' from URL", endpoint.getUrl(), tenant, shardId);
+            }
+        }
+
+        if (tenant == null || shardId == null) {
+            log.warn("Workday [{}]: cannot determine tenant/shardId — atsSlug/atsShardId not set and URL does not match Workday pattern", endpoint.getUrl());
+            return FetchResult.error("Cannot determine tenant or shardId", elapsed(start));
+        }
 
         if (site == null) {
             log.warn("Workday [{}]: could not extract site from URL: {}", tenant, endpoint.getUrl());

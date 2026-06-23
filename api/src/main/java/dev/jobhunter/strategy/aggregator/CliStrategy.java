@@ -120,6 +120,13 @@ public class CliStrategy implements FetchStrategy {
 
             ProcessBuilder pb = new ProcessBuilder(command)
                     .redirectErrorStream(true);
+            // When launched via launchd, PATH is stripped to /usr/bin:/bin only.
+            // Inject the directory containing npx so that npx can find node.
+            String npxDir = new File(npxPath).getParent();
+            if (npxDir != null) {
+                pb.environment().merge("PATH", npxDir,
+                        (existing, dir) -> dir + ":" + existing);
+            }
             Process process = pb.start();
 
             boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
