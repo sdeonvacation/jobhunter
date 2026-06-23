@@ -124,7 +124,7 @@ public class BuiltInEuropeStrategy implements FetchStrategy {
             }
 
             JsonNode root = objectMapper.readTree(responseBody);
-            JsonNode jobs = root.path("jobs");
+            JsonNode jobs = root.path("results");
             if (!jobs.isArray() || jobs.isEmpty()) {
                 break;
             }

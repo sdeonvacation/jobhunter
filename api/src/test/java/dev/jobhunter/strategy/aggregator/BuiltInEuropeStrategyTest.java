@@ -60,11 +60,11 @@ class BuiltInEuropeStrategyTest {
 
     private String pageWith(String... jobJsons) {
         String jobs = String.join(",", jobJsons);
-        return "{\"jobs\":[" + jobs + "]}";
+        return "{\"results\":[" + jobs + "]}";
     }
 
     private String emptyPage() {
-        return "{\"jobs\":[]}";
+        return "{\"results\":[]}";
     }
 
     private String jobJson(String id, String title, String company, String location, String applyUrl) {
