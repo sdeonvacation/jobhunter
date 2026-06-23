@@ -11,5 +11,6 @@ public enum DiscoverySource {
     ARBEITNOW,
     CAREERS_IN_GOTHENBURG,
     INSTAFFO,
-    BUILTIN_EUROPE
+    BUILTIN_EUROPE,
+    JOBGETHER
 }

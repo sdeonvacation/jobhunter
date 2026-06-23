@@ -24,5 +24,6 @@ public enum AtsType {
     INDEED,
     LINKEDIN,
     CUSTOM,
+    JOBGETHER,
     UNKNOWN
 }
