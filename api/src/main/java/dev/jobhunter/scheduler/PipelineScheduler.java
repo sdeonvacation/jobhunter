@@ -90,7 +90,7 @@ public class PipelineScheduler implements Job {
                     if (err == null && stats != null && stats.created() > 0) {
                         try {
                             log.info("[Pipeline] Scoring {} new jobs from source {}", stats.created(), stats.sourceName());
-                            scoringScheduler.scoreAllUnscored();
+                            scoringScheduler.scoreJobsForSource(source.sourceType());
                         } catch (Exception e) {
                             log.error("[Pipeline] Post-source scoring failed for {}", stats.sourceName(), e);
                         }

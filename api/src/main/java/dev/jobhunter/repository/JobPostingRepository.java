@@ -24,6 +24,16 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
            "AND j.id NOT IN (SELECT ms.job.id FROM MatchScore ms)")
     Page<JobPosting> findUnscoredActiveJobs(@Param("filter") FilterDecision filter, Pageable pageable);
 
+    @Query("SELECT j FROM JobPosting j LEFT JOIN FETCH j.company WHERE j.isActive = true AND j.languageFilter = :filter " +
+           "AND j.endpoint.id = :endpointId AND j.id NOT IN (SELECT ms.job.id FROM MatchScore ms)")
+    List<JobPosting> findUnscoredActiveJobsByEndpoint(@Param("endpointId") UUID endpointId,
+                                                      @Param("filter") FilterDecision filter);
+
+    @Query("SELECT j FROM JobPosting j LEFT JOIN FETCH j.company WHERE j.isActive = true AND j.languageFilter = :filter " +
+           "AND j.source = :source AND j.id NOT IN (SELECT ms.job.id FROM MatchScore ms)")
+    List<JobPosting> findUnscoredActiveJobsBySource(@Param("source") JobSource source,
+                                                    @Param("filter") FilterDecision filter);
+
     Optional<JobPosting> findBySourceAndExternalId(JobSource source, String externalId);
 
     Optional<JobPosting> findFirstByApplyUrl(String applyUrl);

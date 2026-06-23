@@ -17,6 +17,9 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
+
+import dev.jobhunter.model.enums.JobSource;
 
 /**
  * Scores unscored jobs using keyword matching (no AI). Runs on startup + daily.
@@ -44,6 +47,34 @@ public class ScoringScheduler implements Job {
     public void execute(JobExecutionContext context) throws JobExecutionException {
         log.info("Scoring scheduler starting");
         scoreAllUnscored();
+    }
+
+    /**
+     * Score unscored KEEP jobs for a specific aggregator source. Called immediately after each source ingestion.
+     */
+    public void scoreJobsForSource(JobSource source) {
+        List<JobPosting> jobs = jobPostingRepository.findUnscoredActiveJobsBySource(
+                source, FilterDecision.KEEP);
+        if (jobs.isEmpty()) return;
+
+        int matched = matchScoringService.scoreJobs(jobs);
+        int opportunities = opportunityScoringService.scoreJobs(jobs);
+        log.debug("Scored source [{}]: {} jobs, matched={}, opportunities={}",
+                source, jobs.size(), matched, opportunities);
+    }
+
+    /**
+     * Score unscored KEEP jobs for a specific endpoint. Called immediately after each endpoint crawl.
+     */
+    public void scoreJobsForEndpoint(UUID endpointId) {
+        List<JobPosting> jobs = jobPostingRepository.findUnscoredActiveJobsByEndpoint(
+                endpointId, FilterDecision.KEEP);
+        if (jobs.isEmpty()) return;
+
+        int matched = matchScoringService.scoreJobs(jobs);
+        int opportunities = opportunityScoringService.scoreJobs(jobs);
+        log.debug("Scored endpoint [{}]: {} jobs, matched={}, opportunities={}",
+                endpointId, jobs.size(), matched, opportunities);
     }
 
     public void scoreAllUnscored() {

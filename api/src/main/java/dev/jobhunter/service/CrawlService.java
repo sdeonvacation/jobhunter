@@ -99,6 +99,13 @@ public class CrawlService {
                 int jobsFound = crawlEndpoint(endpoint);
                 totalJobs += jobsFound;
                 endpointsCrawled++;
+                if (jobsFound > 0) {
+                    try {
+                        scoringScheduler.scoreJobsForEndpoint(endpoint.getId());
+                    } catch (Exception e) {
+                        log.error("Post-crawl scoring failed for endpoint [{}]", endpoint.getId(), e);
+                    }
+                }
             } catch (Exception e) {
                 errors++;
                 log.error("Crawl failed for endpoint [{}] (company: {}): {}",
@@ -109,16 +116,6 @@ public class CrawlService {
 
         log.info("Crawl cycle complete: {} endpoints, {} jobs found, {} errors",
                 endpointsCrawled, totalJobs, errors);
-
-        // Trigger scoring for new jobs immediately after crawl
-        if (totalJobs > 0) {
-            try {
-                log.info("Triggering scoring for new jobs after crawl");
-                scoringScheduler.scoreAllUnscored();
-            } catch (Exception e) {
-                log.error("Post-crawl scoring failed (jobs will be scored on next scheduler run)", e);
-            }
-        }
 
         // Backfill descriptions for SmartRecruiters KEEP jobs (fast: only ~50 jobs)
         try {
