@@ -1,11 +1,7 @@
 package dev.jobhunter.ingestion;
 
-import dev.jobhunter.filter.FilterResult;
-import dev.jobhunter.filter.LanguageFilter;
-import dev.jobhunter.filter.visa.VisaDetectionChain;
-import dev.jobhunter.filter.visa.VisaDetectionResult;
+import dev.jobhunter.filter.DescriptionFilterChain;
 import dev.jobhunter.model.JobPosting;
-import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.model.enums.VisaSponsorship;
 import dev.jobhunter.repository.JobPostingRepository;
@@ -37,8 +33,7 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
     private final WebClient webClient;
     private final JobPostingRepository jobPostingRepository;
     private final MatchScoreRepository matchScoreRepository;
-    private final LanguageFilter languageFilter;
-    private final VisaDetectionChain visaDetectionChain;
+    private final DescriptionFilterChain descriptionFilterChain;
 
     private final int batchSize;
     private final int delayBetweenMs;
@@ -48,16 +43,14 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
             WebClient webClient,
             JobPostingRepository jobPostingRepository,
             MatchScoreRepository matchScoreRepository,
-            LanguageFilter languageFilter,
-            VisaDetectionChain visaDetectionChain,
+            DescriptionFilterChain descriptionFilterChain,
             @Value("${aggregator.enrichment.batch-size:5}") int batchSize,
             @Value("${aggregator.enrichment.delay-between-ms:2000}") int delayBetweenMs,
             @Value("${aggregator.enrichment.min-description-length:500}") int minDescriptionLength) {
         this.webClient = webClient;
         this.jobPostingRepository = jobPostingRepository;
         this.matchScoreRepository = matchScoreRepository;
-        this.languageFilter = languageFilter;
-        this.visaDetectionChain = visaDetectionChain;
+        this.descriptionFilterChain = descriptionFilterChain;
         this.batchSize = batchSize;
         this.delayBetweenMs = delayBetweenMs;
         this.minDescriptionLength = minDescriptionLength;
@@ -125,40 +118,15 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
     @Transactional
     void updateJobDescription(JobPosting job, String extractedText) {
         job.setDescription(extractedText);
-
-        FilterResult langResult = languageFilter.filter(job.getTitle(), extractedText);
-        if (langResult.decision() == FilterDecision.SKIP) {
-            job.setLanguageFilter(FilterDecision.SKIP);
-            log.debug("Aggregator job [{}] filtered by language after enrichment: {}",
-                    job.getExternalId(), langResult.reason());
-        }
-
-        // Two-pass visa re-evaluation: resolve PENDING status now that full description is available
-        if (job.getVisaSponsorship() == VisaSponsorship.PENDING) {
-            VisaDetectionResult visaResult = visaDetectionChain.evaluate(extractedText);
-            switch (visaResult.status()) {
-                case CONFIRMED, LIKELY -> job.setVisaSponsorship(visaResult.status());
-                case REJECTED, UNKNOWN -> {
-                    job.setVisaSponsorship(visaResult.status());
-                    job.setActive(false);
-                    job.setFilterReason("visa: " + visaResult.reason());
-                    log.debug("Aggregator job [{}] deactivated after visa re-evaluation: {}",
-                            job.getExternalId(), visaResult.reason());
-                }
-                default -> job.setVisaSponsorship(visaResult.status());
-            }
-        }
-
+        descriptionFilterChain.refilter(job);
         jobPostingRepository.save(job);
-
         // Delete existing score so job gets rescored with new description
         matchScoreRepository.deleteByJobId(job.getId());
     }
 
     /**
-     * Deactivates a job that is still PENDING visa status when enrichment cannot complete.
-     * Mirrors the REJECTED/UNKNOWN deactivation in updateJobDescription().
-     * No-op if the job's visa status is not PENDING.
+     * Deactivates a job that is still PENDING visa status when enrichment cannot complete
+     * (empty response, no better text, or exception). No-op if visa status is not PENDING.
      */
     @Transactional
     void deactivatePendingVisa(JobPosting job, String reason) {

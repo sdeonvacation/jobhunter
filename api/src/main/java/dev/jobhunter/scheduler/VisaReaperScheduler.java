@@ -18,6 +18,8 @@ import java.util.List;
 /**
  * Periodic reaper (every 6h). Finds active jobs still in PENDING visa status
  * after 24h and deactivates them to prevent stale PENDING jobs leaking into the dashboard.
+ * PENDING jobs always have no/short description — the enricher resolves PENDING atomically
+ * when it writes a description, so no re-evaluation is needed here.
  */
 @Slf4j
 @Component
