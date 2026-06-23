@@ -5,6 +5,7 @@ import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchStrategy;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -22,8 +23,18 @@ public record YamlSourceConfig(
 
     @Override
     public FetchContext buildContext() {
+        List<String> keywords = List.of();
+        if (extraConfig != null && extraConfig.containsKey("queries")) {
+            String raw = (String) extraConfig.get("queries");
+            if (raw != null && !raw.isBlank()) {
+                keywords = Arrays.stream(raw.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isBlank())
+                        .toList();
+            }
+        }
         return FetchContext.forSearch(
-                List.of(),
+                keywords,
                 List.of(),
                 maxResults,
                 3,
