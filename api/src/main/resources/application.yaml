@@ -30,7 +30,7 @@ ai-crawl:
   enabled: ${AI_CRAWL_ENABLED:true}
 
 pipeline:
-  schedule: "0 0 7,13,19 * * ?"
+  schedule: "0 0 */4 * * ?"
   timeout-seconds: 30
 
 discovery:
