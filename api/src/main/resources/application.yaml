@@ -92,6 +92,9 @@ gdpr:
   recruiter-ttl-days: 90
   purge-schedule: "0 0 2 * * ?"
 
+# visa-reaper:
+#   schedule: "0 0 */6 * * ?"  # default: every 6h
+
 aggregator:
   enrichment:
     enabled: true
@@ -125,6 +128,17 @@ aggregator:
         apiKey: "d0f1115ce0f71a8d890b7733f4e3e15c8e03682666eb72e320efb61a46cfda4c"
         index: "jobs"
         filter: "language = \"en\""
+    - name: instaffo
+      strategy: instaffo
+      job-source: INSTAFFO
+      discovery-source: INSTAFFO
+      url: "https://jobs.instaffo.com/sitemap-jobs.xml"
+      frequency-hours: 8
+      max-results: 50
+      visa-exempt: true
+      config:
+        delayBetweenMs: "400"
+        maxScrapePerRun: "50"
 
 server:
   port: 8080

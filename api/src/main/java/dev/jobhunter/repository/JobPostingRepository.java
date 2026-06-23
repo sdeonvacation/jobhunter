@@ -4,6 +4,7 @@ import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.MatchScore;
 import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.model.enums.JobSource;
+import dev.jobhunter.model.enums.VisaSponsorship;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -91,6 +92,9 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     boolean existsBySourceAndExternalId(JobSource source, String externalId);
 
+    @Query("SELECT j.externalId FROM JobPosting j WHERE j.source = :source")
+    List<String> findExternalIdsBySource(@Param("source") JobSource source);
+
     Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndSource(
             FilterDecision languageFilter, JobSource source, Pageable pageable);
 
@@ -142,4 +146,7 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
     Page<JobPosting> findRecentlyPostedJobs(@Param("filter") FilterDecision filter,
                                            @Param("since") LocalDate since,
                                            Pageable pageable);
+
+    @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.visaSponsorship = 'PENDING' AND j.discoveredDate < :cutoff")
+    List<JobPosting> findActivePendingVisaJobsDiscoveredBefore(@Param("cutoff") LocalDate cutoff);
 }

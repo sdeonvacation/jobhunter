@@ -6,6 +6,7 @@ import dev.jobhunter.scheduler.DiscoveryScheduler;
 import dev.jobhunter.scheduler.GdprPurgeScheduler;
 import dev.jobhunter.scheduler.PipelineScheduler;
 import dev.jobhunter.scheduler.ScoringScheduler;
+import dev.jobhunter.scheduler.VisaReaperScheduler;
 import org.quartz.CronScheduleBuilder;
 import org.quartz.JobBuilder;
 import org.quartz.JobDetail;
@@ -189,6 +190,32 @@ public class QuartzConfig {
                 .forJob(aiCrawlJobDetail)
                 .withIdentity("aiCrawlStartupTrigger", "ai-crawl")
                 .startAt(new java.util.Date(System.currentTimeMillis() + 30_000))
+                .build();
+    }
+
+    // --- Visa Reaper ---
+
+    @Bean
+    public JobDetail visaReaperJobDetail() {
+        return JobBuilder.newJob(VisaReaperScheduler.class)
+                .withIdentity("visaReaperJob", "visa-reaper")
+                .storeDurably()
+                .requestRecovery(true)
+                .build();
+    }
+
+    @Bean
+    public Trigger visaReaperTrigger(
+            JobDetail visaReaperJobDetail,
+            @Value("${visa-reaper.schedule:0 0 */6 * * ?}") String cronExpression
+    ) {
+        return TriggerBuilder.newTrigger()
+                .forJob(visaReaperJobDetail)
+                .withIdentity("visaReaperTrigger", "visa-reaper")
+                .withSchedule(
+                        CronScheduleBuilder.cronSchedule(cronExpression)
+                                .withMisfireHandlingInstructionFireAndProceed()
+                )
                 .build();
     }
 }

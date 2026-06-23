@@ -322,6 +322,179 @@ class AggregatorDescriptionEnricherTest {
         assertThat(captor.getValue().getDescription().length()).isLessThanOrEqualTo(10_000);
     }
 
+    // --- deactivatePendingVisa tests ---
+
+    @Test
+    void deactivatePendingVisa_nonPendingJob_doesNothing() {
+        JobPosting job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.ARBEITNOW)
+                .externalId("arb-confirmed")
+                .visaSponsorship(VisaSponsorship.CONFIRMED)
+                .isActive(true)
+                .build();
+
+        enricher.deactivatePendingVisa(job, "visa: pending - no description available (empty response)");
+
+        verify(jobPostingRepository, never()).save(any());
+        assertThat(job.getVisaSponsorship()).isEqualTo(VisaSponsorship.CONFIRMED);
+        assertThat(job.isActive()).isTrue();
+    }
+
+    @Test
+    void deactivatePendingVisa_nullSponsorship_doesNothing() {
+        JobPosting job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.ARBEITNOW)
+                .externalId("arb-null")
+                .visaSponsorship(null)
+                .isActive(true)
+                .build();
+
+        enricher.deactivatePendingVisa(job, "reason");
+
+        verify(jobPostingRepository, never()).save(any());
+    }
+
+    @Test
+    void deactivatePendingVisa_pendingJob_setsUnknownAndDeactivates() {
+        JobPosting job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.ARBEITNOW)
+                .externalId("arb-pending")
+                .visaSponsorship(VisaSponsorship.PENDING)
+                .isActive(true)
+                .build();
+
+        String reason = "visa: pending - no description available (empty response)";
+        enricher.deactivatePendingVisa(job, reason);
+
+        assertThat(job.getVisaSponsorship()).isEqualTo(VisaSponsorship.UNKNOWN);
+        assertThat(job.isActive()).isFalse();
+        assertThat(job.getFilterReason()).isEqualTo(reason);
+        verify(jobPostingRepository).save(job);
+    }
+
+    @Test
+    void enrichDescriptions_emptyHtml_pendingJob_deactivates() {
+        stubFor(get("/jobs/empty-pending").willReturn(ok("").withHeader("Content-Type", "text/html")));
+
+        JobPosting job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.ARBEITNOW)
+                .externalId("arb-empty-pending")
+                .title("Java Dev")
+                .applyUrl(baseUrl + "/jobs/empty-pending")
+                .description(null)
+                .visaSponsorship(VisaSponsorship.PENDING)
+                .languageFilter(FilterDecision.KEEP)
+                .isActive(true)
+                .build();
+
+        when(jobPostingRepository.findAggregatorJobsNeedingDescription(any(), anyInt()))
+                .thenReturn(List.of(job));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+
+        enricher.enrichDescriptions();
+
+        ArgumentCaptor<JobPosting> captor = ArgumentCaptor.forClass(JobPosting.class);
+        verify(jobPostingRepository).save(captor.capture());
+        assertThat(captor.getValue().getVisaSponsorship()).isEqualTo(VisaSponsorship.UNKNOWN);
+        assertThat(captor.getValue().isActive()).isFalse();
+        assertThat(captor.getValue().getFilterReason())
+                .isEqualTo("visa: pending - no description available (empty response)");
+    }
+
+    @Test
+    void enrichDescriptions_emptyHtml_nonPendingJob_doesNotDeactivate() {
+        stubFor(get("/jobs/empty-confirmed").willReturn(ok("").withHeader("Content-Type", "text/html")));
+
+        JobPosting job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.ARBEITNOW)
+                .externalId("arb-empty-confirmed")
+                .title("Java Dev")
+                .applyUrl(baseUrl + "/jobs/empty-confirmed")
+                .description(null)
+                .visaSponsorship(VisaSponsorship.CONFIRMED)
+                .languageFilter(FilterDecision.KEEP)
+                .isActive(true)
+                .build();
+
+        when(jobPostingRepository.findAggregatorJobsNeedingDescription(any(), anyInt()))
+                .thenReturn(List.of(job));
+
+        enricher.enrichDescriptions();
+
+        verify(jobPostingRepository, never()).save(any());
+        assertThat(job.getVisaSponsorship()).isEqualTo(VisaSponsorship.CONFIRMED);
+        assertThat(job.isActive()).isTrue();
+    }
+
+    @Test
+    void enrichDescriptions_noTextImprovement_pendingJob_deactivates() {
+        stubFor(get("/jobs/short-pending").willReturn(
+                ok("<html><body><p>Short</p></body></html>").withHeader("Content-Type", "text/html")));
+
+        String existingDesc = "Existing description that is definitely longer than the short extracted text.";
+        JobPosting job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.ARBEITNOW)
+                .externalId("arb-short-pending")
+                .title("Java Dev")
+                .applyUrl(baseUrl + "/jobs/short-pending")
+                .description(existingDesc)
+                .visaSponsorship(VisaSponsorship.PENDING)
+                .languageFilter(FilterDecision.KEEP)
+                .isActive(true)
+                .build();
+
+        when(jobPostingRepository.findAggregatorJobsNeedingDescription(any(), anyInt()))
+                .thenReturn(List.of(job));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+
+        enricher.enrichDescriptions();
+
+        ArgumentCaptor<JobPosting> captor = ArgumentCaptor.forClass(JobPosting.class);
+        verify(jobPostingRepository).save(captor.capture());
+        assertThat(captor.getValue().getVisaSponsorship()).isEqualTo(VisaSponsorship.UNKNOWN);
+        assertThat(captor.getValue().isActive()).isFalse();
+        assertThat(captor.getValue().getFilterReason())
+                .isEqualTo("visa: pending - no description available (no better text)");
+    }
+
+    @Test
+    void enrichDescriptions_exceptionDuringEnrichment_pendingJob_deactivates() {
+        String html = "<html><body><p>A detailed job description for a senior Java developer with Spring Boot experience.</p></body></html>";
+        stubFor(get("/jobs/exception-pending").willReturn(ok(html).withHeader("Content-Type", "text/html")));
+
+        JobPosting job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.ARBEITNOW)
+                .externalId("arb-exception-pending")
+                .title("Java Dev")
+                .applyUrl(baseUrl + "/jobs/exception-pending")
+                .description(null)
+                .visaSponsorship(VisaSponsorship.PENDING)
+                .languageFilter(FilterDecision.KEEP)
+                .isActive(true)
+                .build();
+
+        when(jobPostingRepository.findAggregatorJobsNeedingDescription(any(), anyInt()))
+                .thenReturn(List.of(job));
+        // visaDetectionChain throws during updateJobDescription → outer catch fires
+        when(visaDetectionChain.evaluate(any())).thenThrow(new RuntimeException("AI service unavailable"));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+
+        enricher.enrichDescriptions();
+
+        ArgumentCaptor<JobPosting> captor = ArgumentCaptor.forClass(JobPosting.class);
+        verify(jobPostingRepository).save(captor.capture());
+        assertThat(captor.getValue().getVisaSponsorship()).isEqualTo(VisaSponsorship.UNKNOWN);
+        assertThat(captor.getValue().isActive()).isFalse();
+        assertThat(captor.getValue().getFilterReason()).isEqualTo("visa: pending - enrichment failed");
+    }
+
     // --- extractText tests ---
 
     @Test

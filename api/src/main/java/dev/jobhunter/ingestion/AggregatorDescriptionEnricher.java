@@ -92,11 +92,13 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
                 String html = fetchPage(job.getApplyUrl());
                 if (html == null || html.isBlank()) {
                     log.debug("Empty response from applyUrl for job [{}]", job.getExternalId());
+                    deactivatePendingVisa(job, "visa: pending - no description available (empty response)");
                     continue;
                 }
 
                 String extractedText = extractText(html);
                 if (extractedText == null || extractedText.length() <= currentDescriptionLength(job)) {
+                    deactivatePendingVisa(job, "visa: pending - no description available (no better text)");
                     continue;
                 }
 
@@ -113,6 +115,7 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
             } catch (Exception e) {
                 log.warn("Failed to enrich aggregator job [{}] from {}: {}",
                         job.getExternalId(), job.getApplyUrl(), e.getMessage());
+                deactivatePendingVisa(job, "visa: pending - enrichment failed");
             }
         }
 
@@ -150,6 +153,23 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
 
         // Delete existing score so job gets rescored with new description
         matchScoreRepository.deleteByJobId(job.getId());
+    }
+
+    /**
+     * Deactivates a job that is still PENDING visa status when enrichment cannot complete.
+     * Mirrors the REJECTED/UNKNOWN deactivation in updateJobDescription().
+     * No-op if the job's visa status is not PENDING.
+     */
+    @Transactional
+    void deactivatePendingVisa(JobPosting job, String reason) {
+        if (job.getVisaSponsorship() != VisaSponsorship.PENDING) {
+            return;
+        }
+        job.setVisaSponsorship(VisaSponsorship.UNKNOWN);
+        job.setActive(false);
+        job.setFilterReason(reason);
+        jobPostingRepository.save(job);
+        log.debug("Deactivated PENDING visa job [{}]: {}", job.getExternalId(), reason);
     }
 
     String fetchPage(String url) {
