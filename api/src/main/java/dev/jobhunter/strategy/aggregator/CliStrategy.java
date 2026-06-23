@@ -9,6 +9,7 @@ import dev.jobhunter.strategy.FetchResult;
 import dev.jobhunter.strategy.FetchStrategy;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
@@ -35,6 +36,12 @@ public class CliStrategy implements FetchStrategy {
     private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(60);
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+    private final String npxPath;
+
+    public CliStrategy(@Value("${indeed.npx-path:npx}") String npxPath) {
+        this.npxPath = npxPath;
+    }
 
     @Override
     public String name() {
@@ -98,7 +105,7 @@ public class CliStrategy implements FetchStrategy {
 
         try {
             List<String> command = new ArrayList<>(List.of(
-                    "npx", "-y", "jobspy-js",
+                    npxPath, "-y", "jobspy-js",
                     "-s", "indeed",
                     "-q", keyword,
                     "-l", location,
