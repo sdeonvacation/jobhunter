@@ -25,7 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -82,6 +84,11 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
 
         JobSource jobSource = source.sourceType();
 
+        // Per-batch company cache: avoids duplicate-insert race when multiple jobs share a company
+        // that doesn't exist in DB yet. findByNormalizedName misses an unflushed insert in the same
+        // transaction, causing a unique-constraint violation that aborts the entire transaction.
+        Map<String, Company> companyCache = new HashMap<>();
+
         // Pre-load known external IDs and fingerprints for this source (batch dedup)
         Set<String> knownExternalIds = jobPostingRepository.findExternalIdsBySourceAsSet(jobSource);
         // Load fingerprints from ATS (non-aggregator) sources for cross-source enrichment matching
@@ -134,8 +141,8 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                 VisaSponsorship visaStatus = chainResult.visaSponsorship() != null
                         ? chainResult.visaSponsorship() : VisaSponsorship.UNKNOWN;
 
-                // Resolve company
-                Company company = resolveCompany(job.companyName(), source);
+                // Resolve company (uses per-batch cache to avoid duplicate-insert within same transaction)
+                Company company = resolveCompany(job.companyName(), source, companyCache);
 
                 // Build and save JobPosting
                 JobPosting posting = JobPosting.builder()
@@ -184,10 +191,14 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
         return new IngestionStats(source.name(), result.jobs().size(), enriched, created, filtered, duplicates, errors, elapsedMs);
     }
 
-    private Company resolveCompany(String companyName, SourceConfig source) {
+    private Company resolveCompany(String companyName, SourceConfig source, Map<String, Company> cache) {
         String resolvedName = (companyName == null || companyName.isBlank()) ? "Unknown" : companyName;
         String normalized = normalizeCompanyName(resolvedName);
-        return companyRepository.findByNormalizedName(normalized)
+        Company cached = cache.get(normalized);
+        if (cached != null) {
+            return cached;
+        }
+        Company company = companyRepository.findByNormalizedName(normalized)
                 .orElseGet(() -> {
                     Company newCompany = Company.builder()
                             .name(resolvedName)
@@ -199,6 +210,8 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                             .build();
                     return companyRepository.save(newCompany);
                 });
+        cache.put(normalized, company);
+        return company;
     }
 
     private String normalizeCompanyName(String name) {
