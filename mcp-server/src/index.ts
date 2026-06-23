@@ -4,6 +4,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { JobHunterClient } from './client.js';
 import {
   getJobKeywordsTool,
+  getJobDescriptionTool,
   markJobAppliedTool,
   getTopJobsTodayTool,
   getTopJobsTool,
@@ -26,6 +27,7 @@ const server = new McpServer({
 // Register all tools
 const tools = [
   getJobKeywordsTool,
+  getJobDescriptionTool,
   markJobAppliedTool,
   getTopJobsTodayTool,
   getTopJobsTool,

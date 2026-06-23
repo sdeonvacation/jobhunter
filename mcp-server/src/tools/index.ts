@@ -1,4 +1,5 @@
 export { getJobKeywordsTool } from './getJobKeywords.js';
+export { getJobDescriptionTool } from './getJobDescription.js';
 export { markJobAppliedTool } from './markJobApplied.js';
 export { getTopJobsTodayTool } from './getTopJobsToday.js';
 export { getTopJobsTool } from './getTopJobs.js';
