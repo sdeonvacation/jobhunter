@@ -258,9 +258,11 @@ public class McpStrategy implements FetchStrategy {
                         && !company.contains("results") && !company.startsWith("Set alert")
                         && !company.startsWith("Jump to") && !company.endsWith("with verification")) {
 
-                    // Scan next 1-3 lines for relative time ("2 days ago", "1 week ago")
+                    // Scan next 1-6 lines for relative time ("2 days ago", "1 week ago").
+                    // LinkedIn inserts "Promoted", "Easy Apply", job-level tags between
+                    // the location line and the date line, so 3 lines is often not enough.
                     LocalDate postedDate = null;
-                    for (int j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
+                    for (int j = i + 1; j <= Math.min(i + 6, lines.length - 1); j++) {
                         postedDate = parseRelativeTime(lines[j].trim());
                         if (postedDate != null) break;
                     }

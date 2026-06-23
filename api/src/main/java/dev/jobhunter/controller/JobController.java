@@ -226,10 +226,14 @@ public class JobController {
     public ResponseEntity<DailyDigestDto> getDailyDigest() {
         DigestSnapshot snapshot = dailyDigestService.computeDigest();
 
-        // Get top opportunities for today
-        Pageable top5 = PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "discoveredDate"));
-        Page<JobPosting> topJobs = jobPostingRepository.findByIsActiveTrueAndLanguageFilter(
-                FilterDecision.KEEP, top5);
+        // Get top opportunities for today: jobs with COALESCE(postedDate, discoveredDate) >= yesterday,
+        // sorted by match score so the best-matching recent jobs surface first.
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        Pageable top5 = PageRequest.of(0, 5,
+                Sort.by(new Sort.Order(Sort.Direction.DESC, "matchScore.overallScore", Sort.NullHandling.NULLS_LAST))
+                        .and(Sort.by(new Sort.Order(Sort.Direction.DESC, "opportunityScore.score", Sort.NullHandling.NULLS_LAST))));
+        Page<JobPosting> topJobs = jobPostingRepository.findRecentlyPostedJobs(
+                FilterDecision.KEEP, yesterday, top5);
 
         List<JobSummaryDto> topOpportunities = topJobs.getContent().stream()
                 .map(DtoMapper::toJobSummary)
@@ -248,10 +252,13 @@ public class JobController {
 
     @GetMapping("/radar")
     public ResponseEntity<RadarDto> getRadar() {
-        // Top opportunities by score
-        Pageable top10 = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "discoveredDate"));
-        Page<JobPosting> topJobs = jobPostingRepository.findByIsActiveTrueAndLanguageFilter(
-                FilterDecision.KEEP, top10);
+        // Top recent opportunities sorted by match score
+        LocalDate twoDaysAgo = LocalDate.now().minusDays(2);
+        Pageable top10 = PageRequest.of(0, 10,
+                Sort.by(new Sort.Order(Sort.Direction.DESC, "matchScore.overallScore", Sort.NullHandling.NULLS_LAST))
+                        .and(Sort.by(new Sort.Order(Sort.Direction.DESC, "opportunityScore.score", Sort.NullHandling.NULLS_LAST))));
+        Page<JobPosting> topJobs = jobPostingRepository.findRecentlyPostedJobs(
+                FilterDecision.KEEP, twoDaysAgo, top10);
 
         List<JobSummaryDto> topOpportunities = topJobs.getContent().stream()
                 .map(DtoMapper::toJobSummary)
