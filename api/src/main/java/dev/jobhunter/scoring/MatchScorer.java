@@ -232,26 +232,25 @@ public class MatchScorer {
 
     /**
      * Check if a skill is mentioned in the text using configured variants.
+     * When variants are configured, they are authoritative — substring fallback is skipped
+     * to prevent false positives (e.g. "java" matching "JavaScript").
      */
     private boolean matchesSkill(String text, String skillName) {
         String lower = skillName.toLowerCase();
 
-        // Direct match (skill name appears in text)
-        if (text.contains(lower)) {
-            return true;
-        }
-
-        // Check configured variants
+        // If variants are configured, use ONLY those (they encode word-boundary rules)
         List<Pattern> variants = compiledVariants.get(lower);
-        if (variants != null) {
+        if (variants != null && !variants.isEmpty()) {
             for (Pattern pattern : variants) {
                 if (pattern.matcher(text).find()) {
                     return true;
                 }
             }
+            return false;
         }
 
-        return false;
+        // No variants configured: fall back to substring match
+        return text.contains(lower);
     }
 
     private Recommendation computeRecommendation(int score, int matchCount) {
