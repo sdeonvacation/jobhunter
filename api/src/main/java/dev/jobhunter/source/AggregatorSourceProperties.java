@@ -25,6 +25,7 @@ public class AggregatorSourceProperties {
         private String jobSource;
         private String discoverySource;
         private String url;
+        /** Stored for reference only — not used for gating. PipelineScheduler runs all sources on every tick. */
         private int frequencyHours = 12;
         private int maxResults = 50;
         private boolean enabled = true;

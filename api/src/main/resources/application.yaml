@@ -102,26 +102,28 @@ aggregator:
     delay-between-ms: 2000
     min-description-length: 500
   sources:
+    # Note: frequency-hours is stored for reference only — not used for gating.
+    # PipelineScheduler runs all sources on every pipeline tick (see pipeline.schedule).
     - name: berlinstartupjobs
       strategy: ai
       job-source: BERLIN_STARTUP_JOBS
       discovery-source: BERLIN_STARTUP_JOBS
       url: "https://berlinstartupjobs.com/engineering/"
-      frequency-hours: 12
+      frequency-hours: 12 # informational only
       max-results: 30
     - name: arbeitnow
       strategy: rest-api
       job-source: ARBEITNOW
       discovery-source: ARBEITNOW
       url: "https://www.arbeitnow.com/api/job-board-api"
-      frequency-hours: 6
+      frequency-hours: 6 # informational only
       max-results: 50
     - name: careersingothenburg
       strategy: meilisearch
       job-source: CAREERS_IN_GOTHENBURG
       discovery-source: CAREERS_IN_GOTHENBURG
       url: "https://search.movetogbg.tenfifty.io"
-      frequency-hours: 12
+      frequency-hours: 12 # informational only
       max-results: 200
       visa-exempt: true
       config:
@@ -133,7 +135,7 @@ aggregator:
       job-source: INSTAFFO
       discovery-source: INSTAFFO
       url: "https://jobs.instaffo.com/sitemap-jobs.xml"
-      frequency-hours: 8
+      frequency-hours: 8 # informational only
       max-results: 50
       visa-exempt: true
       config:

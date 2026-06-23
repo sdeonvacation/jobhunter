@@ -17,6 +17,7 @@ public interface SourceConfig {
 
     FetchContext buildContext();
 
+    /** Stored for reference only — not used for gating. PipelineScheduler runs all sources on every tick. */
     int frequencyHours();
 
     boolean isEnabled();
