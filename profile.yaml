@@ -130,6 +130,7 @@ filters:
       - "marketing"
       - "student"
       - "intern"
+      - "internship"
       - "trainee"
       - "sales"
       - "finance"
@@ -142,6 +143,10 @@ filters:
       - "mlops"
       - "android"
       - "ios"
+      - "hardware"
+      - "graduate"
+      - "test"
+      - "unity"
   location:
     target-cities:
       - "germany"
