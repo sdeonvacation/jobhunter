@@ -6,6 +6,7 @@ import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.JobPostingRepository;
+import dev.jobhunter.repository.MatchScoreRepository;
 import dev.jobhunter.strategy.ats.SmartRecruitersStrategy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,13 +25,16 @@ public class SmartRecruitersDescriptionBackfiller implements DescriptionBackfill
     private final JobPostingRepository jobPostingRepository;
     private final SmartRecruitersStrategy smartRecruitersStrategy;
     private final DescriptionFilterChain descriptionFilterChain;
+    private final MatchScoreRepository matchScoreRepository;
 
     public SmartRecruitersDescriptionBackfiller(JobPostingRepository jobPostingRepository,
                                                 SmartRecruitersStrategy smartRecruitersStrategy,
-                                                DescriptionFilterChain descriptionFilterChain) {
+                                                DescriptionFilterChain descriptionFilterChain,
+                                                MatchScoreRepository matchScoreRepository) {
         this.jobPostingRepository = jobPostingRepository;
         this.smartRecruitersStrategy = smartRecruitersStrategy;
         this.descriptionFilterChain = descriptionFilterChain;
+        this.matchScoreRepository = matchScoreRepository;
     }
 
     @Override
@@ -53,6 +57,7 @@ public class SmartRecruitersDescriptionBackfiller implements DescriptionBackfill
                 job.setDescription(description);
                 descriptionFilterChain.refilter(job);
                 jobPostingRepository.save(job);
+                matchScoreRepository.deleteByJobId(job.getId());
                 filled++;
             }
         }
