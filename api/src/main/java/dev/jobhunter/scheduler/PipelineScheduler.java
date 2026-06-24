@@ -7,6 +7,7 @@ import dev.jobhunter.service.ScoringService;
 import dev.jobhunter.source.SourceConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.quartz.DisallowConcurrentExecution;
 import org.quartz.Job;
 import org.quartz.JobExecutionContext;
@@ -17,6 +18,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Unified pipeline scheduler: [crawl + aggregator sources] in parallel → scoring.
@@ -31,15 +34,18 @@ public class PipelineScheduler implements Job {
     private final ScoringService scoringService;
     private final AggregatorIngestionService aggregatorIngestionService;
     private final List<SourceConfig> sources;
+    private final ExecutorService sourceExecutor;
 
     public PipelineScheduler(CrawlService crawlService,
                              ScoringService scoringService,
                              AggregatorIngestionService aggregatorIngestionService,
-                             @Qualifier("allSources") List<SourceConfig> sources) {
+                             @Qualifier("allSources") List<SourceConfig> sources,
+                             @Value("${aggregator.pipeline.max-concurrent-sources:3}") int maxConcurrentSources) {
         this.crawlService = crawlService;
         this.scoringService = scoringService;
         this.aggregatorIngestionService = aggregatorIngestionService;
         this.sources = sources;
+        this.sourceExecutor = Executors.newFixedThreadPool(maxConcurrentSources);
     }
 
     @Override
@@ -68,8 +74,8 @@ public class PipelineScheduler implements Job {
             }
         });
 
-        // Step 2: Run each enabled aggregator source in parallel; score immediately after each
-        // completes so slow sources (e.g. LinkedIn ~100 min) don't block scoring for fast ones.
+        // Step 2: Run each enabled aggregator source through a bounded executor
+        // to avoid saturating the network with too many concurrent HTTP connections.
         List<CompletableFuture<IngestionStats>> sourceFutures = sources.stream()
                 .filter(SourceConfig::isEnabled)
                 .map(source -> CompletableFuture.supplyAsync(() -> {
@@ -83,7 +89,7 @@ public class PipelineScheduler implements Job {
                         log.error("[Pipeline] Source {} failed", source.name(), e);
                         return new IngestionStats(source.name(), 0, 0, 0, 0, 0, 1, 0);
                     }
-                }).whenComplete((stats, err) -> {
+                }, sourceExecutor).whenComplete((stats, err) -> {
                     if (err == null && stats != null && stats.created() > 0) {
                         try {
                             log.info("[Pipeline] Scoring {} new jobs from source {}", stats.created(), stats.sourceName());
