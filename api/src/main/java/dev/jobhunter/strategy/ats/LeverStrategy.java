@@ -99,7 +99,9 @@ public class LeverStrategy extends AbstractAtsStrategy {
             String externalId = node.path("id").asText(null);
             String title = truncate(node.path("text").asText(null), 500);
             String location = truncate(node.path("categories").path("location").asText(null), 500);
-            String description = node.path("descriptionPlain").asText("");
+            String descriptionPlain = node.path("descriptionPlain").asText("");
+            String descriptionHtml = node.path("description").asText("");
+            String description = !descriptionPlain.isBlank() ? descriptionPlain : descriptionHtml;
             String applyUrl = node.path("hostedUrl").asText(null);
             String rawJson = node.toString();
 

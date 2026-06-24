@@ -220,7 +220,7 @@ public class CrawlService {
                 // Existing job: update lastCrawledAt + backfill missing description
                 JobPosting existing = existingOpt.get();
                 existing.setLastCrawledAt(LocalDateTime.now());
-                if (existing.getDescription() == null && rawJob.description() != null) {
+                if ((existing.getDescription() == null || existing.getDescription().isBlank()) && rawJob.description() != null && !rawJob.description().isBlank()) {
                     existing.setDescription(rawJob.description());
                     descriptionFilterChain.refilter(existing);
                 }

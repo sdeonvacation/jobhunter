@@ -90,7 +90,7 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
                 }
 
                 String extractedText = extractText(html);
-                if (extractedText == null || extractedText.length() <= currentDescriptionLength(job)) {
+                if (extractedText == null || extractedText.length() < minDescriptionLength || extractedText.length() <= currentDescriptionLength(job)) {
                     deactivatePendingVisa(job, "visa: pending - no description available (no better text)");
                     continue;
                 }
