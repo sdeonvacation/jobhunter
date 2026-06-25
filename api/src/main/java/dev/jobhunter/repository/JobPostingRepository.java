@@ -68,6 +68,9 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
     @Query("SELECT j FROM JobPosting j LEFT JOIN FETCH j.endpoint WHERE j.source = :source AND j.languageFilter = :filter AND j.description IS NULL AND j.isActive = true")
     List<JobPosting> findBySourceAndLanguageFilterAndDescriptionIsNull(@Param("source") JobSource source, @Param("filter") FilterDecision filter);
 
+    @Query("SELECT j FROM JobPosting j LEFT JOIN FETCH j.endpoint WHERE j.source = :source AND j.languageFilter = :filter AND j.isActive = true AND (j.description IS NULL OR length(j.description) < :maxLen)")
+    List<JobPosting> findBySourceAndLanguageFilterAndShortDescription(@Param("source") JobSource source, @Param("filter") FilterDecision filter, @Param("maxLen") int maxLen);
+
     @Query("SELECT j FROM JobPosting j WHERE j.source = :source AND j.languageFilter = :filter AND j.postedDate IS NULL AND j.isActive = true")
     List<JobPosting> findBySourceAndLanguageFilterAndPostedDateIsNull(@Param("source") JobSource source, @Param("filter") FilterDecision filter);
 

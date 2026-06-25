@@ -8,6 +8,8 @@ import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -258,6 +260,68 @@ public class WorkdayStrategy extends AbstractAtsStrategy {
             return LocalDate.now().minusDays(30);
         }
         return null;
+    }
+
+    /**
+     * Fetches the full job description from the Workday job page (JSON-LD schema.org data).
+     * The list API only returns bulletFields (short metadata), not the actual description.
+     *
+     * <p>URL format: {baseUrl}/{site}{externalPath} — e.g.
+     * https://ag.wd3.myworkdayjobs.com/Airbus/job/Manching/Software-Developer_JR10422671
+     *
+     * @param endpoint   the career endpoint (provides tenant, shardId, site)
+     * @param externalId the job's external_id, e.g. "/job/Munich/Title_JR123"
+     * @return plain-text description extracted from JSON-LD, or null on failure
+     */
+    public String fetchDescription(CareerEndpoint endpoint, String externalId) {
+        String tenant = endpoint.getAtsSlug();
+        String shardId = endpoint.getAtsShardId();
+        String site = extractSite(endpoint.getUrl());
+
+        if (tenant == null || shardId == null) {
+            Matcher m = WORKDAY_URL_PATTERN.matcher(endpoint.getUrl() != null ? endpoint.getUrl() : "");
+            if (m.matches()) {
+                if (tenant == null) tenant = m.group(1);
+                if (shardId == null) shardId = m.group(2);
+            }
+        }
+
+        if (tenant == null || shardId == null || site == null || externalId == null) {
+            log.warn("Workday fetchDescription: missing tenant/shardId/site/externalId for endpoint {}", endpoint.getId());
+            return null;
+        }
+
+        // Public job page: {baseUrl}/{site}{externalPath}
+        // e.g. https://ag.wd3.myworkdayjobs.com/Airbus/job/Manching/Title_JR123
+        String baseUrl = String.format(baseUrlTemplate, tenant, shardId);
+        String jobUrl = baseUrl + "/" + site + externalId;
+
+        try {
+            String html = webClient.get()
+                    .uri(URI.create(jobUrl))
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block(Duration.ofSeconds(30));
+
+            if (html == null || html.isBlank()) return null;
+
+            // Extract description from JSON-LD schema.org JobPosting
+            Document doc = Jsoup.parse(html);
+            for (org.jsoup.nodes.Element script : doc.select("script[type='application/ld+json']")) {
+                String json = script.html().trim();
+                if (json.contains("\"description\"")) {
+                    JsonNode root = objectMapper.readTree(json);
+                    String desc = root.path("description").asText(null);
+                    if (desc != null && !desc.isBlank()) {
+                        return desc;
+                    }
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            log.warn("Workday fetchDescription [{}]: {}", jobUrl, e.getMessage());
+            return null;
+        }
     }
 
     String extractSite(String url) {
