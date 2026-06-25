@@ -70,3 +70,4 @@ failsafe-reports/
 .opencode/worktrees/
 api/bin/
 /.worktrees
+/.playwright-mcp

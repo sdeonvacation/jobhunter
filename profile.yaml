@@ -147,46 +147,18 @@ filters:
       - "graduate"
       - "test"
       - "unity"
+      - "mechanical"
+      - "founder"
+      - "cad"
+      - "material"
+      - "electric"
+      - "electrical"
+      - "fellow"
+      - "VP"
   location:
-    target-cities:
-      - "germany"
-      - "deutschland"
-      - "berlin"
-      - "munich"
-      - "m[uü]nchen"
-      - "hamburg"
-      - "frankfurt"
-      - "cologne"
-      - "k[oö]ln"
-      - "stuttgart"
-      - "d[uü]sseldorf"
-      - "dortmund"
-      - "dresden"
-      - "leipzig"
-      - "nuremberg"
-      - "n[uü]rnberg"
-      - "hannover"
-      - "bremen"
-      - "bonn"
-      - "mannheim"
-      - "karlsruhe"
-      - "heidelberg"
-      - "potsdam"
-      - "walldorf"
-      - "freiburg"
-      - "essen"
-      - "duisburg"
-      - "wiesbaden"
-      - "mainz"
-      - "aachen"
-      - "regensburg"
-      - "augsburg"
-      - "rostock"
-      - "jena"
-      - "erkner"
-      - "bielefeld"
     remote-patterns:
       - "^(remote|remote\\s*-\\s*(eu|europe|emea|global|worldwide|dach|ger(many)?))$"
+    unknown-action: skip
   language:
     target: "en"
     detect-languages:
@@ -433,4 +405,4 @@ indeed-search:
   keywords: ["backend engineer", "Java developer", "software engineer", "backend engineer"]
   locations: ["Germany", "Netherlands", "Spain", "Sweden"]
   results-wanted: 25
-  hours-old: 168
+  hours-old: 24

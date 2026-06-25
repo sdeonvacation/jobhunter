@@ -19,6 +19,14 @@
         "JOBHUB_API_URL": "http://localhost:8080"
       },
       "enabled": true
-  }
+    },
+    "playwright": {
+      "type": "local",
+      "command": [
+        "npx",
+        "@playwright/mcp@latest"
+      ],
+      "enabled": true
+    }
   }
 }
