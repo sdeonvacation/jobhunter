@@ -2,5 +2,5 @@ package dev.jobhunter.filter;
 
 public interface LocationFilter {
 
-    FilterResult filter(String location);
+    LocationFilterResult filter(String location);
 }

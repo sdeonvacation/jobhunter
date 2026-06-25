@@ -21,6 +21,24 @@ public class LanguageFilterImpl implements LanguageFilter {
     private static final Logger log = LoggerFactory.getLogger(LanguageFilterImpl.class);
     private static final int MIN_TEXT_LENGTH_FOR_DETECTION = 100;
 
+    /**
+     * Strips URLs and markdown-style image/link references before language detection.
+     * Ashby descriptions embed image URLs like [https://app.ashbyhq.com/.../dead.jpeg]
+     * whose hex UUIDs ("dead", "b81d", etc.) confuse Lingua into false non-English detections.
+     */
+    private static final Pattern NOISE_PATTERN = Pattern.compile(
+            "\\[https?://[^\\]]*]"       // [https://url] bracket-enclosed URL refs
+            + "|!?\\[[^\\]]*]\\([^)]*\\)" // ![alt](url) and [text](url) markdown links
+            + "|https?://\\S+",            // bare URLs
+            Pattern.CASE_INSENSITIVE
+    );
+
+    static String stripNoise(String text) {
+        if (text == null || text.isBlank()) return text;
+        String stripped = NOISE_PATTERN.matcher(text).replaceAll(" ");
+        return stripped.replaceAll("\\s+", " ").trim();
+    }
+
     private final Pattern excludePattern;
     private final Pattern softQualifierPattern;
     private final LanguageDetector languageDetector;
@@ -62,12 +80,17 @@ public class LanguageFilterImpl implements LanguageFilter {
 
         // Step 2: Check if description is primarily non-English (probabilistic)
         if (languageDetector != null && jobDescription.length() >= MIN_TEXT_LENGTH_FOR_DETECTION) {
-            // Strip HTML before detection — raw HTML attributes (e.g. class="notion-enable-hover")
-            // contain n-gram noise that confuses Lingua into false non-English detections.
+            // Strip HTML — raw HTML attributes confuse Lingua into false non-English detections.
             String plainText = Jsoup.parse(jobDescription).body().text();
-            String detectedLanguage = detectNonEnglish(plainText.isBlank() ? jobDescription : plainText);
-            if (detectedLanguage != null) {
-                return FilterResult.skip("non-English JD (" + detectedLanguage + ")");
+            String candidate = plainText.isBlank() ? jobDescription : plainText;
+            // Strip URLs and markdown image refs — hex UUIDs in Ashby/Greenhouse image URLs
+            // (e.g. "1246dead-d30e-4c70") trigger false Dutch/German detections.
+            candidate = stripNoise(candidate);
+            if (candidate.length() >= MIN_TEXT_LENGTH_FOR_DETECTION) {
+                String detectedLanguage = detectNonEnglish(candidate);
+                if (detectedLanguage != null) {
+                    return FilterResult.skip("non-English JD (" + detectedLanguage + ")");
+                }
             }
         }
 

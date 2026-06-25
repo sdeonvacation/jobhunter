@@ -151,7 +151,7 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                         .title(job.title())
                         .company(company)
                         .location(job.location())
-                        .locationCountry(LocationCountryParser.extractCountry(job.location()))
+                        .locationCountry(chainResult.countryIso())
                         .locationCity(LocationCountryParser.extractCity(job.location()))
                         .description(job.description())
                         .applyUrl(job.applyUrl())

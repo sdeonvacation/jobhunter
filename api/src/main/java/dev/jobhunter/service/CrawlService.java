@@ -231,6 +231,15 @@ public class CrawlService {
                 if (existing.getApplyUrl() == null && rawJob.applyUrl() != null) {
                     existing.setApplyUrl(rawJob.applyUrl());
                 }
+                // Refresh fingerprint if algorithm changed (prevents stale city-based fingerprints)
+                String companyName = endpoint.getCompany() != null ? endpoint.getCompany().getName() : "";
+                String newFingerprint = deduplicationFilter.generateFingerprint(rawJob.title(), companyName, rawJob.location());
+                if (!newFingerprint.equals(existing.getFingerprint())) {
+                    existing.setFingerprint(newFingerprint);
+                    if (existing.getLanguageFilter() == FilterDecision.KEEP) {
+                        demoteAggregatorDupes(existing, newFingerprint);
+                    }
+                }
                 jobPostingRepository.save(existing);
             } else {
                 // New job: apply unified filter chain
@@ -251,21 +260,7 @@ public class CrawlService {
                     postCrawlPipeline.run(posting, rawJob.rawJson(), rawContent);
 
                     // Demote any aggregator KEEP jobs superseded by this endpoint job
-                    List<JobPosting> aggregatorDupes = jobPostingRepository
-                            .findByFingerprintAndLanguageFilterAndSourceIn(
-                                    fingerprint, FilterDecision.KEEP, JobSource.aggregators());
-                    for (JobPosting agg : aggregatorDupes) {
-                        agg.setLanguageFilter(FilterDecision.SKIP);
-                        agg.setFilterReason("superseded by endpoint");
-                        if (agg.getApplyUrl() != null) {
-                            posting.getExternalLinks().put(agg.getSource().name(), agg.getApplyUrl());
-                        }
-                        jobPostingRepository.save(agg);
-                        matchScoreRepository.deleteByJobId(agg.getId());
-                    }
-                    if (!aggregatorDupes.isEmpty()) {
-                        jobPostingRepository.save(posting);
-                    }
+                    demoteAggregatorDupes(posting, fingerprint);
                 }
 
                 newJobsCount++;
@@ -295,7 +290,7 @@ public class CrawlService {
                 .title(rawJob.title())
                 .company(endpoint.getCompany())
                 .location(rawJob.location())
-                .locationCountry(LocationCountryParser.extractCountry(rawJob.location()))
+                .locationCountry(chainResult.countryIso())
                 .locationCity(LocationCountryParser.extractCity(rawJob.location()))
                 .description(rawJob.description())
                 .applyUrl(rawJob.applyUrl())
@@ -329,6 +324,68 @@ public class CrawlService {
         }
         jobPostingRepository.bulkDeactivateByEndpointExcluding(endpoint.getId(), seenExternalIds, LocalDateTime.now());
     }
+
+    private void demoteAggregatorDupes(JobPosting posting, String fingerprint) {
+        List<JobPosting> aggregatorDupes = jobPostingRepository
+                .findByFingerprintAndLanguageFilterAndSourceIn(
+                        fingerprint, FilterDecision.KEEP, JobSource.aggregators());
+        for (JobPosting agg : aggregatorDupes) {
+            agg.setLanguageFilter(FilterDecision.SKIP);
+            agg.setFilterReason("superseded by endpoint");
+            if (agg.getApplyUrl() != null) {
+                posting.getExternalLinks().put(agg.getSource().name(), agg.getApplyUrl());
+            }
+            jobPostingRepository.save(agg);
+            matchScoreRepository.deleteByJobId(agg.getId());
+        }
+        if (!aggregatorDupes.isEmpty()) {
+            jobPostingRepository.save(posting);
+        }
+    }
+
+    @Transactional
+    public ReindexResult reindexFingerprints() {
+        List<JobPosting> all = jobPostingRepository.findAll();
+        int updated = 0, superseded = 0;
+
+        // Pass 1: recompute all fingerprints so aggregator jobs have current values before supersede
+        for (JobPosting job : all) {
+            if (!job.isActive()) continue;
+            String companyName = job.getCompany() != null ? job.getCompany().getName() : "";
+            String newFp = deduplicationFilter.generateFingerprint(job.getTitle(), companyName, job.getLocation());
+            if (!newFp.equals(job.getFingerprint())) {
+                job.setFingerprint(newFp);
+                jobPostingRepository.save(job);
+                updated++;
+            }
+        }
+
+        // Pass 2: supersede aggregator dupes (all fingerprints are now current)
+        for (JobPosting job : all) {
+            if (!job.isActive()) continue;
+            if (JobSource.aggregators().contains(job.getSource())) continue;
+            if (job.getLanguageFilter() != FilterDecision.KEEP) continue;
+            List<JobPosting> dupes = jobPostingRepository
+                    .findByFingerprintAndLanguageFilterAndSourceIn(
+                            job.getFingerprint(), FilterDecision.KEEP, JobSource.aggregators());
+            for (JobPosting agg : dupes) {
+                agg.setLanguageFilter(FilterDecision.SKIP);
+                agg.setFilterReason("superseded by endpoint");
+                if (agg.getApplyUrl() != null) {
+                    job.getExternalLinks().put(agg.getSource().name(), agg.getApplyUrl());
+                }
+                jobPostingRepository.save(agg);
+                matchScoreRepository.deleteByJobId(agg.getId());
+                superseded++;
+            }
+            if (!dupes.isEmpty()) jobPostingRepository.save(job);
+        }
+
+        log.info("reindexFingerprints: updated={}, superseded={}", updated, superseded);
+        return new ReindexResult(updated, superseded);
+    }
+
+    public record ReindexResult(int fingerprintsUpdated, int aggregatorJobsSuperseded) {}
 
     private void markEndpointError(CareerEndpoint endpoint) {
         try {

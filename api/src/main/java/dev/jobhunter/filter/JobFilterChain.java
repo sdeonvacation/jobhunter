@@ -1,5 +1,6 @@
 package dev.jobhunter.filter;
 
+import dev.jobhunter.filter.geo.CityCountryResolver;
 import dev.jobhunter.filter.visa.VisaFilterResult;
 import dev.jobhunter.filter.visa.VisaSponsorshipFilter;
 import dev.jobhunter.model.enums.FilterDecision;
@@ -18,6 +19,7 @@ public class JobFilterChain {
     private final LanguageFilter languageFilter;
     private final RoleRelevanceFilter roleRelevanceFilter;
     private final LocationFilter locationFilter;
+    private final CityCountryResolver cityCountryResolver;
     private final VisaSponsorshipFilter visaSponsorshipFilter;
     private final YoeFilter yoeFilter;
     private final DeduplicationFilter deduplicationFilter;
@@ -26,6 +28,7 @@ public class JobFilterChain {
     public JobFilterChain(LanguageFilter languageFilter,
                           RoleRelevanceFilter roleRelevanceFilter,
                           LocationFilter locationFilter,
+                          CityCountryResolver cityCountryResolver,
                           VisaSponsorshipFilter visaSponsorshipFilter,
                           YoeFilter yoeFilter,
                           DeduplicationFilter deduplicationFilter,
@@ -33,6 +36,7 @@ public class JobFilterChain {
         this.languageFilter = languageFilter;
         this.roleRelevanceFilter = roleRelevanceFilter;
         this.locationFilter = locationFilter;
+        this.cityCountryResolver = cityCountryResolver;
         this.visaSponsorshipFilter = visaSponsorshipFilter;
         this.yoeFilter = yoeFilter;
         this.deduplicationFilter = deduplicationFilter;
@@ -62,18 +66,17 @@ public class JobFilterChain {
             }
 
             // 3. Location filter
-            FilterResult locationResult = locationFilter.filter(input.location());
+            LocationFilterResult locationResult = locationFilter.filter(input.location());
             if (locationResult.decision() == FilterDecision.SKIP) {
                 return FilterChainResult.skip(locationResult.reason());
             }
 
-            // 4. Visa filter
+            // 4. Visa filter — skipped when source is visa-exempt OR location resolves to a visa-exempt country (DE)
             VisaSponsorship visaStatus;
-            if (visaExempt) {
+            if (visaExempt || cityCountryResolver.isVisaExempt(locationResult.countryIso())) {
                 visaStatus = VisaSponsorship.LIKELY;
             } else {
-                VisaFilterResult visaResult = visaSponsorshipFilter.filter(
-                        input.location(), input.description(), isAggregator);
+                VisaFilterResult visaResult = visaSponsorshipFilter.filter(input.description(), isAggregator);
                 if (visaResult.decision() == FilterDecision.SKIP) {
                     return FilterChainResult.skip(visaResult.reason(), visaResult.visaSponsorship());
                 }
@@ -107,11 +110,11 @@ public class JobFilterChain {
                 }
             }
 
-            return FilterChainResult.keep(visaStatus, yoe);
+            return FilterChainResult.keep(visaStatus, yoe, locationResult.countryIso());
 
         } catch (Exception e) {
             log.warn("Filter chain exception (fail-open): {}", e.getMessage(), e);
-            return FilterChainResult.keep(null, null);
+            return FilterChainResult.keep(VisaSponsorship.UNKNOWN, null, null);
         }
     }
 }

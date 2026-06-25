@@ -38,12 +38,12 @@ class AiPageStrategyTest {
 
     @Test
     void supports_returnsTrue_forCustomType() {
-        assertThat(extractor.supports(AtsType.CUSTOM)).isTrue();
+        assertThat(extractor.supportedTypes()).contains(AtsType.CUSTOM);
     }
 
     @Test
     void supports_returnsFalse_forOtherType() {
-        assertThat(extractor.supports(AtsType.GREENHOUSE)).isFalse();
+        assertThat(extractor.supportedTypes()).doesNotContain(AtsType.GREENHOUSE);
     }
 
     @Test

@@ -1,5 +1,6 @@
 package dev.jobhunter.filter;
 
+import dev.jobhunter.filter.geo.CityCountryResolver;
 import dev.jobhunter.filter.visa.VisaFilterResult;
 import dev.jobhunter.filter.visa.VisaSponsorshipFilter;
 import dev.jobhunter.model.JobPosting;
@@ -31,6 +32,7 @@ class JobFilterChainTest {
     @Mock private LanguageFilter languageFilter;
     @Mock private RoleRelevanceFilter roleRelevanceFilter;
     @Mock private LocationFilter locationFilter;
+    @Mock private CityCountryResolver cityCountryResolver;
     @Mock private VisaSponsorshipFilter visaSponsorshipFilter;
     @Mock private YoeFilter yoeFilter;
     @Mock private DeduplicationFilter deduplicationFilter;
@@ -41,7 +43,8 @@ class JobFilterChainTest {
     @BeforeEach
     void setUp() {
         chain = new JobFilterChain(languageFilter, roleRelevanceFilter, locationFilter,
-                visaSponsorshipFilter, yoeFilter, deduplicationFilter, jobPostingRepository);
+                cityCountryResolver, visaSponsorshipFilter, yoeFilter, deduplicationFilter,
+                jobPostingRepository);
     }
 
     private RawJobInput input(String title, String desc, String location, String company) {
@@ -54,8 +57,8 @@ class JobFilterChainTest {
     void happyPath_allPass_keepWithNullReason() {
         when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(visaSponsorshipFilter.filter(anyString(), anyString(), anyBoolean()))
+        when(locationFilter.filter(anyString())).thenReturn(LocationFilterResult.keep("NL"));
+        when(visaSponsorshipFilter.filter(anyString(), anyBoolean()))
                 .thenReturn(VisaFilterResult.bypass());
         when(yoeFilter.extractYoe(anyString())).thenReturn(null);
         when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
@@ -70,6 +73,7 @@ class JobFilterChainTest {
 
         assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
         assertThat(result.reason()).isNull();
+        assertThat(result.countryIso()).isEqualTo("NL");
     }
 
     // --- Short-circuit tests ---
@@ -104,21 +108,21 @@ class JobFilterChainTest {
     void locationFilter_skip_shortCircuitsVisa() {
         when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(locationFilter.filter(anyString())).thenReturn(FilterResult.skip("bad location"));
+        when(locationFilter.filter(anyString())).thenReturn(LocationFilterResult.skip("bad location"));
 
         FilterChainResult result = chain.apply(
                 input("Engineer", "desc", "US only", "Co"), false, false);
 
         assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
-        verify(visaSponsorshipFilter, never()).filter(anyString(), anyString(), anyBoolean());
+        verify(visaSponsorshipFilter, never()).filter(anyString(), anyBoolean());
     }
 
     @Test
     void visaFilter_rejected_skipWithVisaReason() {
         when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(visaSponsorshipFilter.filter(anyString(), anyString(), anyBoolean()))
+        when(locationFilter.filter(anyString())).thenReturn(LocationFilterResult.keep("NL"));
+        when(visaSponsorshipFilter.filter(anyString(), anyBoolean()))
                 .thenReturn(VisaFilterResult.skip("visa: no sponsorship", VisaSponsorship.REJECTED));
 
         FilterChainResult result = chain.apply(
@@ -134,8 +138,8 @@ class JobFilterChainTest {
     void yoeFilter_skip_shortCircuitsDedup() {
         when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(visaSponsorshipFilter.filter(anyString(), anyString(), anyBoolean()))
+        when(locationFilter.filter(anyString())).thenReturn(LocationFilterResult.keep("NL"));
+        when(visaSponsorshipFilter.filter(anyString(), anyBoolean()))
                 .thenReturn(VisaFilterResult.bypass());
         when(yoeFilter.extractYoe(anyString())).thenReturn(10);
         when(yoeFilter.filter(10)).thenReturn(FilterResult.skip("requires 10+ years experience"));
@@ -148,13 +152,13 @@ class JobFilterChainTest {
         verify(deduplicationFilter, never()).generateFingerprint(anyString(), anyString(), anyString());
     }
 
-    // --- visaExempt flag ---
+    // --- visaExempt flag (source-level) ---
 
     @Test
     void visaExempt_true_skipVisaFilter_returnsLikely() {
         when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
+        when(locationFilter.filter(anyString())).thenReturn(LocationFilterResult.keep("NL"));
         when(yoeFilter.extractYoe(anyString())).thenReturn(null);
         when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
         when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
@@ -168,17 +172,40 @@ class JobFilterChainTest {
 
         assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
         assertThat(result.visaSponsorship()).isEqualTo(VisaSponsorship.LIKELY);
-        verify(visaSponsorshipFilter, never()).filter(anyString(), anyString(), anyBoolean());
+        verify(visaSponsorshipFilter, never()).filter(anyString(), anyBoolean());
     }
 
-    // --- Deduplication ---
+    // --- Geo visa-exempt (DE locations auto-skip visa check) ---
+
+    @Test
+    void geoVisaExempt_de_skipVisaFilter_returnsLikely() {
+        when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
+        when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
+        when(locationFilter.filter(anyString())).thenReturn(LocationFilterResult.keep("DE"));
+        when(cityCountryResolver.isVisaExempt("DE")).thenReturn(true);
+        when(yoeFilter.extractYoe(anyString())).thenReturn(null);
+        when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
+                .thenReturn("fp");
+        when(jobPostingRepository.findFirstByFingerprintAndLanguageFilterExcludingSources(
+                anyString(), any(), any()))
+                .thenReturn(Optional.empty());
+
+        FilterChainResult result = chain.apply(
+                input("Engineer", "Java role", "Berlin", "TestCo"), false, false);
+
+        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+        assertThat(result.visaSponsorship()).isEqualTo(VisaSponsorship.LIKELY);
+        assertThat(result.countryIso()).isEqualTo("DE");
+        verify(visaSponsorshipFilter, never()).filter(anyString(), anyBoolean());
+    }
 
     @Test
     void dedup_duplicateFound_skip() {
         when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(visaSponsorshipFilter.filter(anyString(), anyString(), anyBoolean()))
+        when(locationFilter.filter(anyString())).thenReturn(LocationFilterResult.keep("NL"));
+        when(visaSponsorshipFilter.filter(anyString(), anyBoolean()))
                 .thenReturn(VisaFilterResult.bypass());
         when(yoeFilter.extractYoe(anyString())).thenReturn(null);
         when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
@@ -203,8 +230,8 @@ class JobFilterChainTest {
     void dedup_blankCompanyName_skipsDedupCheck() {
         when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(visaSponsorshipFilter.filter(anyString(), any(), anyBoolean()))
+        when(locationFilter.filter(anyString())).thenReturn(LocationFilterResult.keep("NL"));
+        when(visaSponsorshipFilter.filter(any(), anyBoolean()))
                 .thenReturn(VisaFilterResult.bypass());
         when(yoeFilter.extractYoe(any())).thenReturn(null);
         when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
@@ -228,6 +255,8 @@ class JobFilterChainTest {
 
         assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
         assertThat(result.reason()).isNull();
+        assertThat(result.visaSponsorship()).isEqualTo(VisaSponsorship.UNKNOWN);
+        assertThat(result.countryIso()).isNull();
     }
 
     // --- isAggregator forwarded to visa filter ---
@@ -236,8 +265,8 @@ class JobFilterChainTest {
     void isAggregator_true_forwardedToVisaFilter() {
         when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(visaSponsorshipFilter.filter(anyString(), anyString(), eq(true)))
+        when(locationFilter.filter(anyString())).thenReturn(LocationFilterResult.keep("NL"));
+        when(visaSponsorshipFilter.filter(anyString(), eq(true)))
                 .thenReturn(VisaFilterResult.keep(VisaSponsorship.PENDING));
         when(yoeFilter.extractYoe(anyString())).thenReturn(null);
         when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
@@ -251,7 +280,7 @@ class JobFilterChainTest {
 
         assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
         assertThat(result.visaSponsorship()).isEqualTo(VisaSponsorship.PENDING);
-        verify(visaSponsorshipFilter).filter(anyString(), anyString(), eq(true));
+        verify(visaSponsorshipFilter).filter(anyString(), eq(true));
     }
 
     // --- Null/blank input safety ---
@@ -260,8 +289,8 @@ class JobFilterChainTest {
     void nullInputs_noNpe() {
         when(languageFilter.filter(isNull(), isNull())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(isNull())).thenReturn(FilterResult.keep());
-        when(locationFilter.filter(isNull())).thenReturn(FilterResult.keep());
-        when(visaSponsorshipFilter.filter(isNull(), isNull(), anyBoolean()))
+        when(locationFilter.filter(isNull())).thenReturn(LocationFilterResult.keep("NL"));
+        when(visaSponsorshipFilter.filter(isNull(), anyBoolean()))
                 .thenReturn(VisaFilterResult.bypass());
         when(yoeFilter.extractYoe(isNull())).thenReturn(null);
         when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
@@ -281,8 +310,8 @@ class JobFilterChainTest {
         // CrawlService can supersede the aggregator.
         when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(visaSponsorshipFilter.filter(anyString(), anyString(), anyBoolean()))
+        when(locationFilter.filter(anyString())).thenReturn(LocationFilterResult.keep("NL"));
+        when(visaSponsorshipFilter.filter(anyString(), anyBoolean()))
                 .thenReturn(VisaFilterResult.bypass());
         when(yoeFilter.extractYoe(anyString())).thenReturn(null);
         when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
@@ -307,8 +336,8 @@ class JobFilterChainTest {
         // Endpoint job arrives; another endpoint job already has this fingerprint → dedup.
         when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(visaSponsorshipFilter.filter(anyString(), anyString(), anyBoolean()))
+        when(locationFilter.filter(anyString())).thenReturn(LocationFilterResult.keep("NL"));
+        when(visaSponsorshipFilter.filter(anyString(), anyBoolean()))
                 .thenReturn(VisaFilterResult.bypass());
         when(yoeFilter.extractYoe(anyString())).thenReturn(null);
         when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
@@ -335,8 +364,8 @@ class JobFilterChainTest {
         // the broad findFirstByFingerprintAndLanguageFilter query.
         when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
-        when(visaSponsorshipFilter.filter(anyString(), anyString(), anyBoolean()))
+        when(locationFilter.filter(anyString())).thenReturn(LocationFilterResult.keep("NL"));
+        when(visaSponsorshipFilter.filter(anyString(), anyBoolean()))
                 .thenReturn(VisaFilterResult.bypass());
         when(yoeFilter.extractYoe(anyString())).thenReturn(null);
         when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
@@ -360,4 +389,3 @@ class JobFilterChainTest {
                 .findFirstByFingerprintAndLanguageFilterExcludingSources(anyString(), any(), any());
     }
 }
-

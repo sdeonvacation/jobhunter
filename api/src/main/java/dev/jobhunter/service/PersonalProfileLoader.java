@@ -104,17 +104,9 @@ public class PersonalProfileLoader {
 
         Map<String, Object> locationMap = (Map<String, Object>) filtersMap.get("location");
         if (locationMap != null) {
-            // Backward compat: read "target-cities" first, fall back to deprecated "germany-cities"
-            List<String> cities = (List<String>) locationMap.get("target-cities");
-            if (cities == null) {
-                cities = (List<String>) locationMap.get("germany-cities");
-                if (cities != null) {
-                    log.warn("Config key 'filters.location.germany-cities' is deprecated, use 'target-cities' instead");
-                }
-            }
             location = new PersonalProfile.LocationFilterConfig(
-                    cities != null ? cities : List.of(),
-                    (List<String>) locationMap.getOrDefault("remote-patterns", List.of())
+                    (List<String>) locationMap.getOrDefault("remote-patterns", List.of()),
+                    (String) locationMap.getOrDefault("unknown-action", "skip")
             );
         }
 

@@ -47,8 +47,8 @@ public record PersonalProfile(
     }
 
     public record LocationFilterConfig(
-            List<String> targetCities,
-            List<String> remotePatterns
+            List<String> remotePatterns,
+            String unknownAction   // "skip" (default) or "keep"
     ) {
     }
 

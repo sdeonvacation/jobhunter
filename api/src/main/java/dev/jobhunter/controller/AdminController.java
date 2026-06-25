@@ -134,6 +134,11 @@ public class AdminController {
         return ResponseEntity.ok("Scoring complete");
     }
 
+    @PostMapping("/reindex-fingerprints")
+    public ResponseEntity<CrawlService.ReindexResult> reindexFingerprints() {
+        return ResponseEntity.ok(crawlService.reindexFingerprints());
+    }
+
     @PostMapping("/rescore")
     @Transactional
     public ResponseEntity<RescoreResult> rescoreAll() {

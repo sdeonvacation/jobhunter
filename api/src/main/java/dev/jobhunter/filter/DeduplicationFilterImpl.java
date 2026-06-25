@@ -1,5 +1,6 @@
 package dev.jobhunter.filter;
 
+import dev.jobhunter.util.LocationCountryParser;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -8,48 +9,46 @@ import java.util.HexFormat;
 
 /**
  * Generates a deduplication fingerprint for a job posting based on
- * normalized title + company name + normalized city. Same job from
- * different sources will produce the same fingerprint.
+ * normalized title + company name + country. Using country-level granularity
+ * ensures the same job posted across multiple city offices (or by both an
+ * aggregator with a city location and an ATS with a country location) produces
+ * the same fingerprint and is correctly deduplicated.
  */
 @Component
 public class DeduplicationFilterImpl implements DeduplicationFilter {
 
     /**
-     * Generate fingerprint from title + company name + normalized city.
+     * Generate fingerprint from title + company name + country code.
      */
     @Override
     public String generateFingerprint(String title, String companyName, String location) {
-        String city = extractCity(location);
-        String normalized = normalize(title) + "|" + normalize(companyName) + "|" + city;
+        String country = extractCountry(location);
+        String normalized = normalize(title) + "|" + normalize(companyName) + "|" + country;
         return sha256(normalized).substring(0, 16);
     }
 
     /**
-     * Extract the primary city from a location string.
-     * "Berlin, Germany" → "berlin"
-     * "Berlin, BE, DE" → "berlin"
-     * "Berlin, Berlin, Germany" → "berlin"
-     * "Munich, Bavaria, Germany" → "munich"
-     * "Frankfurt am Main, Hessen" → "frankfurt"
+     * Extract country code from a location string for fingerprinting.
+     * "Germany" → "de"
+     * "Frankfurt am Main, HE, De" → "de"
+     * "Hamburg, HH, De" → "de"
+     * "Remote" → "remote"
+     * Unknown → first normalized segment (fallback)
      */
-    String extractCity(String location) {
+    String extractCountry(String location) {
         if (location == null || location.isBlank()) return "";
 
-        // Take first comma-separated segment as candidate city
-        String city = location.split("[,;]")[0].trim().toLowerCase();
+        String country = LocationCountryParser.extractCountry(location);
+        if (country != null) return country;
 
-        // Normalize common city name variants
-        city = city.replaceAll("\\s*(am main|an der|a\\.\\s*d\\.).*$", "");
-
-        // Strip "remote", "onsite" etc if they appear as the city
-        if (city.matches("remote|onsite|hybrid|anywhere|global|worldwide")) {
+        // Check for remote/global tokens in first segment
+        String firstSegment = location.split("[,;]")[0].trim().toLowerCase();
+        if (firstSegment.matches("remote|onsite|hybrid|anywhere|global|worldwide")) {
             return "remote";
         }
 
-        // Normalize to ASCII-ish
-        city = city.replace("ü", "u").replace("ö", "o").replace("ä", "a").replace("ß", "ss");
-
-        return city.replaceAll("[^a-z0-9]", "").trim();
+        // Unknown location: fall back to normalized first segment
+        return firstSegment.replaceAll("[^a-z0-9]", "");
     }
 
     private String normalize(String input) {

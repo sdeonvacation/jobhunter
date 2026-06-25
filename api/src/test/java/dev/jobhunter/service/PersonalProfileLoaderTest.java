@@ -41,9 +41,6 @@ class PersonalProfileLoaderTest {
                       - "manager"
                       - "director"
                   location:
-                    germany-cities:
-                      - "berlin"
-                      - "munich"
                     remote-patterns:
                       - "^remote$"
                   yoe:
@@ -58,7 +55,6 @@ class PersonalProfileLoaderTest {
         assertThat(profile.filters().role().includePatterns()).containsExactly("engineer", "\\bsre\\b");
         assertThat(profile.filters().role().excludeKeywords()).containsExactly("manager", "director");
         assertThat(profile.filters().location()).isNotNull();
-        assertThat(profile.filters().location().targetCities()).containsExactly("berlin", "munich");
         assertThat(profile.filters().location().remotePatterns()).containsExactly("^remote$");
         assertThat(profile.filters().yoe()).isNotNull();
         assertThat(profile.filters().yoe().maxYears()).isEqualTo(7);
@@ -210,67 +206,6 @@ class PersonalProfileLoaderTest {
         assertThat(profile.filters().language()).isNotNull();
         assertThat(profile.filters().language().target()).isEqualTo("en");
         assertThat(profile.filters().language().excludePatterns()).containsExactly("german\\s+c[12]", "muttersprache");
-    }
-
-    @Test
-    void load_targetCitiesKey_parsedCorrectly() throws IOException {
-        String yaml = """
-                name: Test
-                title: Dev
-                years-of-experience: 3
-                skills: []
-                preferences:
-                  locations: []
-                  employment-type: FULL_TIME
-                  min-salary-eur: 0
-                  seniority: []
-                  languages: []
-                  excluded-industries: []
-                filters:
-                  location:
-                    target-cities:
-                      - "amsterdam"
-                      - "rotterdam"
-                    remote-patterns:
-                      - "^remote$"
-                """;
-
-        PersonalProfileLoader loader = createLoader(yaml);
-        PersonalProfile profile = loader.getProfile();
-
-        assertThat(profile.filters().location()).isNotNull();
-        assertThat(profile.filters().location().targetCities()).containsExactly("amsterdam", "rotterdam");
-    }
-
-    @Test
-    void load_germanyCitiesKey_backwardCompat() throws IOException {
-        // Old key "germany-cities" should still work and map to targetCities
-        String yaml = """
-                name: Test
-                title: Dev
-                years-of-experience: 3
-                skills: []
-                preferences:
-                  locations: []
-                  employment-type: FULL_TIME
-                  min-salary-eur: 0
-                  seniority: []
-                  languages: []
-                  excluded-industries: []
-                filters:
-                  location:
-                    germany-cities:
-                      - "berlin"
-                      - "hamburg"
-                    remote-patterns:
-                      - "^remote$"
-                """;
-
-        PersonalProfileLoader loader = createLoader(yaml);
-        PersonalProfile profile = loader.getProfile();
-
-        assertThat(profile.filters().location()).isNotNull();
-        assertThat(profile.filters().location().targetCities()).containsExactly("berlin", "hamburg");
     }
 
     @Test

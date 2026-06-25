@@ -1,5 +1,7 @@
 package dev.jobhunter.strategy.direct;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.jobhunter.ai.AiProvider;
 import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.enums.AtsType;
@@ -13,10 +15,12 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
@@ -47,6 +51,7 @@ public class AiPageStrategy implements FetchStrategy {
     private final WebClient webClient;
     private final AiProvider aiProvider;
     private final int maxContentChars;
+    private final ObjectMapper objectMapper;
 
     public AiPageStrategy(
             WebClient webClient,
@@ -56,11 +61,12 @@ public class AiPageStrategy implements FetchStrategy {
         this.webClient = webClient;
         this.aiProvider = aiProvider;
         this.maxContentChars = maxContentChars;
+        this.objectMapper = new ObjectMapper();
     }
 
     @Override
-    public boolean supports(AtsType type) {
-        return type == AtsType.CUSTOM;
+    public Set<AtsType> supportedTypes() {
+        return Set.of(AtsType.CUSTOM);
     }
 
     @Override
@@ -80,23 +86,51 @@ public class AiPageStrategy implements FetchStrategy {
         }
 
         try {
-            String html = fetchHtml(endpoint.getUrl());
-            if (html == null || html.isBlank()) {
+            // Parse ats_slug as JSON config if present: {"post_body":{...}, "apply_base":"..."}
+            String atsSlug = endpoint.getAtsSlug();
+            String postBody = null;
+            String applyBase = null;
+            if (atsSlug != null && atsSlug.startsWith("{")) {
+                try {
+                    JsonNode cfg = objectMapper.readTree(atsSlug);
+                    JsonNode pb = cfg.path("post_body");
+                    if (!pb.isMissingNode()) postBody = objectMapper.writeValueAsString(pb);
+                    JsonNode ab = cfg.path("apply_base");
+                    if (!ab.isMissingNode() && !ab.isNull()) applyBase = ab.asText();
+                } catch (Exception ex) {
+                    log.debug("AiPageStrategy: could not parse ats_slug as config for [{}]: {}", endpoint.getId(), ex.getMessage());
+                }
+            }
+
+            String content = fetchContent(endpoint.getUrl(), postBody);
+            if (content == null || content.isBlank()) {
                 return FetchResult.empty(elapsed(start));
             }
 
-            Document doc = Jsoup.parse(html, endpoint.getUrl());
-            removeNonContentElements(doc);
+            boolean isJson = isJsonContent(content);
+            List<CandidateJob> candidates;
+            Document htmlDoc = null;  // parsed once, reused if needed
 
-            List<CandidateJob> candidates = extractCandidateJobs(doc, endpoint.getUrl());
-            String contentForAi;
-
-            if (!candidates.isEmpty()) {
-                // Structured data found - format as table for AI to confirm/enrich
-                contentForAi = formatCandidatesForAi(candidates);
+            if (isJson) {
+                candidates = extractCandidatesFromJson(content, applyBase != null ? applyBase : endpoint.getUrl());
             } else {
-                // Fallback: send truncated body text for full extraction
-                contentForAi = extractBodyText(doc);
+                htmlDoc = Jsoup.parse(content, endpoint.getUrl());
+                removeNonContentElements(htmlDoc);
+                candidates = extractCandidateJobs(htmlDoc, endpoint.getUrl());
+            }
+
+            String contentForAi;
+            if (!candidates.isEmpty()) {
+                contentForAi = formatCandidatesForAi(candidates);
+            } else if (!isJson) {
+                // HTML fallback: reuse already-parsed doc
+                if (htmlDoc == null) {
+                    htmlDoc = Jsoup.parse(content, endpoint.getUrl());
+                    removeNonContentElements(htmlDoc);
+                }
+                contentForAi = extractBodyText(htmlDoc);
+            } else {
+                return FetchResult.empty(elapsed(start));
             }
 
             if (contentForAi.isBlank()) {
@@ -129,6 +163,84 @@ public class AiPageStrategy implements FetchStrategy {
             log.error("GenericAI [{}]: extraction failed - {}", endpoint.getUrl(), e.getMessage(), e);
             return FetchResult.error(e.getClass().getSimpleName() + ": " + e.getMessage(), elapsed(start));
         }
+    }
+
+    /** Fetch via POST (if postBody non-null) or GET. */
+    String fetchContent(String url, String postBody) {
+        if (postBody != null) {
+            return webClient.post()
+                    .uri(url)
+                    .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(postBody)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block(Duration.ofSeconds(30));
+        }
+        return fetchHtml(url);
+    }
+
+    /** True if content looks like a JSON object or array. */
+    boolean isJsonContent(String content) {
+        if (content == null) return false;
+        String t = content.stripLeading();
+        return t.startsWith("{") || t.startsWith("[");
+    }
+
+    /**
+     * Extract CandidateJobs from a JSON API response.
+     * Tries common array wrappers: hits, data, jobs, results, items, or root array.
+     * Apply URLs are constructed from slug/url/link fields using applyBase when needed.
+     */
+    List<CandidateJob> extractCandidatesFromJson(String json, String applyBase) {
+        List<CandidateJob> candidates = new ArrayList<>();
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            JsonNode jobArray = null;
+            for (String key : List.of("hits", "data", "jobs", "results", "items")) {
+                JsonNode node = root.path(key);
+                if (node.isArray() && !node.isEmpty()) {
+                    jobArray = node;
+                    break;
+                }
+            }
+            if (jobArray == null && root.isArray() && !root.isEmpty()) jobArray = root;
+            if (jobArray == null) return candidates;
+
+            for (JsonNode job : jobArray) {
+                String title = firstNonNull(job, "job_title", "title", "name", "position", "jobTitle");
+                if (title == null) continue;
+                String location = firstNonNull(job, "city", "location", "office", "address", "country");
+                String slugOrUrl = firstNonNull(job, "slug", "url", "link", "applyUrl", "apply_url", "externalUrl");
+                String applyUrl = buildApplyUrl(slugOrUrl, applyBase);
+                candidates.add(new CandidateJob(title, location, applyUrl));
+            }
+        } catch (Exception e) {
+            log.debug("AiPageStrategy: JSON candidate extraction failed: {}", e.getMessage());
+        }
+        return candidates;
+    }
+
+    private String buildApplyUrl(String slugOrUrl, String applyBase) {
+        if (slugOrUrl == null) return null;
+        if (slugOrUrl.startsWith("http://") || slugOrUrl.startsWith("https://")) return slugOrUrl;
+        if (applyBase != null) {
+            String base = applyBase.endsWith("/") ? applyBase : applyBase + "/";
+            String slug = slugOrUrl.startsWith("/") ? slugOrUrl.substring(1) : slugOrUrl;
+            return base + slug;
+        }
+        return slugOrUrl;
+    }
+
+    private String firstNonNull(JsonNode node, String... fields) {
+        for (String field : fields) {
+            JsonNode val = node.path(field);
+            if (!val.isMissingNode() && !val.isNull() && val.isValueNode()) {
+                String text = val.asText().trim();
+                if (!text.isEmpty()) return text;
+            }
+        }
+        return null;
     }
 
     String fetchHtml(String url) {

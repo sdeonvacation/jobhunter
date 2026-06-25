@@ -1,104 +1,89 @@
 package dev.jobhunter.filter;
 
+import dev.jobhunter.filter.geo.CityCountryResolver;
 import dev.jobhunter.service.PersonalProfile;
 import dev.jobhunter.service.PersonalProfileLoader;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
- * Whitelist-based location filter. KEEP if location matches configured target cities,
- * whitelisted remote patterns, or target EU countries from visa config. Everything else is SKIP.
+ * Location filter backed by CityCountryResolver (GeoNames CSV + built-in country patterns).
+ * Remote-EU patterns are checked first; everything else is resolved to ISO2 and tested
+ * against the target-country set configured in CityCountryResolver.
  */
 @Component
 public class LocationFilterImpl implements LocationFilter {
 
-    private final Pattern targetCitiesPattern;
-    private final Pattern genericRemotePattern;
-    private final Pattern euCountriesPattern;
+    private final CityCountryResolver cityCountryResolver;
+    private final Pattern remotePattern;
+    private final String unknownAction; // "skip" or "keep"
 
-    // Default target city patterns (used when config section is absent)
-    private static final List<String> DEFAULT_TARGET_CITIES = List.of(
-            "germany", "deutschland", "berlin", "munich", "m[uü]nchen",
-            "hamburg", "frankfurt", "cologne", "k[oö]ln", "stuttgart",
-            "d[uü]sseldorf", "dortmund", "dresden", "leipzig",
-            "nuremberg", "n[uü]rnberg", "hannover", "bremen", "bonn",
-            "mannheim", "karlsruhe", "heidelberg", "potsdam", "walldorf",
-            "freiburg", "essen", "duisburg", "wiesbaden", "mainz", "aachen",
-            "regensburg", "augsburg", "rostock", "jena", "erkner", "bielefeld"
-    );
-
-    // Default remote patterns (used when config section is absent)
+    // Default remote patterns (used when config section is absent or empty)
     private static final List<String> DEFAULT_REMOTE_PATTERNS = List.of(
             "^(remote|remote\\s*-\\s*(eu|europe|emea|global|worldwide|dach|ger(many)?))$"
     );
 
-    public LocationFilterImpl(PersonalProfileLoader profileLoader) {
+    public LocationFilterImpl(PersonalProfileLoader profileLoader, CityCountryResolver cityCountryResolver) {
+        this.cityCountryResolver = cityCountryResolver;
+
         PersonalProfile profile = profileLoader.getProfile();
-        List<String> cities = DEFAULT_TARGET_CITIES;
-        List<String> remotePatterns = DEFAULT_REMOTE_PATTERNS;
+        List<String> remotePatterns = new ArrayList<>(DEFAULT_REMOTE_PATTERNS);
+        String action = "skip";
 
-        if (profile.filters() != null && profile.filters().location() != null) {
-            PersonalProfile.LocationFilterConfig locationConfig = profile.filters().location();
-            if (!locationConfig.targetCities().isEmpty()) {
-                cities = locationConfig.targetCities();
+        if (profile != null && profile.filters() != null) {
+            PersonalProfile.FilterConfig filters = profile.filters();
+
+            if (filters.location() != null) {
+                PersonalProfile.LocationFilterConfig locationConfig = filters.location();
+                if (locationConfig.remotePatterns() != null && !locationConfig.remotePatterns().isEmpty()) {
+                    remotePatterns = new ArrayList<>(locationConfig.remotePatterns());
+                }
+                if (locationConfig.unknownAction() != null) {
+                    action = locationConfig.unknownAction();
+                }
             }
-            if (!locationConfig.remotePatterns().isEmpty()) {
-                remotePatterns = locationConfig.remotePatterns();
+
+            // Merge in visa-sponsorship remote-EU patterns (additional remote region matchers)
+            if (filters.visaSponsorship() != null
+                    && filters.visaSponsorship().remoteEuPatterns() != null
+                    && !filters.visaSponsorship().remoteEuPatterns().isEmpty()) {
+                remotePatterns.addAll(filters.visaSponsorship().remoteEuPatterns());
             }
         }
 
-        // Wrap city names with word boundaries
-        String cityRegex = cities.stream()
-                .map(city -> city.startsWith("\\b") ? city : "\\b" + city + "\\b")
-                .collect(Collectors.joining("|"));
-        this.targetCitiesPattern = Pattern.compile(cityRegex, Pattern.CASE_INSENSITIVE);
-
-        // Remote patterns are used as-is (full regex)
-        this.genericRemotePattern = Pattern.compile(
-                String.join("|", remotePatterns),
-                Pattern.CASE_INSENSITIVE
-        );
-
-        // Widen: also accept EU countries from visa sponsorship config
-        List<String> euCountries = List.of();
-        if (profile.filters() != null && profile.filters().visaSponsorship() != null) {
-            euCountries = profile.filters().visaSponsorship().targetCountries();
-        }
-        if (!euCountries.isEmpty()) {
-            String euRegex = euCountries.stream()
-                    .map(c -> c.startsWith("\\b") ? c : "\\b" + c + "\\b")
-                    .collect(Collectors.joining("|"));
-            this.euCountriesPattern = Pattern.compile(euRegex, Pattern.CASE_INSENSITIVE);
-        } else {
-            this.euCountriesPattern = null;
-        }
+        this.remotePattern = Pattern.compile(String.join("|", remotePatterns), Pattern.CASE_INSENSITIVE);
+        this.unknownAction = action;
     }
 
     @Override
-    public FilterResult filter(String location) {
+    public LocationFilterResult filter(String location) {
         if (location == null || location.isBlank()) {
-            return FilterResult.skip("location: empty");
+            return LocationFilterResult.skip("location: blank");
         }
 
-        // Whitelist: target city match anywhere in string
-        if (targetCitiesPattern.matcher(location).find()) {
-            return FilterResult.keep();
+        // 1. Remote-EU pattern check — runs before city lookup so "Remote - EU" doesn't need a city match
+        if (remotePattern.matcher(location.trim()).find()) {
+            return LocationFilterResult.keep("REMOTE_EU");
         }
 
-        // Whitelist: purely "Remote" or whitelisted remote region patterns
-        if (genericRemotePattern.matcher(location.trim()).find()) {
-            return FilterResult.keep();
+        // 2. Resolve free-text location to ISO2 country code
+        Optional<String> iso = cityCountryResolver.resolve(location);
+        if (iso.isPresent()) {
+            String code = iso.get();
+            if (cityCountryResolver.isTargetCountry(code)) {
+                return LocationFilterResult.keep(code);
+            }
+            return LocationFilterResult.skip("location: " + code + " not a target country");
         }
 
-        // Whitelist: EU country from visa sponsorship config
-        if (euCountriesPattern != null && euCountriesPattern.matcher(location).find()) {
-            return FilterResult.keep();
+        // 3. Unknown location — apply configured policy
+        if ("keep".equalsIgnoreCase(unknownAction)) {
+            return LocationFilterResult.keep(null);
         }
-
-        // Everything else: SKIP
-        return FilterResult.skip("location: not in target locations");
+        return LocationFilterResult.skip("location: not in target locations");
     }
 }

@@ -1,5 +1,6 @@
 package dev.jobhunter.filter;
 
+import dev.jobhunter.filter.geo.CityCountryResolver;
 import dev.jobhunter.filter.visa.VisaFilterResult;
 import dev.jobhunter.filter.visa.VisaSponsorshipFilter;
 import dev.jobhunter.model.JobPosting;
@@ -22,13 +23,16 @@ public class DescriptionFilterChain {
     private final LanguageFilter languageFilter;
     private final YoeFilter yoeFilter;
     private final VisaSponsorshipFilter visaSponsorshipFilter;
+    private final CityCountryResolver cityCountryResolver;
 
     public DescriptionFilterChain(LanguageFilter languageFilter,
                                   YoeFilter yoeFilter,
-                                  VisaSponsorshipFilter visaSponsorshipFilter) {
+                                  VisaSponsorshipFilter visaSponsorshipFilter,
+                                  CityCountryResolver cityCountryResolver) {
         this.languageFilter = languageFilter;
         this.yoeFilter = yoeFilter;
         this.visaSponsorshipFilter = visaSponsorshipFilter;
+        this.cityCountryResolver = cityCountryResolver;
     }
 
     /**
@@ -61,8 +65,13 @@ public class DescriptionFilterChain {
         }
 
         if (job.getVisaSponsorship() == VisaSponsorship.PENDING) {
+            // Visa-exempt country (e.g. DE) — no description scan needed
+            if (cityCountryResolver.isVisaExempt(job.getLocationCountry())) {
+                job.setVisaSponsorship(VisaSponsorship.LIKELY);
+                return;
+            }
             // isAggregator=false: force detection, no deferral now that we have real content
-            VisaFilterResult visaResult = visaSponsorshipFilter.filter(job.getLocation(), description, false);
+            VisaFilterResult visaResult = visaSponsorshipFilter.filter(description, false);
             job.setVisaSponsorship(visaResult.visaSponsorship());
             if (visaResult.decision() == FilterDecision.SKIP) {
                 job.setLanguageFilter(FilterDecision.SKIP);
