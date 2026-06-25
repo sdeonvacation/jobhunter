@@ -190,6 +190,9 @@ public class LinkedInExtractor implements FetchStrategy {
             String company = block != null ? block.company : null;
             String location = block != null ? block.location : null;
             LocalDate postedDate = block != null ? block.postedDate : null;
+            if (postedDate == null) {
+                postedDate = parseDateOrNull(ref, "listed_at", "posted_date", "date_posted");
+            }
 
             ObjectNode rawNode = objectMapper.createObjectNode();
             rawNode.put("id", externalId);
