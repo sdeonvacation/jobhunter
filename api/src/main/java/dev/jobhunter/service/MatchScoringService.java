@@ -60,6 +60,15 @@ public class MatchScoringService {
     }
 
     /**
+     * Delete any existing score for the job then score it fresh.
+     */
+    @Transactional
+    public Optional<MatchScore> rescoreJob(JobPosting job) {
+        matchScoreRepository.findByJobId(job.getId()).ifPresent(matchScoreRepository::delete);
+        return scoreJob(job);
+    }
+
+    /**
      * Score multiple jobs in batch.
      */
     @Transactional

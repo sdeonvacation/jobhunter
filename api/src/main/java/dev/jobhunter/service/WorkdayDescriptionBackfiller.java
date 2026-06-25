@@ -6,7 +6,6 @@ import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.JobPostingRepository;
-import dev.jobhunter.repository.MatchScoreRepository;
 import dev.jobhunter.strategy.ats.WorkdayStrategy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,16 +29,16 @@ public class WorkdayDescriptionBackfiller implements DescriptionBackfiller {
     private final JobPostingRepository jobPostingRepository;
     private final WorkdayStrategy workdayStrategy;
     private final DescriptionFilterChain descriptionFilterChain;
-    private final MatchScoreRepository matchScoreRepository;
+    private final MatchScoringService matchScoringService;
 
     public WorkdayDescriptionBackfiller(JobPostingRepository jobPostingRepository,
                                         WorkdayStrategy workdayStrategy,
                                         DescriptionFilterChain descriptionFilterChain,
-                                        MatchScoreRepository matchScoreRepository) {
+                                        MatchScoringService matchScoringService) {
         this.jobPostingRepository = jobPostingRepository;
         this.workdayStrategy = workdayStrategy;
         this.descriptionFilterChain = descriptionFilterChain;
-        this.matchScoreRepository = matchScoreRepository;
+        this.matchScoringService = matchScoringService;
     }
 
     @Override
@@ -64,7 +63,7 @@ public class WorkdayDescriptionBackfiller implements DescriptionBackfiller {
                 job.setDescription(description);
                 descriptionFilterChain.refilter(job);
                 jobPostingRepository.save(job);
-                matchScoreRepository.deleteByJobId(job.getId());
+                matchScoringService.rescoreJob(job);
                 filled++;
                 log.debug("Workday backfill: filled description for {} ({})", job.getId(), job.getTitle());
 
