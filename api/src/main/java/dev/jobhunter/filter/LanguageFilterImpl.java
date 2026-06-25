@@ -3,6 +3,7 @@ package dev.jobhunter.filter;
 import com.github.pemistahl.lingua.api.*;
 import dev.jobhunter.service.PersonalProfile;
 import dev.jobhunter.service.PersonalProfileLoader;
+import org.jsoup.Jsoup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -61,7 +62,10 @@ public class LanguageFilterImpl implements LanguageFilter {
 
         // Step 2: Check if description is primarily non-English (probabilistic)
         if (languageDetector != null && jobDescription.length() >= MIN_TEXT_LENGTH_FOR_DETECTION) {
-            String detectedLanguage = detectNonEnglish(jobDescription);
+            // Strip HTML before detection — raw HTML attributes (e.g. class="notion-enable-hover")
+            // contain n-gram noise that confuses Lingua into false non-English detections.
+            String plainText = Jsoup.parse(jobDescription).body().text();
+            String detectedLanguage = detectNonEnglish(plainText.isBlank() ? jobDescription : plainText);
             if (detectedLanguage != null) {
                 return FilterResult.skip("non-English JD (" + detectedLanguage + ")");
             }
