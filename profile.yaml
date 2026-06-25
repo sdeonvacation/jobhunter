@@ -155,6 +155,9 @@ filters:
       - "electrical"
       - "fellow"
       - "VP"
+      - "chemical"
+      - "simulation"
+      - "abap"
   location:
     remote-patterns:
       - "^(remote|remote\\s*-\\s*(eu|europe|emea|global|worldwide|dach|ger(many)?))$"
