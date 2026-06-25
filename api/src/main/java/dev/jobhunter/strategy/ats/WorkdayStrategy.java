@@ -120,7 +120,7 @@ public class WorkdayStrategy extends AbstractAtsStrategy {
                 }
 
                 for (JsonNode posting : postings) {
-                    RawAggregatorJob job = mapJob(posting, baseUrl);
+                    RawAggregatorJob job = mapJob(posting, baseUrl, site);
                     if (job != null) {
                         allJobs.add(job);
                     }
@@ -207,7 +207,7 @@ public class WorkdayStrategy extends AbstractAtsStrategy {
         );
     }
 
-    private RawAggregatorJob mapJob(JsonNode node, String baseUrl) {
+    private RawAggregatorJob mapJob(JsonNode node, String baseUrl, String site) {
         try {
             String externalPath = node.path("externalPath").asText(null);
             String title = truncate(node.path("title").asText(null), 500);
@@ -227,7 +227,7 @@ public class WorkdayStrategy extends AbstractAtsStrategy {
                 }
             }
 
-            String applyUrl = externalPath != null ? baseUrl + externalPath : null;
+            String applyUrl = externalPath != null ? baseUrl + "/" + site + externalPath : null;
             LocalDate postedDate = parsePostedOn(postedOnRaw);
 
             return new RawAggregatorJob(
