@@ -273,6 +273,6 @@ public class CityCountryResolver {
 
     /** Whether this ISO is visa-exempt (jobs here don't need visa check). Currently only DE. */
     public boolean isVisaExempt(String iso) {
-        return "DE".equals(iso);
+        return "DE".equalsIgnoreCase(iso);
     }
 }

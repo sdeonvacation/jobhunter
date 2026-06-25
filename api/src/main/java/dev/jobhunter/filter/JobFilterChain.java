@@ -74,7 +74,7 @@ public class JobFilterChain {
             // 4. Visa filter — skipped when source is visa-exempt OR location resolves to a visa-exempt country (DE)
             VisaSponsorship visaStatus;
             if (visaExempt || cityCountryResolver.isVisaExempt(locationResult.countryIso())) {
-                visaStatus = VisaSponsorship.LIKELY;
+                visaStatus = VisaSponsorship.UNKNOWN;
             } else {
                 VisaFilterResult visaResult = visaSponsorshipFilter.filter(input.description(), isAggregator);
                 if (visaResult.decision() == FilterDecision.SKIP) {
