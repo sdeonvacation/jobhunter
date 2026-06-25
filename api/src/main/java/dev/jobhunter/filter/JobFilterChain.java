@@ -3,6 +3,7 @@ package dev.jobhunter.filter;
 import dev.jobhunter.filter.visa.VisaFilterResult;
 import dev.jobhunter.filter.visa.VisaSponsorshipFilter;
 import dev.jobhunter.model.enums.FilterDecision;
+import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.model.enums.VisaSponsorship;
 import dev.jobhunter.repository.JobPostingRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -90,9 +91,17 @@ public class JobFilterChain {
             if (input.companyName() != null && !input.companyName().isBlank()) {
                 String fingerprint = deduplicationFilter.generateFingerprint(
                         input.title(), input.companyName(), input.location());
-                Optional<dev.jobhunter.model.JobPosting> duplicate =
-                        jobPostingRepository.findFirstByFingerprintAndLanguageFilter(
-                                fingerprint, FilterDecision.KEEP);
+                // Endpoint jobs only dedup against other endpoint jobs; if only an aggregator
+                // job exists the endpoint wins — CrawlService will supersede it after save.
+                // Aggregator jobs dedup against everything (endpoint and aggregator).
+                Optional<dev.jobhunter.model.JobPosting> duplicate;
+                if (isAggregator) {
+                    duplicate = jobPostingRepository.findFirstByFingerprintAndLanguageFilter(
+                            fingerprint, FilterDecision.KEEP);
+                } else {
+                    duplicate = jobPostingRepository.findFirstByFingerprintAndLanguageFilterExcludingSources(
+                            fingerprint, FilterDecision.KEEP, JobSource.aggregators());
+                }
                 if (duplicate.isPresent()) {
                     return FilterChainResult.skip("duplicate of " + duplicate.get().getSource());
                 }

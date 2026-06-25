@@ -4,6 +4,7 @@ import dev.jobhunter.filter.visa.VisaFilterResult;
 import dev.jobhunter.filter.visa.VisaSponsorshipFilter;
 import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.FilterDecision;
+import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.model.enums.VisaSponsorship;
 import dev.jobhunter.repository.JobPostingRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -59,7 +61,8 @@ class JobFilterChainTest {
         when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
         when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
                 .thenReturn("fp");
-        when(jobPostingRepository.findFirstByFingerprintAndLanguageFilter(anyString(), any()))
+        when(jobPostingRepository.findFirstByFingerprintAndLanguageFilterExcludingSources(
+                anyString(), any(), any()))
                 .thenReturn(Optional.empty());
 
         FilterChainResult result = chain.apply(
@@ -156,7 +159,8 @@ class JobFilterChainTest {
         when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
         when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
                 .thenReturn("fp");
-        when(jobPostingRepository.findFirstByFingerprintAndLanguageFilter(anyString(), any()))
+        when(jobPostingRepository.findFirstByFingerprintAndLanguageFilterExcludingSources(
+                anyString(), any(), any()))
                 .thenReturn(Optional.empty());
 
         FilterChainResult result = chain.apply(
@@ -184,7 +188,8 @@ class JobFilterChainTest {
                 .id(UUID.randomUUID())
                 .source(dev.jobhunter.model.enums.JobSource.GREENHOUSE)
                 .build();
-        when(jobPostingRepository.findFirstByFingerprintAndLanguageFilter("dup-fp", FilterDecision.KEEP))
+        when(jobPostingRepository.findFirstByFingerprintAndLanguageFilterExcludingSources(
+                eq("dup-fp"), eq(FilterDecision.KEEP), any()))
                 .thenReturn(Optional.of(dupJob));
 
         FilterChainResult result = chain.apply(
@@ -266,4 +271,93 @@ class JobFilterChainTest {
         // blank companyName → dedup skipped; should KEEP without NPE
         assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
     }
+
+    // --- Tier-aware deduplication ---
+
+    @Test
+    void dedup_endpointJob_onlyAggregatorExists_keepNotSkipped() {
+        // Endpoint job arrives; only an aggregator job has this fingerprint.
+        // The endpoint must NOT be deduplicated — it should pass through so
+        // CrawlService can supersede the aggregator.
+        when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
+        when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
+        when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
+        when(visaSponsorshipFilter.filter(anyString(), anyString(), anyBoolean()))
+                .thenReturn(VisaFilterResult.bypass());
+        when(yoeFilter.extractYoe(anyString())).thenReturn(null);
+        when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
+                .thenReturn("agg-fp");
+        // Endpoint dedup query returns empty — no endpoint job exists yet
+        when(jobPostingRepository.findFirstByFingerprintAndLanguageFilterExcludingSources(
+                eq("agg-fp"), eq(FilterDecision.KEEP), any()))
+                .thenReturn(Optional.empty());
+
+        FilterChainResult result = chain.apply(
+                input("Engineer", "desc", "Berlin", "TestCo"), false, false);
+
+        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+        // Aggregator-wide query should NOT be called for endpoint jobs
+        verify(jobPostingRepository, never())
+                .findFirstByFingerprintAndLanguageFilter(anyString(), any());
+    }
+
+    @Test
+    void dedup_endpointJob_anotherEndpointExists_skip() {
+        // Endpoint job arrives; another endpoint job already has this fingerprint → dedup.
+        when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
+        when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
+        when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
+        when(visaSponsorshipFilter.filter(anyString(), anyString(), anyBoolean()))
+                .thenReturn(VisaFilterResult.bypass());
+        when(yoeFilter.extractYoe(anyString())).thenReturn(null);
+        when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
+                .thenReturn("endpoint-fp");
+        var existingEndpointJob = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.GREENHOUSE)
+                .build();
+        when(jobPostingRepository.findFirstByFingerprintAndLanguageFilterExcludingSources(
+                eq("endpoint-fp"), eq(FilterDecision.KEEP), any()))
+                .thenReturn(Optional.of(existingEndpointJob));
+
+        FilterChainResult result = chain.apply(
+                input("Engineer", "desc", "Berlin", "TestCo"), false, false);
+
+        assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
+        assertThat(result.reason()).startsWith("duplicate of");
+    }
+
+    @Test
+    void dedup_aggregatorJob_endpointExists_skip() {
+        // Aggregator job arrives; an endpoint job has the same fingerprint → dedup via
+        // the broad findFirstByFingerprintAndLanguageFilter query.
+        when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
+        when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
+        when(locationFilter.filter(anyString())).thenReturn(FilterResult.keep());
+        when(visaSponsorshipFilter.filter(anyString(), anyString(), anyBoolean()))
+                .thenReturn(VisaFilterResult.bypass());
+        when(yoeFilter.extractYoe(anyString())).thenReturn(null);
+        when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
+                .thenReturn("fp");
+        var existingEndpointJob = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.GREENHOUSE)
+                .build();
+        when(jobPostingRepository.findFirstByFingerprintAndLanguageFilter(
+                eq("fp"), eq(FilterDecision.KEEP)))
+                .thenReturn(Optional.of(existingEndpointJob));
+
+        FilterChainResult result = chain.apply(
+                input("Engineer", "desc", "Berlin", "TestCo"), true, false);
+
+        assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
+        assertThat(result.reason()).startsWith("duplicate of");
+        // Endpoint-only query should NOT be called for aggregator jobs
+        verify(jobPostingRepository, never())
+                .findFirstByFingerprintAndLanguageFilterExcludingSources(anyString(), any(), any());
+    }
 }
+

@@ -19,6 +19,7 @@ import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.CareerEndpointRepository;
 import dev.jobhunter.repository.JobPostingRepository;
+import dev.jobhunter.repository.MatchScoreRepository;
 import dev.jobhunter.people.crawl.PostCrawlPipeline;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,6 +55,7 @@ class CrawlServiceTest {
     @Mock private ScoringService scoringService;
     @Mock private FetchStrategy fetchStrategy;
     @Mock private PostCrawlPipeline postCrawlPipeline;
+    @Mock private MatchScoreRepository matchScoreRepository;
 
     private CrawlService crawlService;
 
@@ -62,7 +64,7 @@ class CrawlServiceTest {
         crawlService = new CrawlService(
                 endpointRepository, jobPostingRepository, strategyRegistry,
                 jobFilterChain, deduplicationFilter, descriptionFilterChain,
-                List.of(), List.of(), scoringService, postCrawlPipeline);
+                List.of(), List.of(), scoringService, postCrawlPipeline, matchScoreRepository);
         // @Value field not set by Spring in unit tests; set manually
         ReflectionTestUtils.setField(crawlService, "crawlConcurrency", 10);
     }
@@ -620,4 +622,141 @@ class CrawlServiceTest {
         assertThat(endpoint.getConsecutiveErrors()).isEqualTo(10);
         assertThat(endpoint.isActive()).isFalse();
     }
+
+    // --- Aggregator demotion ---
+
+    @Test
+    void crawlEndpoint_newKeepJob_demotesExistingAggregatorJob() {
+        var company = Company.builder().id(UUID.randomUUID()).name("TestCo").build();
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("testco")
+                .company(company)
+                .build();
+
+        var rawJob = new RawAggregatorJob("ext-1", "Engineer", null, "Berlin", "Java dev role",
+                "https://apply.com", LocalDate.now(), null, null, null, "{}");
+        var result = FetchResult.success(List.of(rawJob), Duration.ofMillis(200));
+
+        var aggregatorJob = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.LINKEDIN)
+                .fingerprint("test-fingerprint")
+                .languageFilter(FilterDecision.KEEP)
+                .applyUrl("https://linkedin.com/jobs/view/123")
+                .build();
+
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(result);
+        when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-1"))
+                .thenReturn(Optional.empty());
+        when(jobPostingRepository.findByEndpointIdAndIsActiveTrue(endpoint.getId())).thenReturn(List.of());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
+                .thenReturn("test-fingerprint");
+        when(jobFilterChain.apply(any(RawJobInput.class), anyBoolean(), anyBoolean()))
+                .thenReturn(FilterChainResult.keep(null, null));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+        when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(0);
+        when(jobPostingRepository.findByFingerprintAndLanguageFilterAndSourceIn(
+                eq("test-fingerprint"), eq(FilterDecision.KEEP), any()))
+                .thenReturn(List.of(aggregatorJob));
+
+        crawlService.crawlEndpoint(endpoint);
+
+        // Aggregator job must be demoted to SKIP
+        assertThat(aggregatorJob.getLanguageFilter()).isEqualTo(FilterDecision.SKIP);
+        assertThat(aggregatorJob.getFilterReason()).isEqualTo("superseded by endpoint");
+        // Match score for aggregator must be deleted
+        verify(matchScoreRepository).deleteByJobId(aggregatorJob.getId());
+    }
+
+    @Test
+    void crawlEndpoint_newSkipJob_doesNotDemoteAggregators() {
+        var company = Company.builder().id(UUID.randomUUID()).name("TestCo").build();
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("testco")
+                .company(company)
+                .build();
+
+        var rawJob = new RawAggregatorJob("ext-1", "Manager", null, "Berlin", "Management role",
+                "https://apply.com", LocalDate.now(), null, null, null, "{}");
+        var result = FetchResult.success(List.of(rawJob), Duration.ofMillis(200));
+
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(result);
+        when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-1"))
+                .thenReturn(Optional.empty());
+        when(jobPostingRepository.findByEndpointIdAndIsActiveTrue(endpoint.getId())).thenReturn(List.of());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
+                .thenReturn("skip-fingerprint");
+        when(jobFilterChain.apply(any(RawJobInput.class), anyBoolean(), anyBoolean()))
+                .thenReturn(FilterChainResult.skip("manager role"));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+        when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(0);
+
+        crawlService.crawlEndpoint(endpoint);
+
+        // Aggregator demotion query must NOT be called for SKIP jobs
+        verify(jobPostingRepository, never())
+                .findByFingerprintAndLanguageFilterAndSourceIn(anyString(), any(), any());
+        verify(matchScoreRepository, never()).deleteByJobId(any());
+    }
+
+    @Test
+    void crawlEndpoint_newKeepJob_copiesAggregatorApplyUrlToExternalLinks() {
+        var company = Company.builder().id(UUID.randomUUID()).name("TestCo").build();
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("testco")
+                .company(company)
+                .build();
+
+        var rawJob = new RawAggregatorJob("ext-1", "Engineer", null, "Berlin", "Java role",
+                "https://apply.com", LocalDate.now(), null, null, null, "{}");
+        var result = FetchResult.success(List.of(rawJob), Duration.ofMillis(200));
+
+        var aggregatorJob = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.INDEED)
+                .fingerprint("fp")
+                .languageFilter(FilterDecision.KEEP)
+                .applyUrl("https://indeed.com/jobs/456")
+                .build();
+
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(result);
+        when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-1"))
+                .thenReturn(Optional.empty());
+        when(jobPostingRepository.findByEndpointIdAndIsActiveTrue(endpoint.getId())).thenReturn(List.of());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
+                .thenReturn("fp");
+        when(jobFilterChain.apply(any(RawJobInput.class), anyBoolean(), anyBoolean()))
+                .thenReturn(FilterChainResult.keep(null, null));
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+        when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(0);
+        when(jobPostingRepository.findByFingerprintAndLanguageFilterAndSourceIn(
+                eq("fp"), eq(FilterDecision.KEEP), any()))
+                .thenReturn(List.of(aggregatorJob));
+
+        // Capture all saved JobPostings
+        var captor = ArgumentCaptor.forClass(JobPosting.class);
+        when(jobPostingRepository.save(captor.capture())).thenAnswer(i -> i.getArgument(0));
+
+        crawlService.crawlEndpoint(endpoint);
+
+        // Find the endpoint job among saved postings (not the demoted aggregator)
+        var endpointJobSaves = captor.getAllValues().stream()
+                .filter(j -> j.getSource() == JobSource.GREENHOUSE)
+                .toList();
+        assertThat(endpointJobSaves).isNotEmpty();
+        var endpointJob = endpointJobSaves.get(endpointJobSaves.size() - 1); // last save has externalLinks
+        assertThat(endpointJob.getExternalLinks()).containsEntry("INDEED", "https://indeed.com/jobs/456");
+    }
 }
+

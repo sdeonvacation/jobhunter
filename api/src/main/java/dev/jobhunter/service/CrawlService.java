@@ -21,6 +21,7 @@ import dev.jobhunter.model.enums.ExtractionStatus;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.CareerEndpointRepository;
 import dev.jobhunter.repository.JobPostingRepository;
+import dev.jobhunter.repository.MatchScoreRepository;
 import dev.jobhunter.people.crawl.PostCrawlPipeline;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -51,6 +52,7 @@ public class CrawlService {
     private final List<BackfillPostProcessor> backfillPostProcessors;
     private final ScoringService scoringService;
     private final PostCrawlPipeline postCrawlPipeline;
+    private final MatchScoreRepository matchScoreRepository;
 
     public CrawlService(CareerEndpointRepository endpointRepository,
                         JobPostingRepository jobPostingRepository,
@@ -61,7 +63,8 @@ public class CrawlService {
                         List<DescriptionBackfiller> descriptionBackfillers,
                         List<BackfillPostProcessor> backfillPostProcessors,
                         ScoringService scoringService,
-                        PostCrawlPipeline postCrawlPipeline) {
+                        PostCrawlPipeline postCrawlPipeline,
+                        MatchScoreRepository matchScoreRepository) {
         this.endpointRepository = endpointRepository;
         this.jobPostingRepository = jobPostingRepository;
         this.strategyRegistry = strategyRegistry;
@@ -72,6 +75,7 @@ public class CrawlService {
         this.backfillPostProcessors = backfillPostProcessors;
         this.scoringService = scoringService;
         this.postCrawlPipeline = postCrawlPipeline;
+        this.matchScoreRepository = matchScoreRepository;
     }
 
     /**
@@ -245,6 +249,23 @@ public class CrawlService {
                     Map<String, Object> rawContent = posting.getRawContent() != null
                             ? posting.getRawContent() : Map.of();
                     postCrawlPipeline.run(posting, rawJob.rawJson(), rawContent);
+
+                    // Demote any aggregator KEEP jobs superseded by this endpoint job
+                    List<JobPosting> aggregatorDupes = jobPostingRepository
+                            .findByFingerprintAndLanguageFilterAndSourceIn(
+                                    fingerprint, FilterDecision.KEEP, JobSource.aggregators());
+                    for (JobPosting agg : aggregatorDupes) {
+                        agg.setLanguageFilter(FilterDecision.SKIP);
+                        agg.setFilterReason("superseded by endpoint");
+                        if (agg.getApplyUrl() != null) {
+                            posting.getExternalLinks().put(agg.getSource().name(), agg.getApplyUrl());
+                        }
+                        jobPostingRepository.save(agg);
+                        matchScoreRepository.deleteByJobId(agg.getId());
+                    }
+                    if (!aggregatorDupes.isEmpty()) {
+                        jobPostingRepository.save(posting);
+                    }
                 }
 
                 newJobsCount++;

@@ -15,6 +15,7 @@ import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.CareerEndpointRepository;
 import dev.jobhunter.repository.JobPostingRepository;
+import dev.jobhunter.repository.MatchScoreRepository;
 import dev.jobhunter.people.crawl.PostCrawlPipeline;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,7 @@ class CrawlServiceBackfillYoeTest {
     @Mock private ScoringService scoringService;
     @Mock private FetchStrategy fetchStrategy;
     @Mock private PostCrawlPipeline postCrawlPipeline;
+    @Mock private MatchScoreRepository matchScoreRepository;
 
     private CrawlService crawlService;
 
@@ -56,7 +58,7 @@ class CrawlServiceBackfillYoeTest {
         crawlService = new CrawlService(
                 endpointRepository, jobPostingRepository, strategyRegistry,
                 jobFilterChain, deduplicationFilter, descriptionFilterChain,
-                List.of(), List.of(), scoringService, postCrawlPipeline);
+                List.of(), List.of(), scoringService, postCrawlPipeline, matchScoreRepository);
     }
 
     private CareerEndpoint endpoint(AtsType atsType) {

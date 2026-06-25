@@ -89,6 +89,18 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     Optional<JobPosting> findFirstByFingerprintAndLanguageFilter(String fingerprint, FilterDecision filter);
 
+    @Query("SELECT j FROM JobPosting j WHERE j.fingerprint = :fingerprint AND j.languageFilter = :filter AND j.source NOT IN :excludedSources")
+    Optional<JobPosting> findFirstByFingerprintAndLanguageFilterExcludingSources(
+            @Param("fingerprint") String fingerprint,
+            @Param("filter") FilterDecision filter,
+            @Param("excludedSources") List<JobSource> excludedSources);
+
+    @Query("SELECT j FROM JobPosting j WHERE j.fingerprint = :fingerprint AND j.languageFilter = :filter AND j.source IN :sources")
+    List<JobPosting> findByFingerprintAndLanguageFilterAndSourceIn(
+            @Param("fingerprint") String fingerprint,
+            @Param("filter") FilterDecision filter,
+            @Param("sources") List<JobSource> sources);
+
     @Query("SELECT jp FROM JobPosting jp WHERE jp.fingerprint = :fingerprint " +
            "AND jp.isActive = true " +
            "AND jp.source NOT IN :excludedSources")

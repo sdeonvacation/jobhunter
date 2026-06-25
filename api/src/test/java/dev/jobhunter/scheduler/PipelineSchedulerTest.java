@@ -36,7 +36,7 @@ class PipelineSchedulerTest {
         lenient().when(disabledSource.name()).thenReturn("disabled-source");
 
         scheduler = new PipelineScheduler(crawlService, scoringService,
-                aggregatorIngestionService, List.of(enabledSource, disabledSource));
+                aggregatorIngestionService, List.of(enabledSource, disabledSource), 3);
     }
 
     @Test
@@ -56,7 +56,7 @@ class PipelineSchedulerTest {
     @Test
     void runPipeline_noSources_stillCrawlsAndScores() {
         PipelineScheduler emptyScheduler = new PipelineScheduler(crawlService, scoringService,
-                aggregatorIngestionService, List.of());
+                aggregatorIngestionService, List.of(), 3);
         when(crawlService.crawlAllDueEndpoints()).thenReturn(new int[]{3, 10, 0});
 
         emptyScheduler.runPipeline();
