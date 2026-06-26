@@ -24,6 +24,12 @@ public class YoeFilterImpl implements YoeFilter {
             Pattern.CASE_INSENSITIVE
     );
 
+    // Matches patterns like "8+ years as a Backend Engineer", "5+ years in software development"
+    private static final Pattern YOE_ROLE_PATTERN = Pattern.compile(
+            "(\\d+)\\+?\\s*(?:years?|yrs?)\\s+(?:as|in)\\b",
+            Pattern.CASE_INSENSITIVE
+    );
+
     public YoeFilterImpl(PersonalProfileLoader profileLoader) {
         PersonalProfile profile = profileLoader.getProfile();
         if (profile.filters() != null && profile.filters().yoe() != null) {
@@ -41,17 +47,18 @@ public class YoeFilterImpl implements YoeFilter {
     public Integer extractYoe(String description) {
         if (description == null || description.isBlank()) return null;
 
-        Matcher matcher = YOE_PATTERN.matcher(description);
         Integer minYoe = null;
 
-        while (matcher.find()) {
-            int yoe = Integer.parseInt(matcher.group(1));
-            // Ignore absurd values (e.g. "25 years ago" false positive)
-            if (yoe > 20) continue;
-            // Take the first reasonable match (usually the primary requirement)
-            if (minYoe == null) {
-                minYoe = yoe;
+        for (Pattern pattern : new Pattern[]{YOE_PATTERN, YOE_ROLE_PATTERN}) {
+            Matcher matcher = pattern.matcher(description);
+            while (matcher.find()) {
+                int yoe = Integer.parseInt(matcher.group(1));
+                if (yoe > 20) continue;
+                if (minYoe == null) {
+                    minYoe = yoe;
+                }
             }
+            if (minYoe != null) break; // first pattern that matched wins
         }
 
         return minYoe;
