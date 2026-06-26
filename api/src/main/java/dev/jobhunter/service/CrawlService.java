@@ -223,6 +223,12 @@ public class CrawlService {
             if (existingOpt.isPresent()) {
                 // Existing job: update lastCrawledAt + backfill missing description
                 JobPosting existing = existingOpt.get();
+                // Sync title if company renamed the job on the ATS
+                if (rawJob.title() != null && !rawJob.title().equals(existing.getTitle())) {
+                    log.info("CrawlService: title updated for job {} [{} → {}]",
+                             existing.getId(), existing.getTitle(), rawJob.title());
+                    existing.setTitle(rawJob.title());
+                }
                 existing.setLastCrawledAt(LocalDateTime.now());
                 if ((existing.getDescription() == null || existing.getDescription().isBlank()) && rawJob.description() != null && !rawJob.description().isBlank()) {
                     existing.setDescription(rawJob.description());
