@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.net.URI;
 import java.time.*;
 import java.util.*;
 
@@ -49,6 +50,24 @@ public class RecruiteeStrategy extends AbstractAtsStrategy {
     }
 
 
+    /** Use endpoint URL as base when it's a custom domain (not *.recruitee.com). */
+    private String resolveBaseUrl(CareerEndpoint endpoint) {
+        String endpointUrl = endpoint.getUrl();
+        if (endpointUrl != null && !endpointUrl.isBlank()) {
+            try {
+                String host = URI.create(endpointUrl).getHost();
+                if (host != null && !host.endsWith("recruitee.com")) {
+                    // Strip any path — keep scheme + host only
+                    URI uri = URI.create(endpointUrl);
+                    return uri.getScheme() + "://" + uri.getHost();
+                }
+            } catch (IllegalArgumentException e) {
+                log.warn("Recruitee: invalid endpoint URL '{}', falling back to slug", endpointUrl);
+            }
+        }
+        return String.format(baseUrlTemplate, endpoint.getAtsSlug());
+    }
+
     @Override
     public FetchResult fetch(FetchContext context) {
         CareerEndpoint endpoint = context.endpoint();
@@ -56,7 +75,7 @@ public class RecruiteeStrategy extends AbstractAtsStrategy {
         String slug = endpoint.getAtsSlug();
 
         try {
-            String url = String.format(baseUrlTemplate, slug) + API_PATH;
+            String url = resolveBaseUrl(endpoint) + API_PATH;
             String responseBody = webClient.get()
                     .uri(url)
                     .retrieve()
