@@ -95,10 +95,12 @@ public class AdminController {
     }
 
     @PostMapping("/crawl")
-    public ResponseEntity<CrawlResult> triggerCrawl() {
-        int[] stats = crawlService.crawlAllDueEndpoints();
-        scoringScheduler.scoreAllUnscored();
-        return ResponseEntity.ok(new CrawlResult(stats[0], stats[1], stats[2]));
+    public ResponseEntity<Map<String, String>> triggerCrawl() {
+        CompletableFuture.runAsync(() -> {
+            crawlService.crawlAllDueEndpoints();
+            scoringScheduler.scoreAllUnscored();
+        });
+        return ResponseEntity.accepted().body(Map.of("status", "started"));
     }
 
     @PostMapping("/crawl/aggregators")
