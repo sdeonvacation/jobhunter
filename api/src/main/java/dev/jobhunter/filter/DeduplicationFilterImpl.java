@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.regex.Pattern;
 
 /**
  * Generates a deduplication fingerprint for a job posting based on
@@ -17,13 +18,17 @@ import java.util.HexFormat;
 @Component
 public class DeduplicationFilterImpl implements DeduplicationFilter {
 
+    private static final Pattern LEGAL_SUFFIX = Pattern.compile(
+            "\\b(gmbh|inc|ltd|ag|llc|bv|sa|sas|srl|ug|kg|co|corp|plc|se|nv|as)\\b(\\s*[&+]\\s*\\w+\\.?)?",
+            Pattern.CASE_INSENSITIVE);
+
     /**
      * Generate fingerprint from title + company name + country code.
      */
     @Override
     public String generateFingerprint(String title, String companyName, String location) {
         String country = extractCountry(location);
-        String normalized = normalize(title) + "|" + normalize(companyName) + "|" + country;
+        String normalized = normalize(title) + "|" + normalizeCompany(companyName) + "|" + country;
         return sha256(normalized).substring(0, 16);
     }
 
@@ -49,6 +54,12 @@ public class DeduplicationFilterImpl implements DeduplicationFilter {
 
         // Unknown location: fall back to normalized first segment
         return firstSegment.replaceAll("[^a-z0-9]", "");
+    }
+
+    private String normalizeCompany(String input) {
+        if (input == null) return "";
+        String stripped = LEGAL_SUFFIX.matcher(input).replaceAll("").trim();
+        return normalize(stripped);
     }
 
     private String normalize(String input) {

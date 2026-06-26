@@ -67,7 +67,7 @@ public class DescriptionFilterChain {
         if (job.getVisaSponsorship() == VisaSponsorship.PENDING) {
             // Visa-exempt country (e.g. DE) — no description scan needed
             if (cityCountryResolver.isVisaExempt(job.getLocationCountry())) {
-                job.setVisaSponsorship(VisaSponsorship.LIKELY);
+                job.setVisaSponsorship(VisaSponsorship.UNKNOWN);
                 return;
             }
             // isAggregator=false: force detection, no deferral now that we have real content
