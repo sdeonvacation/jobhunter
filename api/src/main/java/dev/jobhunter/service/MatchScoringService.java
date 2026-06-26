@@ -64,7 +64,10 @@ public class MatchScoringService {
      */
     @Transactional
     public Optional<MatchScore> rescoreJob(JobPosting job) {
-        matchScoreRepository.findByJobId(job.getId()).ifPresent(matchScoreRepository::delete);
+        matchScoreRepository.findByJobId(job.getId()).ifPresent(ms -> {
+            matchScoreRepository.delete(ms);
+            matchScoreRepository.flush();
+        });
         return scoreJob(job);
     }
 
