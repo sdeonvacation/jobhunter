@@ -163,7 +163,7 @@ public class WorkdayStrategy extends AbstractAtsStrategy {
 
         try {
             String response = postRequest(url, requestBody);
-            return objectMapper.readTree(response);
+            return parseWorkdayResponse(url, offset, response);
         } catch (WebClientResponseException e) {
             if (e.getStatusCode().value() == 422) {
                 // Some Workday instances reject sortBy - retry without it
@@ -171,7 +171,7 @@ public class WorkdayStrategy extends AbstractAtsStrategy {
                 String fallbackBody = buildRequestBody(offset, false);
                 try {
                     String response = postRequest(url, fallbackBody);
-                    return objectMapper.readTree(response);
+                    return parseWorkdayResponse(url, offset, response);
                 } catch (WebClientResponseException retryEx) {
                     throw retryEx;
                 } catch (Exception retryEx) {
@@ -180,8 +180,17 @@ public class WorkdayStrategy extends AbstractAtsStrategy {
             }
             throw e;
         } catch (Exception e) {
+            log.error("Workday: non-HTTP failure at [{}] offset {}: {}", url, offset, e.getMessage(), e);
             throw new RuntimeException("Failed to fetch Workday page at offset " + offset, e);
         }
+    }
+
+    private JsonNode parseWorkdayResponse(String url, int offset, String response) throws Exception {
+        if (response != null && response.stripLeading().startsWith("<")) {
+            log.warn("Workday [{}]: received HTML instead of JSON at offset {} (Cloudflare challenge?)", url, offset);
+            throw new WebClientResponseException(403, "Cloudflare challenge page", null, null, null);
+        }
+        return objectMapper.readTree(response);
     }
 
     private String postRequest(String url, String body) {
