@@ -130,7 +130,8 @@ public class AiPageStrategy implements FetchStrategy {
                 }
                 contentForAi = extractBodyText(htmlDoc);
             } else {
-                return FetchResult.empty(elapsed(start));
+                // JSON content but no candidates from known wrappers — let AI try directly
+                contentForAi = truncate(content, maxContentChars);
             }
 
             if (contentForAi.isBlank()) {
@@ -171,6 +172,7 @@ public class AiPageStrategy implements FetchStrategy {
             return webClient.post()
                     .uri(url)
                     .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+                    .header("Referer", "https://www.ibm.com/")
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(postBody)
                     .retrieve()
@@ -197,21 +199,33 @@ public class AiPageStrategy implements FetchStrategy {
         try {
             JsonNode root = objectMapper.readTree(json);
             JsonNode jobArray = null;
+            // Try standard wrappers first
             for (String key : List.of("hits", "data", "jobs", "results", "items")) {
                 JsonNode node = root.path(key);
                 if (node.isArray() && !node.isEmpty()) {
                     jobArray = node;
                     break;
                 }
+                // Elasticsearch: hits is an object containing a hits array
+                if (node.isObject()) {
+                    JsonNode nested = node.path("hits");
+                    if (nested.isArray() && !nested.isEmpty()) {
+                        jobArray = nested;
+                        break;
+                    }
+                }
             }
             if (jobArray == null && root.isArray() && !root.isEmpty()) jobArray = root;
             if (jobArray == null) return candidates;
 
             for (JsonNode job : jobArray) {
-                String title = firstNonNull(job, "job_title", "title", "name", "position", "jobTitle");
+                // Elasticsearch: actual fields are under _source
+                JsonNode src = job.has("_source") ? job.path("_source") : job;
+                String title = firstNonNull(src, "job_title", "title", "name", "position", "jobTitle");
                 if (title == null) continue;
-                String location = firstNonNull(job, "city", "location", "office", "address", "country");
-                String slugOrUrl = firstNonNull(job, "slug", "url", "link", "applyUrl", "apply_url", "externalUrl");
+                String location = firstNonNull(src, "city", "location", "office", "address", "country",
+                                               "field_keyword_19", "field_keyword_05");
+                String slugOrUrl = firstNonNull(src, "slug", "url", "link", "applyUrl", "apply_url", "externalUrl");
                 String applyUrl = buildApplyUrl(slugOrUrl, applyBase);
                 candidates.add(new CandidateJob(title, location, applyUrl));
             }
