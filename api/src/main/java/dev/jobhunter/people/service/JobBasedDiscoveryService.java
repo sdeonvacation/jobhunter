@@ -96,14 +96,14 @@ public class JobBasedDiscoveryService {
             return contactRepository.findByCompanyId(companyId);
         }
 
-        // Concatenate JD snippets — focus on areas where contact info lives
+        // Concatenate JD snippets — first 500 + last 2000 chars where contact info lives
         String jdText = jobs.stream()
                 .filter(j -> j.getDescription() != null && !j.getDescription().isBlank())
                 .map(j -> {
                     String desc = j.getDescription();
-                    // Take last 2000 chars (contact info is almost always in final third)
+                    String head = desc.length() > 500 ? desc.substring(0, 500) : desc;
                     String tail = desc.length() > 2000 ? desc.substring(desc.length() - 2000) : desc;
-                    return "--- Job: " + j.getTitle() + " ---\n" + tail;
+                    return "--- Job: " + j.getTitle() + " ---\n" + head + "\n...\n" + tail;
                 })
                 .limit(5) // Max 5 JDs to keep token cost low
                 .collect(Collectors.joining("\n\n"));
@@ -212,8 +212,10 @@ public class JobBasedDiscoveryService {
         }
 
         String desc = job.getDescription();
+        // Take first 500 chars (hiring manager intros) + last 2000 chars (contact info at end)
+        String head = desc.length() > 500 ? desc.substring(0, 500) : desc;
         String tail = desc.length() > 2000 ? desc.substring(desc.length() - 2000) : desc;
-        String jdText = "--- Job: " + job.getTitle() + " at " + company.getName() + " ---\n" + tail;
+        String jdText = "--- Job: " + job.getTitle() + " at " + company.getName() + " ---\n" + head + "\n...\n" + tail;
 
         List<ExtractedContact> extracted = extractContactsFromText(jdText);
         if (extracted.isEmpty()) return List.of();

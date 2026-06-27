@@ -121,9 +121,33 @@ public class EvaluationService {
     @SuppressWarnings("unchecked")
     private Map<String, Object> extractBlock(String systemPrompt, String content) {
         try {
-            return aiProvider.extract(systemPrompt, content, Map.class);
+            // Use generate() instead of extract() — extract() with Map.class sends an empty
+            // JSON schema causing Gemini to produce huge unstructured output that gets truncated.
+            String response = aiProvider.generate(systemPrompt + "\n\nRespond ONLY with a valid JSON object. No markdown fences.", content);
+            if (response == null || response.isBlank()) {
+                return Map.of("error", "Empty AI response");
+            }
+
+            // Strip markdown fences if present
+            String json = response.trim();
+            if (json.startsWith("```")) {
+                int first = json.indexOf('\n');
+                if (first > 0) json = json.substring(first + 1);
+                if (json.endsWith("```")) json = json.substring(0, json.length() - 3).trim();
+            }
+
+            // Find JSON object boundaries
+            int start = json.indexOf('{');
+            int end = json.lastIndexOf('}');
+            if (start == -1 || end == -1 || end <= start) {
+                return Map.of("error", "No JSON object in response");
+            }
+            json = json.substring(start, end + 1);
+
+            var objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            return objectMapper.readValue(json, Map.class);
         } catch (Exception e) {
-            log.error("AI extraction failed: {}", e.getMessage(), e);
+            log.error("AI extraction failed: {}", e.getMessage());
             return Map.of("error", e.getMessage());
         }
     }

@@ -12,6 +12,8 @@ export default function LivenessBadge({ status, checkedAt }: LivenessBadgeProps)
     UNCERTAIN: { dot: 'bg-warning', text: 'text-warning', bg: 'bg-warning/10' },
   };
 
+  if (!status || !config[status]) return null;
+
   const { dot, text, bg } = config[status];
 
   return (
