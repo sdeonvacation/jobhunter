@@ -158,6 +158,11 @@ filters:
       - "chemical"
       - "simulation"
       - "abap"
+      - "rust"
+      - "plc"
+      - "support"
+      - "consultant"
+      - "industrial"
   location:
     remote-patterns:
       - "^(remote|remote\\s*-\\s*(eu|europe|emea|global|worldwide|dach|ger(many)?))$"
@@ -399,13 +404,13 @@ people:
 
 # LinkedIn job search configuration
 linkedin-search:
-  query: '(software OR java OR backend OR fullstack OR AI) AND (developer OR engineer) NOT graduate NOT lead NOT staff NOT principal'
+  query: '(software OR java OR backend OR fullstack OR AI OR platform OR forward deployed) AND (developer OR engineer) NOT graduate NOT lead NOT staff NOT principal'
   locations: ["Germany", "Remote"]
   date-posted: week
 
 # Indeed job search configuration
 indeed-search:
-  keywords: ["backend engineer", "Java developer", "software engineer", "backend engineer"]
+  keywords: ["backend engineer", "Java developer", "software engineer"]
   locations: ["Germany", "Netherlands", "Spain", "Sweden"]
   results-wanted: 25
   hours-old: 24
