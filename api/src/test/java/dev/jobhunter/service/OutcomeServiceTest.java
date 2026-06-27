@@ -10,6 +10,7 @@ import dev.jobhunter.repository.ApplicationRepository;
 import dev.jobhunter.repository.CompanyRepository;
 import dev.jobhunter.repository.JobOutcomeRepository;
 import dev.jobhunter.repository.JobPostingRepository;
+import dev.jobhunter.service.FollowUpCadenceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +33,7 @@ class OutcomeServiceTest {
     @Mock private JobPostingRepository jobPostingRepository;
     @Mock private JobOutcomeRepository jobOutcomeRepository;
     @Mock private CompanyRepository companyRepository;
+    @Mock private FollowUpCadenceService followUpCadenceService;
 
     private OutcomeService outcomeService;
 
@@ -39,7 +41,7 @@ class OutcomeServiceTest {
     void setUp() {
         outcomeService = new OutcomeService(
                 applicationRepository, jobPostingRepository,
-                jobOutcomeRepository, companyRepository);
+                jobOutcomeRepository, companyRepository, followUpCadenceService);
     }
 
     @Test

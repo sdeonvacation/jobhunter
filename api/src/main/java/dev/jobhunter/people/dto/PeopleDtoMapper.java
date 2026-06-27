@@ -36,7 +36,9 @@ public final class PeopleDtoMapper {
                 relationship != null ? relationship.getStatus() : null,
                 relationship != null && relationship.getLastContactAt() != null
                         ? relationship.getLastContactAt().format(ISO_FORMAT) : null,
-                contact.getCreatedAt() != null ? contact.getCreatedAt().format(ISO_FORMAT) : null
+                contact.getCreatedAt() != null ? contact.getCreatedAt().format(ISO_FORMAT) : null,
+                contact.getEmail(),
+                contact.getEmailConfidence() != null ? contact.getEmailConfidence().name() : null
         );
     }
 

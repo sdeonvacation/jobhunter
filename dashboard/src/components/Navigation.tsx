@@ -44,6 +44,42 @@ const links = [
     ),
   },
   {
+    to: '/follow-ups',
+    label: 'Follow-ups',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="10" cy="10" r="7" />
+        <path d="M10 6v4" />
+        <path d="M10 14h.01" />
+      </svg>
+    ),
+  },
+  {
+    to: '/analytics',
+    label: 'Analytics',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 16V10" />
+        <path d="M8 16V6" />
+        <path d="M12 16V8" />
+        <path d="M16 16V4" />
+      </svg>
+    ),
+  },
+  {
+    to: '/story-bank',
+    label: 'Story Bank',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 4h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2z" />
+        <path d="M8 2v4" />
+        <path d="M12 2v4" />
+        <path d="M6 10h8" />
+        <path d="M6 14h4" />
+      </svg>
+    ),
+  },
+  {
     to: '/companies',
     label: 'Companies',
     icon: (

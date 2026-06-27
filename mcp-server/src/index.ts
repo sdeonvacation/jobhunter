@@ -14,6 +14,12 @@ import {
   connectWithTool,
   sendLinkedinMessageTool,
   researchPersonTool,
+  evaluateJobTool,
+  generateCoverLetterTool,
+  checkJobLivenessTool,
+  prepareInterviewTool,
+  getApplicationPatternsTool,
+  getFollowUpScheduleTool,
 } from './tools/index.js';
 import { profileResources, jobResources } from './resources/index.js';
 
@@ -37,6 +43,12 @@ const tools = [
   connectWithTool,
   sendLinkedinMessageTool,
   researchPersonTool,
+  evaluateJobTool,
+  generateCoverLetterTool,
+  checkJobLivenessTool,
+  prepareInterviewTool,
+  getApplicationPatternsTool,
+  getFollowUpScheduleTool,
 ] as const;
 
 for (const tool of tools) {

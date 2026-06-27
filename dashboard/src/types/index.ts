@@ -202,6 +202,8 @@ export interface Contact {
   relationshipStatus?: RelationshipStatus;
   lastContactAt?: string;
   createdAt: string;
+  email?: string;
+  emailConfidence?: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH';
 }
 
 export interface ContactDetail extends Contact {
@@ -211,6 +213,17 @@ export interface ContactDetail extends Contact {
   messages: OutreachMessageItem[];
   linkedJobs: LinkedJob[];
   referredBy?: Contact;
+}
+
+export interface SuggestedContact {
+  id: string;
+  personName: string;
+  title: string | null;
+  seniority: string | null;
+  linkedinUrl: string;
+  email: string | null;
+  emailConfidence: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH';
+  contactPriorityScore: number;
 }
 
 export interface RelationshipEvent {

@@ -8,6 +8,12 @@ import Health from './pages/Health';
 import People from './pages/People';
 import ContactDetail from './pages/ContactDetail';
 import Today from './pages/Today';
+import Evaluate from './pages/Evaluate';
+import Analytics from './pages/Analytics';
+import FollowUps from './pages/FollowUps';
+import InterviewPrep from './pages/InterviewPrep';
+import StoryBank from './pages/StoryBank';
+import CoverLetter from './pages/CoverLetter';
 
 export default function App() {
   return (
@@ -24,6 +30,12 @@ export default function App() {
             <Route path="/companies" element={<Companies />} />
             <Route path="/people" element={<People />} />
             <Route path="/people/:id" element={<ContactDetail />} />
+            <Route path="/evaluate/:jobId" element={<Evaluate />} />
+            <Route path="/cover-letter/:jobId" element={<CoverLetter />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/follow-ups" element={<FollowUps />} />
+            <Route path="/interview-prep/:jobId" element={<InterviewPrep />} />
+            <Route path="/story-bank" element={<StoryBank />} />
             <Route path="/health" element={<Health />} />
             <Route path="*" element={<Navigate to="/digest" replace />} />
           </Routes>

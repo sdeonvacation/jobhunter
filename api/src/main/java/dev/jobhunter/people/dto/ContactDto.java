@@ -20,5 +20,7 @@ public record ContactDto(
     int contactPriorityScore,
     RelationshipStatus relationshipStatus,
     String lastContactAt,
-    String createdAt
+    String createdAt,
+    String email,
+    String emailConfidence
 ) {}

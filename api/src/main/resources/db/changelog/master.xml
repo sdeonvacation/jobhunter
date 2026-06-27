@@ -14,5 +14,11 @@
     <include file="db/changelog/007-people-module.sql"/>
     <include file="db/changelog/008-visa-sponsorship.sql"/>
     <include file="db/changelog/009-performance-indexes.sql"/>
+    <include file="db/changelog/010-career-ops-evaluation.sql"/>
+    <include file="db/changelog/011-career-ops-cover-letter.sql"/>
+    <include file="db/changelog/012-career-ops-liveness.sql"/>
+    <include file="db/changelog/013-career-ops-interview.sql"/>
+    <include file="db/changelog/014-career-ops-followup.sql"/>
+    <include file="db/changelog/015-outreach-contact-email.sql"/>
 
 </databaseChangeLog>

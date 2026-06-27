@@ -11,6 +11,7 @@ import dev.jobhunter.repository.MatchScoreRepository;
 import dev.jobhunter.repository.OpportunityScoreRepository;
 import dev.jobhunter.service.DailyDigestService;
 import dev.jobhunter.service.DailyDigestService.DigestSnapshot;
+import dev.jobhunter.service.FollowUpCadenceService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -32,13 +33,16 @@ public class JobController {
     private final JobPostingRepository jobPostingRepository;
     private final JobSkillRepository jobSkillRepository;
     private final DailyDigestService dailyDigestService;
+    private final FollowUpCadenceService followUpCadenceService;
 
     public JobController(JobPostingRepository jobPostingRepository,
                          JobSkillRepository jobSkillRepository,
-                         DailyDigestService dailyDigestService) {
+                         DailyDigestService dailyDigestService,
+                         FollowUpCadenceService followUpCadenceService) {
         this.jobPostingRepository = jobPostingRepository;
         this.jobSkillRepository = jobSkillRepository;
         this.dailyDigestService = dailyDigestService;
+        this.followUpCadenceService = followUpCadenceService;
     }
 
     @GetMapping
@@ -186,6 +190,13 @@ public class JobController {
         job.setApplied(applied);
         job.setAppliedAt(applied ? java.time.LocalDateTime.now() : null);
         jobPostingRepository.save(job);
+        if (applied) {
+            try {
+                followUpCadenceService.scheduleFollowUp(id);
+            } catch (Exception ignored) {
+                // Follow-up creation failure shouldn't block the apply action
+            }
+        }
         return ResponseEntity.noContent().build();
     }
 

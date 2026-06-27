@@ -1,6 +1,7 @@
 package dev.jobhunter.controller;
 
 import dev.jobhunter.linkedin.OutreachContact;
+import dev.jobhunter.model.Company;
 import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.people.dto.*;
 import dev.jobhunter.people.model.ContactDiscoveryRun;
@@ -12,7 +13,10 @@ import dev.jobhunter.people.model.enums.Seniority;
 import dev.jobhunter.people.repository.OutreachMessageRepository;
 import dev.jobhunter.people.repository.RelationshipRepository;
 import dev.jobhunter.people.service.ContactDiscoveryService;
+import dev.jobhunter.people.service.EmailInferenceService;
+import dev.jobhunter.people.service.JobBasedDiscoveryService;
 import dev.jobhunter.people.service.RelationshipService;
+import dev.jobhunter.repository.CompanyRepository;
 import dev.jobhunter.repository.JobPostingRepository;
 import dev.jobhunter.repository.OutreachContactRepository;
 import org.springframework.data.domain.Page;
@@ -33,23 +37,32 @@ public class PeopleController {
 
     private final RelationshipService relationshipService;
     private final ContactDiscoveryService contactDiscoveryService;
+    private final JobBasedDiscoveryService jobBasedDiscoveryService;
+    private final EmailInferenceService emailInferenceService;
     private final OutreachContactRepository outreachContactRepository;
     private final RelationshipRepository relationshipRepository;
     private final OutreachMessageRepository outreachMessageRepository;
     private final JobPostingRepository jobPostingRepository;
+    private final CompanyRepository companyRepository;
 
     public PeopleController(RelationshipService relationshipService,
                             ContactDiscoveryService contactDiscoveryService,
+                            JobBasedDiscoveryService jobBasedDiscoveryService,
+                            EmailInferenceService emailInferenceService,
                             OutreachContactRepository outreachContactRepository,
                             RelationshipRepository relationshipRepository,
                             OutreachMessageRepository outreachMessageRepository,
-                            JobPostingRepository jobPostingRepository) {
+                            JobPostingRepository jobPostingRepository,
+                            CompanyRepository companyRepository) {
         this.relationshipService = relationshipService;
         this.contactDiscoveryService = contactDiscoveryService;
+        this.jobBasedDiscoveryService = jobBasedDiscoveryService;
+        this.emailInferenceService = emailInferenceService;
         this.outreachContactRepository = outreachContactRepository;
         this.relationshipRepository = relationshipRepository;
         this.outreachMessageRepository = outreachMessageRepository;
         this.jobPostingRepository = jobPostingRepository;
+        this.companyRepository = companyRepository;
     }
 
     @GetMapping("/api/people")
@@ -137,10 +150,29 @@ public class PeopleController {
         return new PeopleStatsDto(total, Map.of(), Map.of(), avgPriority != null ? avgPriority : 0.0, discoveredToday);
     }
 
+    @GetMapping("/api/people/company-ids-with-contacts")
+    public List<String> getJobIdsWithContacts() {
+        return outreachContactRepository.findJobIdsWithContacts().stream()
+                .map(UUID::toString)
+                .toList();
+    }
+
     @PostMapping("/api/people/discover/{companyId}")
     public ResponseEntity<List<ContactDto>> triggerDiscovery(@PathVariable UUID companyId) {
-        List<String> defaultKeywords = List.of("recruiter", "hiring manager", "talent acquisition", "engineering manager");
-        List<OutreachContact> contacts = contactDiscoveryService.discoverForCompany(companyId, defaultKeywords);
+        // Try LinkedIn first, fall back to job-based discovery
+        List<OutreachContact> contacts;
+        try {
+            List<String> defaultKeywords = List.of("recruiter", "hiring manager", "talent acquisition", "engineering manager");
+            contacts = contactDiscoveryService.discoverForCompany(companyId, defaultKeywords);
+        } catch (Exception e) {
+            contacts = List.of();
+        }
+
+        // If LinkedIn returned nothing, use job-based discovery
+        if (contacts.isEmpty()) {
+            contacts = jobBasedDiscoveryService.discoverForCompany(companyId);
+        }
+
         List<ContactDto> dtos = contacts.stream()
                 .map(c -> PeopleDtoMapper.toContactDto(c, null))
                 .toList();
@@ -170,5 +202,42 @@ public class PeopleController {
                     return PeopleDtoMapper.toContactDto(contact, relationship);
                 })
                 .toList();
+    }
+
+    @PostMapping("/api/jobs/{jobId}/suggest-contacts")
+    public ResponseEntity<List<SuggestedContactDto>> suggestContactsForJob(@PathVariable UUID jobId) {
+        // Discover contacts specifically for this job (extracts from its JD)
+        List<OutreachContact> contacts = jobBasedDiscoveryService.discoverForJob(jobId);
+
+        List<SuggestedContactDto> dtos = contacts.stream()
+                .map(contact -> new SuggestedContactDto(
+                        contact.getId(),
+                        contact.getPersonName(),
+                        contact.getTitle(),
+                        contact.getSeniority() != null ? contact.getSeniority().name() : null,
+                        contact.getLinkedinUrl(),
+                        contact.getEmail(),
+                        contact.getEmailConfidence() != null ? contact.getEmailConfidence().name() : "NONE",
+                        contact.getContactPriorityScore() != null ? contact.getContactPriorityScore() : 0
+                ))
+                .toList();
+
+        return ResponseEntity.ok(dtos);
+    }
+
+    /**
+     * Bulk discover contacts for top companies by match score.
+     * Populates People module from existing job data without needing LinkedIn.
+     */
+    @PostMapping("/api/people/discover-from-jobs")
+    public ResponseEntity<Map<String, Object>> discoverFromJobs(
+            @RequestParam(defaultValue = "20") int maxCompanies) {
+        int created = jobBasedDiscoveryService.discoverFromTopCompanies(maxCompanies);
+        long total = outreachContactRepository.count();
+        return ResponseEntity.ok(Map.of(
+                "companiesProcessed", maxCompanies,
+                "contactsCreated", created,
+                "totalContacts", total
+        ));
     }
 }

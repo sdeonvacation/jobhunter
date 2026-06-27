@@ -3,6 +3,7 @@ package dev.jobhunter.controller;
 import dev.jobhunter.repository.JobPostingRepository;
 import dev.jobhunter.repository.JobSkillRepository;
 import dev.jobhunter.service.DailyDigestService;
+import dev.jobhunter.service.FollowUpCadenceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,12 +24,13 @@ class JobControllerResolveTest {
     @Mock private JobPostingRepository jobPostingRepository;
     @Mock private JobSkillRepository jobSkillRepository;
     @Mock private DailyDigestService dailyDigestService;
+    @Mock private FollowUpCadenceService followUpCadenceService;
 
     private JobController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new JobController(jobPostingRepository, jobSkillRepository, dailyDigestService);
+        controller = new JobController(jobPostingRepository, jobSkillRepository, dailyDigestService, followUpCadenceService);
     }
 
     @Test

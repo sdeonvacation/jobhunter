@@ -10,10 +10,14 @@ import dev.jobhunter.people.model.OutreachMessage;
 import dev.jobhunter.people.model.Relationship;
 import dev.jobhunter.people.model.RelationshipEvent;
 import dev.jobhunter.people.model.enums.*;
+import dev.jobhunter.people.repository.OutreachMessageRepository;
 import dev.jobhunter.people.repository.RelationshipRepository;
 import dev.jobhunter.people.service.ContactDiscoveryService;
 import dev.jobhunter.people.service.ContactPriorityScorer;
+import dev.jobhunter.people.service.EmailInferenceService;
+import dev.jobhunter.people.service.JobBasedDiscoveryService;
 import dev.jobhunter.people.service.RelationshipService;
+import dev.jobhunter.repository.CompanyRepository;
 import dev.jobhunter.repository.JobPostingRepository;
 import dev.jobhunter.repository.OutreachContactRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,10 +47,14 @@ class PeopleControllerTest {
 
     @Mock private RelationshipService relationshipService;
     @Mock private ContactDiscoveryService contactDiscoveryService;
+    @Mock private JobBasedDiscoveryService jobBasedDiscoveryService;
+    @Mock private EmailInferenceService emailInferenceService;
     @Mock private ContactPriorityScorer contactPriorityScorer;
     @Mock private OutreachContactRepository outreachContactRepository;
     @Mock private RelationshipRepository relationshipRepository;
+    @Mock private OutreachMessageRepository outreachMessageRepository;
     @Mock private JobPostingRepository jobPostingRepository;
+    @Mock private CompanyRepository companyRepository;
 
     private PeopleController controller;
 
@@ -55,10 +63,13 @@ class PeopleControllerTest {
         controller = new PeopleController(
                 relationshipService,
                 contactDiscoveryService,
-                contactPriorityScorer,
+                jobBasedDiscoveryService,
+                emailInferenceService,
                 outreachContactRepository,
                 relationshipRepository,
-                jobPostingRepository
+                outreachMessageRepository,
+                jobPostingRepository,
+                companyRepository
         );
     }
 

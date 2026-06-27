@@ -162,4 +162,44 @@ export class JobHunterClient {
   async getConnectionsRemaining(): Promise<{ remaining: number }> {
     return this.request('/api/linkedin/contacts/remaining');
   }
+
+  // Career-ops integration methods
+  async evaluateJob(id: string, blocks?: string[]): Promise<unknown> {
+    return this.request(`/api/jobs/${id}/evaluate`, {
+      method: 'POST',
+      body: JSON.stringify(blocks ? { blocks } : {}),
+    });
+  }
+
+  async getJobEvaluation(id: string): Promise<unknown> {
+    return this.request(`/api/jobs/${id}/evaluation`);
+  }
+
+  async generateCoverLetter(id: string, params: { tone?: string; focus?: string; angles?: string[] }): Promise<unknown> {
+    return this.request(`/api/jobs/${id}/cover-letter`, {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  async checkJobLiveness(id: string): Promise<unknown> {
+    return this.request(`/api/jobs/${id}/liveness-check`, { method: 'POST' });
+  }
+
+  async prepareInterview(id: string): Promise<unknown> {
+    return this.request(`/api/jobs/${id}/interview-prep`, { method: 'POST' });
+  }
+
+  async getApplicationPatterns(since?: string): Promise<unknown> {
+    const qs = since ? `?since=${encodeURIComponent(since)}` : '';
+    return this.request(`/api/analytics/patterns${qs}`);
+  }
+
+  async getFollowUpSchedule(status?: string, limit?: number): Promise<unknown> {
+    const searchParams = new URLSearchParams();
+    if (status) searchParams.set('status', status);
+    if (limit) searchParams.set('limit', String(limit));
+    const qs = searchParams.toString();
+    return this.request(`/api/follow-ups${qs ? `?${qs}` : ''}`);
+  }
 }

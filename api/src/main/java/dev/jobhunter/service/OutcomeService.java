@@ -29,15 +29,18 @@ public class OutcomeService {
     private final JobPostingRepository jobPostingRepository;
     private final JobOutcomeRepository jobOutcomeRepository;
     private final CompanyRepository companyRepository;
+    private final FollowUpCadenceService followUpCadenceService;
 
     public OutcomeService(ApplicationRepository applicationRepository,
                           JobPostingRepository jobPostingRepository,
                           JobOutcomeRepository jobOutcomeRepository,
-                          CompanyRepository companyRepository) {
+                          CompanyRepository companyRepository,
+                          FollowUpCadenceService followUpCadenceService) {
         this.applicationRepository = applicationRepository;
         this.jobPostingRepository = jobPostingRepository;
         this.jobOutcomeRepository = jobOutcomeRepository;
         this.companyRepository = companyRepository;
+        this.followUpCadenceService = followUpCadenceService;
     }
 
     @Transactional
@@ -71,6 +74,13 @@ public class OutcomeService {
 
         // Update company stats
         updateCompanyApplicationCount(job.getCompany());
+
+        // Auto-schedule first follow-up
+        try {
+            followUpCadenceService.scheduleFollowUp(jobId);
+        } catch (Exception e) {
+            log.warn("Failed to auto-schedule follow-up for job {}: {}", jobId, e.getMessage());
+        }
 
         log.info("Marked job {} as applied, application {}", jobId, saved.getId());
         return Optional.of(saved);

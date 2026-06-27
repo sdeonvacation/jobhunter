@@ -1,6 +1,33 @@
+import { useState, useEffect } from 'react';
 import type { Job } from '../types';
+import { Link } from 'react-router-dom';
 import ScoreBadge from './ScoreBadge';
 import VisaBadge from './VisaBadge';
+
+// Module-level cache for job IDs with contacts
+let _jobIdsWithContacts: Set<string> | null = null;
+let _fetchPromise: Promise<Set<string>> | null = null;
+
+function fetchJobIdsWithContacts(): Promise<Set<string>> {
+  if (_jobIdsWithContacts) return Promise.resolve(_jobIdsWithContacts);
+  if (_fetchPromise) return _fetchPromise;
+  _fetchPromise = fetch('/api/people/company-ids-with-contacts')
+    .then(r => r.ok ? r.json() : [])
+    .then((ids: string[]) => {
+      _jobIdsWithContacts = new Set(ids);
+      return _jobIdsWithContacts;
+    })
+    .catch(() => new Set<string>());
+  return _fetchPromise;
+}
+
+function useHasContacts(jobId: string): boolean {
+  const [has, setHas] = useState(() => _jobIdsWithContacts?.has(jobId) ?? false);
+  useEffect(() => {
+    fetchJobIdsWithContacts().then(set => setHas(set.has(jobId)));
+  }, [jobId]);
+  return has;
+}
 
 const SOURCE_BUTTON_CONFIG: Record<string, { label: string; color: string }> = {
   linkedin: { label: 'LinkedIn', color: 'bg-blue-500/10 text-blue-400 ring-blue-500/20' },
@@ -18,6 +45,7 @@ interface JobCardProps {
 
 export default function JobCard({ job, index = 0, onMarkApplied, onUndoApplied, onHide }: JobCardProps) {
   const salary = formatSalary(job);
+  const hasContacts = useHasContacts(job.id);
   const recommendation = job.recommendation;
   const delay = Math.min(index * 50, 300);
 
@@ -144,6 +172,42 @@ export default function JobCard({ job, index = 0, onMarkApplied, onUndoApplied, 
               </svg>
             </button>
           )}
+          <Link
+            to={`/cover-letter/${job.id}`}
+            onClick={(e) => e.stopPropagation()}
+            title="Cover letter"
+            className="w-8 h-8 flex items-center justify-center rounded-md border border-surface-600 text-text-muted hover:border-accent/40 hover:text-accent hover:bg-accent/10 transition-all duration-150"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13 2H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z" />
+              <path d="M6 5h6M6 8h6M6 11h3" />
+              <path d="M2 4v10a1 1 0 0 0 1 1h8" />
+            </svg>
+          </Link>
+          {hasContacts && (
+            <Link
+              to={`/people?company=${encodeURIComponent(job.companyName || '')}`}
+              onClick={(e) => e.stopPropagation()}
+              title="Find people at this company"
+              className="w-8 h-8 flex items-center justify-center rounded-md border border-blue-500/40 text-blue-400 bg-blue-400/10 hover:bg-blue-400/20 transition-all duration-150"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="8" cy="5" r="3" />
+                <path d="M2 14c0-3 2.5-5 6-5s6 2 6 5" />
+              </svg>
+            </Link>
+          )}
+          <Link
+            to={`/evaluate/${job.id}`}
+            onClick={(e) => e.stopPropagation()}
+            title="Deep evaluation"
+            className="w-8 h-8 flex items-center justify-center rounded-md border border-surface-600 text-text-muted hover:border-accent/40 hover:text-accent hover:bg-accent/10 transition-all duration-150"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 12l3-3 2 2 4-4 3 3" />
+              <path d="M12 4h2v2" />
+            </svg>
+          </Link>
           {(onMarkApplied || onUndoApplied) && (
             <button
               onClick={handleApplied}

@@ -2,6 +2,7 @@ package dev.jobhunter.linkedin;
 
 import dev.jobhunter.model.Company;
 import dev.jobhunter.people.model.enums.ContactDiscoverySource;
+import dev.jobhunter.people.model.enums.EmailConfidence;
 import dev.jobhunter.people.model.enums.Seniority;
 import jakarta.persistence.*;
 import lombok.*;
@@ -79,6 +80,14 @@ public class OutreachContact {
     @Column(name = "contact_priority_score")
     @Builder.Default
     private Integer contactPriorityScore = 0;
+
+    @Column(name = "email")
+    private String email;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "email_confidence")
+    @Builder.Default
+    private EmailConfidence emailConfidence = EmailConfidence.NONE;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

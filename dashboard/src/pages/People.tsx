@@ -62,6 +62,23 @@ function ContactCard({ contact, onClick }: { contact: Contact; onClick: () => vo
 
       <p className="text-xs text-text-secondary truncate mb-3">{contact.companyName}</p>
 
+      {contact.email && (
+        <div className="flex items-center gap-1.5 mb-2">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-muted shrink-0">
+            <rect x="2" y="3" width="12" height="10" rx="1" />
+            <path d="M2 5l6 4 6-4" />
+          </svg>
+          <span className="text-xs text-accent truncate">{contact.email}</span>
+          <span className={`text-[9px] px-1 py-0.5 rounded ${
+            contact.emailConfidence === 'HIGH' ? 'bg-success/10 text-success' :
+            contact.emailConfidence === 'MEDIUM' ? 'bg-warning/10 text-warning' :
+            'bg-surface-700 text-text-muted'
+          }`}>
+            {contact.emailConfidence}
+          </span>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {contact.seniority && (

@@ -25,6 +25,7 @@ import type {
   CompanyIntelligence,
   VisaSignals,
   OutreachMessageItem,
+  SuggestedContact,
 } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -244,6 +245,9 @@ export const api = {
     },
     getMessages(contactId: string): Promise<OutreachMessageItem[]> {
       return get<OutreachMessageItem[]>(`/contacts/${contactId}/messages`);
+    },
+    suggestContacts(jobId: string): Promise<SuggestedContact[]> {
+      return fetchApi<SuggestedContact[]>(`/api/jobs/${jobId}/suggest-contacts`, { method: 'POST' });
     },
   },
 
