@@ -220,11 +220,21 @@ public class LivenessCheckService {
     }
 
     private void updateLivenessColumns(UUID jobId, LivenessStatus status, LocalDateTime checkedAt) {
-        entityManager.createNativeQuery(
-                "UPDATE job_posting SET liveness_status = :status, last_liveness_check = :checkedAt WHERE id = :id")
-                .setParameter("status", status.name())
-                .setParameter("checkedAt", checkedAt)
-                .setParameter("id", jobId)
-                .executeUpdate();
+        if (status == LivenessStatus.EXPIRED) {
+            entityManager.createNativeQuery(
+                    "UPDATE job_posting SET liveness_status = :status, last_liveness_check = :checkedAt, " +
+                            "is_active = false, deactivated_at = :checkedAt WHERE id = :id")
+                    .setParameter("status", status.name())
+                    .setParameter("checkedAt", checkedAt)
+                    .setParameter("id", jobId)
+                    .executeUpdate();
+        } else {
+            entityManager.createNativeQuery(
+                    "UPDATE job_posting SET liveness_status = :status, last_liveness_check = :checkedAt WHERE id = :id")
+                    .setParameter("status", status.name())
+                    .setParameter("checkedAt", checkedAt)
+                    .setParameter("id", jobId)
+                    .executeUpdate();
+        }
     }
 }
