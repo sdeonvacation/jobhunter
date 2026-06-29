@@ -30,6 +30,12 @@ public class YoeFilterImpl implements YoeFilter {
             Pattern.CASE_INSENSITIVE
     );
 
+    // Matches standalone "8+ years" followed by punctuation/conjunction — e.g. "typically 8+ years, but..."
+    private static final Pattern YOE_STANDALONE_PATTERN = Pattern.compile(
+            "(\\d+)\\+\\s*(?:years?|yrs?)\\s*[,;.(]",
+            Pattern.CASE_INSENSITIVE
+    );
+
     public YoeFilterImpl(PersonalProfileLoader profileLoader) {
         PersonalProfile profile = profileLoader.getProfile();
         if (profile.filters() != null && profile.filters().yoe() != null) {
@@ -47,21 +53,20 @@ public class YoeFilterImpl implements YoeFilter {
     public Integer extractYoe(String description) {
         if (description == null || description.isBlank()) return null;
 
-        Integer minYoe = null;
+        Integer maxYoeFound = null;
 
-        for (Pattern pattern : new Pattern[]{YOE_PATTERN, YOE_ROLE_PATTERN}) {
+        for (Pattern pattern : new Pattern[]{YOE_PATTERN, YOE_ROLE_PATTERN, YOE_STANDALONE_PATTERN}) {
             Matcher matcher = pattern.matcher(description);
             while (matcher.find()) {
                 int yoe = Integer.parseInt(matcher.group(1));
                 if (yoe > 20) continue;
-                if (minYoe == null) {
-                    minYoe = yoe;
+                if (maxYoeFound == null || yoe > maxYoeFound) {
+                    maxYoeFound = yoe;
                 }
             }
-            if (minYoe != null) break; // first pattern that matched wins
         }
 
-        return minYoe;
+        return maxYoeFound;
     }
 
     /**

@@ -47,7 +47,7 @@ class YoeFilterConfigTest {
     }
 
     @Test
-    void extractYoe_unchanged() {
+    void extractYoe_standardPatterns() {
         PersonalProfileLoader loader = loaderWithNullFilters();
         YoeFilter filter = new YoeFilterImpl(loader);
 
@@ -56,6 +56,26 @@ class YoeFilterConfigTest {
         assertThat(filter.extractYoe(null)).isNull();
         assertThat(filter.extractYoe("")).isNull();
         assertThat(filter.extractYoe("no yoe mentioned")).isNull();
+    }
+
+    @Test
+    void extractYoe_standaloneWithPunctuation() {
+        PersonalProfileLoader loader = loaderWithNullFilters();
+        YoeFilter filter = new YoeFilterImpl(loader);
+
+        // CRX-style: "typically 8+ years, but we care more about depth"
+        assertThat(filter.extractYoe("typically 8+ years, but we care more about depth")).isEqualTo(8);
+        assertThat(filter.extractYoe("Deep production experience (typically 8+ years, but...)")).isEqualTo(8);
+        assertThat(filter.extractYoe("6+ years.")).isEqualTo(6);
+    }
+
+    @Test
+    void extractYoe_returnsMaxNotFirst() {
+        PersonalProfileLoader loader = loaderWithNullFilters();
+        YoeFilter filter = new YoeFilterImpl(loader);
+
+        // Should return max (8), not the first match (2)
+        assertThat(filter.extractYoe("2+ years of experience. Ideally 8+ years, but open to strong engineers.")).isEqualTo(8);
     }
 
     @Test
