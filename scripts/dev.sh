@@ -60,19 +60,9 @@ start_api() {
 
   echo "Starting API..."
   launchctl remove dev.jobhunter.api 2>/dev/null || true
-  # Write env wrapper script so launchctl inherits .zshenv vars
-  cat > /tmp/jobhunter-start-api.sh <<EOF
-#!/bin/zsh
-source ~/.zshenv 2>/dev/null
-exec "$JAVA_HOME/bin/java" -jar "$API_JAR" \\
-  --spring.liquibase.enabled=false \\
-  --spring.quartz.auto-startup=true \\
-  "--profile.path=file:$PROJECT_ROOT/profile.yaml"
-EOF
-  chmod +x /tmp/jobhunter-start-api.sh
   launchctl submit -l dev.jobhunter.api \
     -o "$LOG_DIR/api.log" -e "$LOG_DIR/api.log" \
-    -- /tmp/jobhunter-start-api.sh
+    -- "$PROJECT_ROOT/scripts/start-api.sh"
 
   printf "Waiting for API..."
   for i in {1..40}; do
@@ -89,17 +79,9 @@ start_dashboard() {
   fi
   echo "Starting Dashboard..."
   launchctl remove dev.jobhunter.dashboard 2>/dev/null || true
-  local node_path=$(dirname $(which node))
-  cat > /tmp/jobhunter-start-dashboard.sh <<EOF
-#!/bin/zsh
-export PATH="$node_path:\$PATH"
-cd "$PROJECT_ROOT/dashboard"
-exec npm run dev
-EOF
-  chmod +x /tmp/jobhunter-start-dashboard.sh
   launchctl submit -l dev.jobhunter.dashboard \
     -o "$LOG_DIR/dashboard.log" -e "$LOG_DIR/dashboard.log" \
-    -- /tmp/jobhunter-start-dashboard.sh
+    -- "$PROJECT_ROOT/scripts/start-dashboard.sh"
   sleep 3
   curl -sf http://localhost:3000 >/dev/null 2>&1 && echo "  Dashboard ready" || echo "  WARN: Dashboard not responding yet"
 }
