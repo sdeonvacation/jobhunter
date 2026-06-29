@@ -126,7 +126,7 @@ public class JobController {
         Pageable pageable = PageRequest.of(page, size, sortOrder);
         LocalDate yesterday = LocalDate.now().minusDays(1);
         Page<JobPosting> jobs = jobPostingRepository.findRecentlyPostedJobs(
-                FilterDecision.KEEP, yesterday, JobSource.aggregators(), pageable);
+                FilterDecision.KEEP, yesterday, LocalDate.now(), JobSource.aggregators(), pageable);
         return jobs.map(DtoMapper::toJobSummary);
     }
 
@@ -245,7 +245,7 @@ public class JobController {
                  Sort.by(new Sort.Order(Sort.Direction.DESC, "matchScore.overallScore", Sort.NullHandling.NULLS_LAST))
                          .and(Sort.by(new Sort.Order(Sort.Direction.DESC, "opportunityScore.score", Sort.NullHandling.NULLS_LAST))));
          Page<JobPosting> topJobs = jobPostingRepository.findRecentlyPostedJobs(
-                 FilterDecision.KEEP, yesterday, JobSource.aggregators(), top5);
+                 FilterDecision.KEEP, yesterday, LocalDate.now(), JobSource.aggregators(), top5);
 
         List<JobSummaryDto> topOpportunities = topJobs.getContent().stream()
                 .map(DtoMapper::toJobSummary)
@@ -270,7 +270,7 @@ public class JobController {
                 Sort.by(new Sort.Order(Sort.Direction.DESC, "matchScore.overallScore", Sort.NullHandling.NULLS_LAST))
                         .and(Sort.by(new Sort.Order(Sort.Direction.DESC, "opportunityScore.score", Sort.NullHandling.NULLS_LAST))));
         Page<JobPosting> topJobs = jobPostingRepository.findRecentlyPostedJobs(
-                FilterDecision.KEEP, twoDaysAgo, JobSource.aggregators(), top10);
+                FilterDecision.KEEP, twoDaysAgo, LocalDate.now(), JobSource.aggregators(), top10);
 
         List<JobSummaryDto> topOpportunities = topJobs.getContent().stream()
                 .map(DtoMapper::toJobSummary)

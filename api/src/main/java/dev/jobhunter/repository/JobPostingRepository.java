@@ -198,9 +198,11 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
            "AND (" +
            "  (j.postedDate IS NOT NULL AND j.postedDate >= :since) " +
            "  OR (j.postedDate IS NULL AND j.source NOT IN :aggregatorSources AND j.discoveredDate >= :since)" +
+           "  OR (j.postedDate IS NULL AND j.source IN :aggregatorSources AND j.discoveredDate = :today)" +
            ")")
     Page<JobPosting> findRecentlyPostedJobs(@Param("filter") FilterDecision filter,
                                            @Param("since") LocalDate since,
+                                           @Param("today") LocalDate today,
                                            @Param("aggregatorSources") List<JobSource> aggregatorSources,
                                            Pageable pageable);
 
