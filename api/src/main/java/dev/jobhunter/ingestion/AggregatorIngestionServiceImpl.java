@@ -118,7 +118,8 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                 if (job.companyName() != null && !job.companyName().isBlank()
                         && knownFingerprints.contains(fingerprint)) {
                     // Enrich existing ATS job if possible (best-effort lookup)
-                    Optional<JobPosting> atsMatch = jobPostingRepository.findAtsJobByFingerprint(fingerprint, JobSource.aggregators());
+                    List<JobPosting> atsMatches = jobPostingRepository.findAtsJobsByFingerprint(fingerprint, JobSource.aggregators());
+                    Optional<JobPosting> atsMatch = atsMatches.isEmpty() ? Optional.empty() : Optional.of(atsMatches.get(0));
                     if (atsMatch.isPresent()) {
                         JobPosting existing = atsMatch.get();
                         existing.getExternalLinks().put(source.name(), job.applyUrl());

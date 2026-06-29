@@ -107,11 +107,12 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
             @Param("filter") FilterDecision filter,
             @Param("sources") List<JobSource> sources);
 
-    @Query("SELECT jp FROM JobPosting jp WHERE jp.fingerprint = :fingerprint " +
-           "AND jp.isActive = true " +
-           "AND jp.source NOT IN :excludedSources")
-    Optional<JobPosting> findAtsJobByFingerprint(@Param("fingerprint") String fingerprint,
-                                                 @Param("excludedSources") List<JobSource> excludedSources);
+     @Query("SELECT jp FROM JobPosting jp WHERE jp.fingerprint = :fingerprint " +
+            "AND jp.isActive = true " +
+            "AND jp.source NOT IN :excludedSources " +
+            "ORDER BY jp.createdAt DESC")
+     List<JobPosting> findAtsJobsByFingerprint(@Param("fingerprint") String fingerprint,
+                                               @Param("excludedSources") List<JobSource> excludedSources);
 
     @Query(value = "SELECT id FROM job_posting WHERE CAST(id AS TEXT) LIKE :prefix || '%' LIMIT 1", nativeQuery = true)
     Optional<UUID> findIdByPrefix(@Param("prefix") String prefix);
