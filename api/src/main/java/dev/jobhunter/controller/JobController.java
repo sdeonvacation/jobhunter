@@ -126,7 +126,7 @@ public class JobController {
         Pageable pageable = PageRequest.of(page, size, sortOrder);
         LocalDate yesterday = LocalDate.now().minusDays(1);
         Page<JobPosting> jobs = jobPostingRepository.findRecentlyPostedJobs(
-                FilterDecision.KEEP, yesterday, pageable);
+                FilterDecision.KEEP, yesterday, JobSource.aggregators(), pageable);
         return jobs.map(DtoMapper::toJobSummary);
     }
 
@@ -237,14 +237,15 @@ public class JobController {
     public ResponseEntity<DailyDigestDto> getDailyDigest() {
         DigestSnapshot snapshot = dailyDigestService.computeDigest();
 
-        // Get top opportunities for today: jobs with COALESCE(postedDate, discoveredDate) >= yesterday,
-        // sorted by match score so the best-matching recent jobs surface first.
-        LocalDate yesterday = LocalDate.now().minusDays(1);
-        Pageable top5 = PageRequest.of(0, 5,
-                Sort.by(new Sort.Order(Sort.Direction.DESC, "matchScore.overallScore", Sort.NullHandling.NULLS_LAST))
-                        .and(Sort.by(new Sort.Order(Sort.Direction.DESC, "opportunityScore.score", Sort.NullHandling.NULLS_LAST))));
-        Page<JobPosting> topJobs = jobPostingRepository.findRecentlyPostedJobs(
-                FilterDecision.KEEP, yesterday, top5);
+         // Get top opportunities for today: jobs posted/discovered recently.
+         // Aggregator jobs (LinkedIn, Indeed, etc.) require explicit postedDate — discoveredDate
+         // is always "today" for these and would surface old posts as new.
+         LocalDate yesterday = LocalDate.now().minusDays(1);
+         Pageable top5 = PageRequest.of(0, 5,
+                 Sort.by(new Sort.Order(Sort.Direction.DESC, "matchScore.overallScore", Sort.NullHandling.NULLS_LAST))
+                         .and(Sort.by(new Sort.Order(Sort.Direction.DESC, "opportunityScore.score", Sort.NullHandling.NULLS_LAST))));
+         Page<JobPosting> topJobs = jobPostingRepository.findRecentlyPostedJobs(
+                 FilterDecision.KEEP, yesterday, JobSource.aggregators(), top5);
 
         List<JobSummaryDto> topOpportunities = topJobs.getContent().stream()
                 .map(DtoMapper::toJobSummary)
@@ -269,7 +270,7 @@ public class JobController {
                 Sort.by(new Sort.Order(Sort.Direction.DESC, "matchScore.overallScore", Sort.NullHandling.NULLS_LAST))
                         .and(Sort.by(new Sort.Order(Sort.Direction.DESC, "opportunityScore.score", Sort.NullHandling.NULLS_LAST))));
         Page<JobPosting> topJobs = jobPostingRepository.findRecentlyPostedJobs(
-                FilterDecision.KEEP, twoDaysAgo, top10);
+                FilterDecision.KEEP, twoDaysAgo, JobSource.aggregators(), top10);
 
         List<JobSummaryDto> topOpportunities = topJobs.getContent().stream()
                 .map(DtoMapper::toJobSummary)

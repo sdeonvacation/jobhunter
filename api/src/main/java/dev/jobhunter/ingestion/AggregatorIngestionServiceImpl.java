@@ -57,13 +57,12 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
     }
 
     @Override
-    @Transactional
     public IngestionStats ingest(SourceConfig source) {
         long startMs = System.currentTimeMillis();
         int created = 0, enriched = 0, filtered = 0, duplicates = 0, errors = 0;
 
         FetchResult result;
-        // NOTE: fetch() is called before any DB access. Despite @Transactional, HikariCP does not
+        // NOTE: fetch() is called before any DB access. HikariCP does not
         // acquire a connection from the pool until the first JDBC operation, so no connection is
         // held during the HTTP fetch. This is safe with Spring Boot's default HikariCP configuration.
         try {

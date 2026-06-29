@@ -194,9 +194,14 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     @Query("SELECT j FROM JobPosting j LEFT JOIN j.matchScore ms LEFT JOIN j.opportunityScore os " +
            "WHERE j.isActive = true AND j.applied = false AND j.hidden = false " +
-           "AND j.languageFilter = :filter AND COALESCE(j.postedDate, j.discoveredDate) >= :since")
+           "AND j.languageFilter = :filter " +
+           "AND (" +
+           "  (j.postedDate IS NOT NULL AND j.postedDate >= :since) " +
+           "  OR (j.postedDate IS NULL AND j.source NOT IN :aggregatorSources AND j.discoveredDate >= :since)" +
+           ")")
     Page<JobPosting> findRecentlyPostedJobs(@Param("filter") FilterDecision filter,
                                            @Param("since") LocalDate since,
+                                           @Param("aggregatorSources") List<JobSource> aggregatorSources,
                                            Pageable pageable);
 
     @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.visaSponsorship = 'PENDING' AND j.discoveredDate < :cutoff")
