@@ -20,5 +20,6 @@
     <include file="db/changelog/013-career-ops-interview.sql"/>
     <include file="db/changelog/014-career-ops-followup.sql"/>
     <include file="db/changelog/015-outreach-contact-email.sql"/>
+    <include file="db/changelog/016-drop-extraction-method.sql"/>
 
 </databaseChangeLog>

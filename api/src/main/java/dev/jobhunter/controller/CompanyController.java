@@ -10,7 +10,6 @@ import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.model.enums.CompanyStatus;
 import dev.jobhunter.model.enums.Confidence;
 import dev.jobhunter.model.enums.DiscoverySource;
-import dev.jobhunter.model.enums.ExtractionMethod;
 import dev.jobhunter.repository.CareerEndpointRepository;
 import dev.jobhunter.repository.CompanyRepository;
 import dev.jobhunter.repository.JobPostingRepository;
@@ -125,7 +124,6 @@ public class CompanyController {
                         .company(company)
                         .url(request.careersUrl())
                         .atsType(atsType)
-                        .extractionMethod(ExtractionMethod.CUSTOM)
                         .confidence(Confidence.MEDIUM)
                         .verified(false)
                         .isActive(true)

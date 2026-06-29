@@ -3,7 +3,6 @@ package dev.jobhunter.model;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.model.enums.Confidence;
 import dev.jobhunter.model.enums.CrawlStatus;
-import dev.jobhunter.model.enums.ExtractionMethod;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -40,10 +39,6 @@ public class CareerEndpoint {
 
     @Column(name = "ats_shard_id")
     private String atsShardId;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "extraction_method")
-    private ExtractionMethod extractionMethod;
 
     @Enumerated(EnumType.STRING)
     private Confidence confidence;
