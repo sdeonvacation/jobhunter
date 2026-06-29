@@ -90,6 +90,11 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     Page<JobPosting> findByIsActiveTrueAndAppliedTrue(Pageable pageable);
 
+    @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.applied = true " +
+           "AND (:query IS NULL OR LOWER(j.title) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')) " +
+           "     OR LOWER(j.company.name) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')))")
+    Page<JobPosting> searchApplied(@Param("query") String query, Pageable pageable);
+
     Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndDiscoveredDate(
             FilterDecision filter, java.time.LocalDate discoveredDate, Pageable pageable);
 

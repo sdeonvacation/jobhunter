@@ -98,8 +98,10 @@ export const api = {
     search(params: JobSearchParams): Promise<PageResponse<Job>> {
       return fetchApi(`/api/jobs${toQueryString(params as unknown as Record<string, unknown>)}`);
     },
-    getApplied(page = 0, size = 20): Promise<PageResponse<Job>> {
-      return fetchApi(`/api/jobs/applied?page=${page}&size=${size}`);
+    getApplied(page = 0, size = 20, sort = 'appliedAt', search = ''): Promise<PageResponse<Job>> {
+      const params = new URLSearchParams({ page: String(page), size: String(size), sort });
+      if (search.trim()) params.set('search', search.trim());
+      return fetchApi(`/api/jobs/applied?${params}`);
     },
     getToday(page = 0, size = 50, sort = 'matchScore'): Promise<PageResponse<Job>> {
       return fetchApi(`/api/jobs/today?page=${page}&size=${size}&sort=${sort}`);

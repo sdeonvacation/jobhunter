@@ -106,9 +106,20 @@ public class JobController {
     @GetMapping("/applied")
     public Page<JobSummaryDto> getAppliedJobs(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "appliedAt"));
-        Page<JobPosting> jobs = jobPostingRepository.findByIsActiveTrueAndAppliedTrue(pageable);
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "appliedAt") String sort,
+            @RequestParam(required = false) String search) {
+        Sort sortOrder = switch (sort) {
+            case "matchScore"  -> Sort.by(new Sort.Order(Sort.Direction.DESC, "matchScore.overallScore", Sort.NullHandling.NULLS_LAST));
+            case "opportunity" -> Sort.by(new Sort.Order(Sort.Direction.DESC, "opportunityScore.score", Sort.NullHandling.NULLS_LAST));
+            case "company"     -> Sort.by(Sort.Direction.ASC, "company.name");
+            case "title"       -> Sort.by(Sort.Direction.ASC, "title");
+            case "date"        -> Sort.by(Sort.Direction.DESC, "postedDate");
+            default            -> Sort.by(Sort.Direction.DESC, "appliedAt");
+        };
+        Pageable pageable = PageRequest.of(page, size, sortOrder);
+        String query = (search != null && !search.isBlank()) ? search.trim() : null;
+        Page<JobPosting> jobs = jobPostingRepository.searchApplied(query, pageable);
         return jobs.map(DtoMapper::toJobSummary);
     }
 
