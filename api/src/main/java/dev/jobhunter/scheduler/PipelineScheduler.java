@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Unified pipeline scheduler: [crawl + aggregator sources] in parallel → scoring.
@@ -35,6 +36,7 @@ public class PipelineScheduler implements Job {
     private final AggregatorIngestionService aggregatorIngestionService;
     private final List<SourceConfig> sources;
     private final ExecutorService sourceExecutor;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
     public PipelineScheduler(CrawlService crawlService,
                              ScoringService scoringService,
@@ -55,8 +57,21 @@ public class PipelineScheduler implements Job {
 
     /**
      * Run the full pipeline. Can be called from Quartz or manually via admin endpoint.
+     * Guards against concurrent execution — only one pipeline run at a time.
      */
     public void runPipeline() {
+        if (!running.compareAndSet(false, true)) {
+            log.warn("Pipeline already running, skipping concurrent trigger");
+            return;
+        }
+        try {
+            runPipelineInternal();
+        } finally {
+            running.set(false);
+        }
+    }
+
+    private void runPipelineInternal() {
         log.info("Pipeline starting: [crawl + {} aggregator sources] parallel → scoring", sources.size());
         Instant start = Instant.now();
 

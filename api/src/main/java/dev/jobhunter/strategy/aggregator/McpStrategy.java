@@ -3,6 +3,7 @@ package dev.jobhunter.strategy.aggregator;
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.jobhunter.linkedin.HttpMcpClient;
 import dev.jobhunter.linkedin.LinkedInRateLimiter;
+import dev.jobhunter.linkedin.McpClientException;
 import dev.jobhunter.linkedin.ToolCategory;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.strategy.FetchContext;
@@ -122,6 +123,18 @@ public class McpStrategy implements FetchStrategy {
 
         // Try structuredContent (old format) or root-level fields
         JsonNode sc = result.has("structuredContent") ? result.path("structuredContent") : result;
+
+        // Check for section_errors — MCP wraps Playwright/scrape failures as isError:false with section_errors
+        JsonNode sectionErrors = sc.path("section_errors");
+        if (!sectionErrors.isMissingNode() && sectionErrors.isObject() && sectionErrors.size() > 0) {
+            JsonNode srError = sectionErrors.path("search_results");
+            String errorType = srError.path("error_type").asText("");
+            String errorMessage = srError.path("error_message").asText("");
+            if (!errorType.isBlank()) {
+                throw new McpClientException("LinkedIn scrape error [" + errorType + "]: " + errorMessage, 0);
+            }
+        }
+
         String searchText = sc.path("sections").path("search_results").asText("");
         JsonNode references = sc.path("references").path("search_results");
 
