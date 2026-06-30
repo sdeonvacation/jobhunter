@@ -14,6 +14,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.time.Duration;
 import java.util.List;
@@ -105,6 +106,17 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
                 Thread.currentThread().interrupt();
                 log.warn("Aggregator enrichment interrupted after {}/{} jobs", enrichedCount, batch.size());
                 break;
+            } catch (WebClientResponseException e) {
+                if (e.getStatusCode().is4xxClientError()) {
+                    job.setActive(false);
+                    job.setFilterReason("url-dead-" + e.getStatusCode().value());
+                    jobPostingRepository.save(job);
+                    log.info("Deactivated dead-URL job [{}] (HTTP {}): {}", job.getExternalId(), e.getStatusCode().value(), job.getApplyUrl());
+                } else {
+                    log.warn("Failed to enrich aggregator job [{}] from {}: {}",
+                            job.getExternalId(), job.getApplyUrl(), e.getMessage());
+                    deactivatePendingVisa(job, "visa: pending - enrichment failed");
+                }
             } catch (Exception e) {
                 log.warn("Failed to enrich aggregator job [{}] from {}: {}",
                         job.getExternalId(), job.getApplyUrl(), e.getMessage());
@@ -152,6 +164,12 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
                     .bodyToMono(String.class)
                     .timeout(FETCH_TIMEOUT)
                     .block();
+        } catch (WebClientResponseException e) {
+            if (e.getStatusCode().is4xxClientError()) {
+                throw e;
+            }
+            log.warn("HTTP fetch failed for {}: {}", url, e.getMessage());
+            return null;
         } catch (Exception e) {
             log.warn("HTTP fetch failed for {}: {}", url, e.getMessage());
             return null;
