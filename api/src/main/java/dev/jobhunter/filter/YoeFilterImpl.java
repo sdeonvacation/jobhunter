@@ -32,7 +32,7 @@ public class YoeFilterImpl implements YoeFilter {
 
     // Matches standalone "8+ years" followed by punctuation/conjunction — e.g. "typically 8+ years, but..."
     private static final Pattern YOE_STANDALONE_PATTERN = Pattern.compile(
-            "(\\d+)\\+\\s*(?:years?|yrs?)\\s*[,;.(]",
+            "(\\d+)\\+\\s*(?:years?|yrs?)\\s*[,;.()]",
             Pattern.CASE_INSENSITIVE
     );
 
