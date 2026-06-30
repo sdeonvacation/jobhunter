@@ -69,8 +69,11 @@ public class BsjApplyUrlResolver implements PostIngestionEnricher {
                 }
             } catch (WebClientResponseException e) {
                 if (e.getStatusCode().is4xxClientError()) {
-                    log.debug("BSJ page gone (HTTP {}) for job [{}] - will be handled by description enricher",
-                            e.getStatusCode().value(), job.getExternalId());
+                    job.setActive(false);
+                    job.setFilterReason("url-dead-" + e.getStatusCode().value());
+                    jobPostingRepository.save(job);
+                    log.info("Deactivated expired BSJ listing [{}] (HTTP {}): {}",
+                            job.getExternalId(), e.getStatusCode().value(), job.getApplyUrl());
                 } else {
                     log.warn("Failed to fetch BSJ page for job [{}]: {}", job.getExternalId(), e.getMessage());
                 }
