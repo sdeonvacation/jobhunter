@@ -338,6 +338,17 @@ public class AiPageStrategy implements FetchStrategy {
                 continue;
             }
 
+            // If link text is a generic CTA ("View Job", "View Position", etc.) the real title
+            // lives in a nearby heading element — climb the DOM to find it.
+            if (isGenericCtaText(title)) {
+                String headingTitle = findNearestHeading(link);
+                if (headingTitle != null && !headingTitle.isEmpty()) {
+                    title = headingTitle;
+                } else {
+                    continue; // no heading found — skip rather than produce a bad title
+                }
+            }
+
             String location = extractLocationFromContext(link);
             String applyUrl = resolveUrl(href, baseUrl);
 
@@ -354,6 +365,41 @@ public class AiPageStrategy implements FetchStrategy {
                 || lower.equals("back") || lower.equals("home")
                 || lower.equals("more") || lower.equals("read more")
                 || lower.equals("learn more") || lower.equals("view all");
+    }
+
+    /**
+     * Returns true if the link text is a generic CTA ("View Job", "View Position", etc.)
+     * that does not contain the actual job title.
+     */
+    private boolean isGenericCtaText(String text) {
+        String lower = text.toLowerCase();
+        return lower.equals("view job") || lower.equals("view position")
+                || lower.equals("view role") || lower.equals("view opening")
+                || lower.equals("see details") || lower.equals("see job")
+                || lower.equals("apply here") || lower.equals("find out more")
+                || lower.equals("more details")
+                || lower.startsWith("view job ") || lower.startsWith("view position ");
+    }
+
+    /**
+     * Climbs up to 5 ancestor levels from {@code link} looking for the first h1/h2/h3/h4
+     * that is a sibling or descendant of an ancestor — used when the link text is a generic
+     * CTA and the real title lives in a nearby heading element.
+     */
+    private String findNearestHeading(Element link) {
+        Element el = link;
+        for (int i = 0; i < 5; i++) {
+            el = el.parent();
+            if (el == null) break;
+            Element heading = el.selectFirst("h1, h2, h3, h4");
+            if (heading != null) {
+                String text = heading.text().trim();
+                if (!text.isEmpty() && text.length() >= 3 && text.length() <= 200) {
+                    return text;
+                }
+            }
+        }
+        return null;
     }
 
     private String extractLocationFromContext(Element link) {
