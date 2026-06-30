@@ -42,7 +42,7 @@ start_mcp() {
   launchctl remove dev.jobhunter.mcp 2>/dev/null || true
   launchctl submit -l dev.jobhunter.mcp \
     -o "$LOG_DIR/mcp.log" -e "$LOG_DIR/mcp.log" \
-    -- "$uvx_path" linkedin-scraper-mcp@latest --transport streamable-http --host 0.0.0.0 --port 8000 --log-level INFO
+    -- "$uvx_path" mcp-server-linkedin@latest --transport streamable-http --host 0.0.0.0 --port 8000 --log-level INFO
   for i in {1..10}; do nc -z localhost 8000 2>/dev/null && break; sleep 1; done
   nc -z localhost 8000 2>/dev/null && echo "  MCP ready" || echo "  WARN: MCP not responding"
 }
