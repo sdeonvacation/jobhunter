@@ -90,6 +90,7 @@ public class AiPageStrategy implements FetchStrategy {
             String atsSlug = endpoint.getAtsSlug();
             String postBody = null;
             String applyBase = null;
+            boolean jsonApi = false;
             if (atsSlug != null && atsSlug.startsWith("{")) {
                 try {
                     JsonNode cfg = objectMapper.readTree(atsSlug);
@@ -97,12 +98,14 @@ public class AiPageStrategy implements FetchStrategy {
                     if (!pb.isMissingNode()) postBody = objectMapper.writeValueAsString(pb);
                     JsonNode ab = cfg.path("apply_base");
                     if (!ab.isMissingNode() && !ab.isNull()) applyBase = ab.asText();
+                    JsonNode ja = cfg.path("json_api");
+                    if (!ja.isMissingNode() && ja.asBoolean()) jsonApi = true;
                 } catch (Exception ex) {
                     log.debug("AiPageStrategy: could not parse ats_slug as config for [{}]: {}", endpoint.getId(), ex.getMessage());
                 }
             }
 
-            String content = fetchContent(endpoint.getUrl(), postBody);
+            String content = fetchContent(endpoint.getUrl(), postBody, jsonApi);
             if (content == null || content.isBlank()) {
                 return FetchResult.empty(elapsed(start));
             }
@@ -166,8 +169,8 @@ public class AiPageStrategy implements FetchStrategy {
         }
     }
 
-    /** Fetch via POST (if postBody non-null) or GET. */
-    String fetchContent(String url, String postBody) {
+    /** Fetch via POST (if postBody non-null), JSON GET (if jsonApi), or HTML GET. */
+    String fetchContent(String url, String postBody, boolean jsonApi) {
         if (postBody != null) {
             return webClient.post()
                     .uri(url)
@@ -179,7 +182,15 @@ public class AiPageStrategy implements FetchStrategy {
                     .bodyToMono(String.class)
                     .block(Duration.ofSeconds(30));
         }
+        if (jsonApi) {
+            return fetchJson(url);
+        }
         return fetchHtml(url);
+    }
+
+    /** Kept for tests that call the two-arg form directly. */
+    String fetchContent(String url, String postBody) {
+        return fetchContent(url, postBody, false);
     }
 
     /** True if content looks like a JSON object or array. */
@@ -225,7 +236,7 @@ public class AiPageStrategy implements FetchStrategy {
                 if (title == null) continue;
                 String location = firstNonNull(src, "city", "location", "office", "address", "country",
                                                "field_keyword_19", "field_keyword_05");
-                String slugOrUrl = firstNonNull(src, "slug", "url", "link", "applyUrl", "apply_url", "externalUrl");
+                String slugOrUrl = firstNonNull(src, "slug", "url", "link", "applyUrl", "apply_url", "externalUrl", "id");
                 String applyUrl = buildApplyUrl(slugOrUrl, applyBase);
                 candidates.add(new CandidateJob(title, location, applyUrl));
             }
@@ -246,12 +257,29 @@ public class AiPageStrategy implements FetchStrategy {
         return slugOrUrl;
     }
 
-    private String firstNonNull(JsonNode node, String... fields) {
+    String firstNonNull(com.fasterxml.jackson.databind.JsonNode node, String... fields) {
         for (String field : fields) {
             JsonNode val = node.path(field);
-            if (!val.isMissingNode() && !val.isNull() && val.isValueNode()) {
+            if (val.isMissingNode() || val.isNull()) continue;
+            // Scalar value
+            if (val.isValueNode()) {
                 String text = val.asText().trim();
                 if (!text.isEmpty()) return text;
+            }
+            // Array of objects — take first element's label/name/title or text
+            if (val.isArray() && !val.isEmpty()) {
+                JsonNode first = val.get(0);
+                if (first.isValueNode()) {
+                    String text = first.asText().trim();
+                    if (!text.isEmpty()) return text;
+                }
+                for (String subField : new String[]{"label", "name", "title", "value", "text"}) {
+                    JsonNode sub = first.path(subField);
+                    if (!sub.isMissingNode() && !sub.isNull() && sub.isValueNode()) {
+                        String text = sub.asText().trim();
+                        if (!text.isEmpty()) return text;
+                    }
+                }
             }
         }
         return null;
@@ -263,6 +291,15 @@ public class AiPageStrategy implements FetchStrategy {
                 .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
                 .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
                 .header("Accept-Language", "en-US,en;q=0.9")
+                .retrieve()
+                .bodyToMono(String.class)
+                .block(Duration.ofSeconds(30));
+    }
+
+    String fetchJson(String url) {
+        return webClient.get()
+                .uri(URI.create(url))
+                .header("Accept", "application/json")
                 .retrieve()
                 .bodyToMono(String.class)
                 .block(Duration.ofSeconds(30));

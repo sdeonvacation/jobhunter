@@ -8,6 +8,7 @@ import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -36,6 +37,10 @@ class AiPageStrategyTest {
         extractor = new TestableAiPageStrategy(webClient, aiProvider, 8000);
     }
 
+    // -------------------------------------------------------------------------
+    // Supported types
+    // -------------------------------------------------------------------------
+
     @Test
     void supports_returnsTrue_forCustomType() {
         assertThat(extractor.supportedTypes()).contains(AtsType.CUSTOM);
@@ -45,6 +50,10 @@ class AiPageStrategyTest {
     void supports_returnsFalse_forOtherType() {
         assertThat(extractor.supportedTypes()).doesNotContain(AtsType.GREENHOUSE);
     }
+
+    // -------------------------------------------------------------------------
+    // HTML path — basic cases
+    // -------------------------------------------------------------------------
 
     @Test
     void extract_aiNotAvailable_returnsError() {
@@ -136,7 +145,6 @@ class AiPageStrategyTest {
         assertThat(result.jobs().get(0).applyUrl()).isEqualTo("https://example.com/jobs/backend-engineer");
         assertThat(result.jobs().get(1).title()).isEqualTo("Frontend Developer");
 
-        // Verify AI was called with structured pre-extracted content
         verify(aiProvider).extract(anyString(), contains("Backend Engineer"), eq(AiExtractionResponse.class));
     }
 
@@ -174,7 +182,6 @@ class AiPageStrategyTest {
         assertThat(result.jobs()).hasSize(1);
         assertThat(result.jobs().get(0).title()).isEqualTo("Senior Java Developer");
 
-        // Verify scripts/styles were removed before sending to AI
         verify(aiProvider).extract(
                 anyString(),
                 argThat(content -> !content.contains("var x = 1") && !content.contains("color: red")),
@@ -259,7 +266,6 @@ class AiPageStrategyTest {
     void extract_contentTruncatedToMaxChars() {
         when(aiProvider.isAvailable()).thenReturn(true);
 
-        // Create HTML with very long content
         StringBuilder sb = new StringBuilder("<html><body><main>");
         for (int i = 0; i < 1000; i++) {
             sb.append("<p>This is paragraph number ").append(i).append(" with some filler text to make it long.</p>");
@@ -277,19 +283,7 @@ class AiPageStrategyTest {
 
         extractor.fetch(FetchContext.forEndpoint(endpoint));
 
-        // Verify AI received content <= maxContentChars
         verify(aiProvider).extract(anyString(), argThat(content -> content.length() <= 8000), eq(AiExtractionResponse.class));
-    }
-
-    @Test
-    void generateExternalId_deterministic() {
-        String id1 = extractor.generateExternalId("Backend Engineer", "https://example.com/jobs/1");
-        String id2 = extractor.generateExternalId("Backend Engineer", "https://example.com/jobs/1");
-        String id3 = extractor.generateExternalId("Frontend Dev", "https://example.com/jobs/2");
-
-        assertThat(id1).isEqualTo(id2);
-        assertThat(id1).isNotEqualTo(id3);
-        assertThat(id1).hasSize(16); // 8 bytes = 16 hex chars
     }
 
     @Test
@@ -349,7 +343,6 @@ class AiPageStrategyTest {
 
         var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
 
-        // Content sent to AI should not contain removed elements
         verify(aiProvider).extract(anyString(), argThat(content ->
                 !content.contains("alert") &&
                         !content.contains("margin") &&
@@ -390,23 +383,421 @@ class AiPageStrategyTest {
         assertThat(result.jobs().get(0).title()).isEqualTo("Backend Engineer - Java");
     }
 
+    // -------------------------------------------------------------------------
+    // json_api flag — fetch routing
+    // -------------------------------------------------------------------------
+
+    @Test
+    void extract_jsonApiFalse_usesFetchHtml() {
+        when(aiProvider.isAvailable()).thenReturn(true);
+        extractor.setHtmlResponse("<html><body><main><p>content</p></main></body></html>");
+        when(aiProvider.extract(anyString(), anyString(), eq(AiExtractionResponse.class)))
+                .thenReturn(new AiExtractionResponse(List.of()));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://example.com/careers")
+                .build();
+
+        extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(extractor.htmlFetchCount).isEqualTo(1);
+        assertThat(extractor.jsonFetchCount).isEqualTo(0);
+    }
+
+    @Test
+    void extract_jsonApiTrue_usesFetchJson() {
+        when(aiProvider.isAvailable()).thenReturn(true);
+        extractor.setJsonResponse("{\"items\":[{\"id\":\"JOB-1\",\"title\":\"Engineer\",\"city\":[{\"label\":\"Berlin\",\"key\":\"berlin\"}]}]}");
+        when(aiProvider.extract(anyString(), anyString(), eq(AiExtractionResponse.class)))
+                .thenReturn(new AiExtractionResponse(List.of(
+                        new AiExtractionResponse.AiJobEntry("Engineer", "Berlin", "https://careers.example.com/JOB-1")
+                )));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://api.example.com/jobs?country=de")
+                .atsSlug("{\"apply_base\":\"https://careers.example.com/\",\"json_api\":true}")
+                .build();
+
+        extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(extractor.jsonFetchCount).isEqualTo(1);
+        assertThat(extractor.htmlFetchCount).isEqualTo(0);
+    }
+
+    @Test
+    void extract_jsonApiTrue_emptyResponse_returnsEmpty() {
+        when(aiProvider.isAvailable()).thenReturn(true);
+        extractor.setJsonResponse(null);
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://api.example.com/jobs")
+                .atsSlug("{\"json_api\":true}")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+        assertThat(result.status()).isEqualTo(ExtractionStatus.EMPTY);
+    }
+
+    // -------------------------------------------------------------------------
+    // JSON candidate extraction — extractCandidatesFromJson
+    // -------------------------------------------------------------------------
+
+    @Nested
+    class ExtractCandidatesFromJson {
+
+        @Test
+        void items_wrapper_extractsAllJobs() {
+            String json = """
+                    {"total":{"value":2},"items":[
+                      {"id":"JOB-1","title":"Backend Engineer","city":[{"label":"Berlin","key":"berlin"}]},
+                      {"id":"JOB-2","title":"Frontend Developer","city":[{"label":"München","key":"munchen"}]}
+                    ]}""";
+
+            var candidates = extractor.extractCandidatesFromJson(json, "https://careers.example.com/");
+
+            assertThat(candidates).hasSize(2);
+            assertThat(candidates.get(0).title()).isEqualTo("Backend Engineer");
+            assertThat(candidates.get(1).title()).isEqualTo("Frontend Developer");
+        }
+
+        @Test
+        void data_wrapper_extractsAllJobs() {
+            String json = """
+                    {"data":[
+                      {"title":"Backend Engineer","location":"Berlin","url":"https://example.com/apply/1"}
+                    ]}""";
+
+            var candidates = extractor.extractCandidatesFromJson(json, null);
+
+            assertThat(candidates).hasSize(1);
+            assertThat(candidates.get(0).title()).isEqualTo("Backend Engineer");
+        }
+
+        @Test
+        void rootArray_extractsAllJobs() {
+            String json = """
+                    [{"title":"Engineer","location":"Hamburg","url":"https://example.com/1"}]""";
+
+            var candidates = extractor.extractCandidatesFromJson(json, null);
+
+            assertThat(candidates).hasSize(1);
+            assertThat(candidates.get(0).title()).isEqualTo("Engineer");
+        }
+
+        @Test
+        void city_arrayOfObjects_extractsFirstLabel() {
+            String json = """
+                    {"items":[{"id":"JOB-1","title":"Engineer",
+                      "city":[{"label":"Berlin","key":"berlin"},{"label":"Hamburg","key":"hamburg"}]}
+                    ]}""";
+
+            var candidates = extractor.extractCandidatesFromJson(json, null);
+
+            assertThat(candidates).hasSize(1);
+            assertThat(candidates.get(0).location()).isEqualTo("Berlin");
+        }
+
+        @Test
+        void city_scalarString_extractsDirectly() {
+            String json = """
+                    {"items":[{"id":"JOB-1","title":"Engineer","city":"Berlin"}]}""";
+
+            var candidates = extractor.extractCandidatesFromJson(json, null);
+
+            assertThat(candidates.get(0).location()).isEqualTo("Berlin");
+        }
+
+        @Test
+        void location_scalarString_extractsDirectly() {
+            String json = """
+                    {"items":[{"id":"JOB-1","title":"Engineer","location":"Munich"}]}""";
+
+            var candidates = extractor.extractCandidatesFromJson(json, null);
+
+            assertThat(candidates.get(0).location()).isEqualTo("Munich");
+        }
+
+        @Test
+        void id_field_buildsApplyUrl_withApplyBase() {
+            String json = """
+                    {"items":[{"id":"JOB-42","title":"Engineer"}]}""";
+
+            var candidates = extractor.extractCandidatesFromJson(json, "https://careers.example.com/job-details/");
+
+            assertThat(candidates).hasSize(1);
+            assertThat(candidates.get(0).applyUrl())
+                    .isEqualTo("https://careers.example.com/job-details/JOB-42");
+        }
+
+        @Test
+        void slug_field_buildsApplyUrl_withApplyBase() {
+            String json = """
+                    {"items":[{"slug":"senior-engineer","title":"Senior Engineer"}]}""";
+
+            var candidates = extractor.extractCandidatesFromJson(json, "https://careers.example.com/jobs/");
+
+            assertThat(candidates.get(0).applyUrl())
+                    .isEqualTo("https://careers.example.com/jobs/senior-engineer");
+        }
+
+        @Test
+        void absoluteUrl_field_usedDirectly() {
+            String json = """
+                    {"items":[{"title":"Engineer","url":"https://apply.example.com/JOB-1"}]}""";
+
+            var candidates = extractor.extractCandidatesFromJson(json, "https://ignored.com/");
+
+            assertThat(candidates.get(0).applyUrl()).isEqualTo("https://apply.example.com/JOB-1");
+        }
+
+        @Test
+        void missingTitle_jobSkipped() {
+            String json = """
+                    {"items":[
+                      {"id":"JOB-1","city":[{"label":"Berlin","key":"berlin"}]},
+                      {"id":"JOB-2","title":"Valid Engineer","city":[{"label":"Hamburg","key":"hamburg"}]}
+                    ]}""";
+
+            var candidates = extractor.extractCandidatesFromJson(json, null);
+
+            assertThat(candidates).hasSize(1);
+            assertThat(candidates.get(0).title()).isEqualTo("Valid Engineer");
+        }
+
+        @Test
+        void malformedJson_returnsEmpty() {
+            var candidates = extractor.extractCandidatesFromJson("{not valid json", null);
+            assertThat(candidates).isEmpty();
+        }
+
+        @Test
+        void emptyItemsArray_returnsEmpty() {
+            var candidates = extractor.extractCandidatesFromJson("{\"items\":[]}", null);
+            assertThat(candidates).isEmpty();
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // firstNonNull — array-of-objects handling
+    // -------------------------------------------------------------------------
+
+    @Nested
+    class FirstNonNull {
+
+        @Test
+        void scalar_returnsValue() {
+            String json = """
+                    {"title":"Backend Engineer","location":"Berlin"}""";
+            com.fasterxml.jackson.databind.JsonNode node = parse(json);
+            assertThat(extractor.firstNonNullForTest(node, "title")).isEqualTo("Backend Engineer");
+        }
+
+        @Test
+        void array_ofObjects_returnsFirstLabel() {
+            String json = """
+                    {"city":[{"label":"Berlin","key":"berlin"},{"label":"Hamburg","key":"hamburg"}]}""";
+            com.fasterxml.jackson.databind.JsonNode node = parse(json);
+            assertThat(extractor.firstNonNullForTest(node, "city")).isEqualTo("Berlin");
+        }
+
+        @Test
+        void array_ofObjects_noLabel_returnsFirstName() {
+            String json = """
+                    {"office":[{"name":"HQ","id":"1"}]}""";
+            com.fasterxml.jackson.databind.JsonNode node = parse(json);
+            assertThat(extractor.firstNonNullForTest(node, "office")).isEqualTo("HQ");
+        }
+
+        @Test
+        void array_ofScalars_returnsFirstValue() {
+            String json = """
+                    {"tags":["java","spring"]}""";
+            com.fasterxml.jackson.databind.JsonNode node = parse(json);
+            assertThat(extractor.firstNonNullForTest(node, "tags")).isEqualTo("java");
+        }
+
+        @Test
+        void missingField_returnsNull() {
+            String json = "{}";
+            com.fasterxml.jackson.databind.JsonNode node = parse(json);
+            assertThat(extractor.firstNonNullForTest(node, "missing")).isNull();
+        }
+
+        @Test
+        void nullField_returnsNull() {
+            String json = "{\"location\":null}";
+            com.fasterxml.jackson.databind.JsonNode node = parse(json);
+            assertThat(extractor.firstNonNullForTest(node, "location")).isNull();
+        }
+
+        @Test
+        void emptyStringField_returnsNull() {
+            String json = "{\"title\":\"\"}";
+            com.fasterxml.jackson.databind.JsonNode node = parse(json);
+            assertThat(extractor.firstNonNullForTest(node, "title")).isNull();
+        }
+
+        @Test
+        void fallback_firstNonNullAmongMultipleFields() {
+            String json = "{\"id\":\"JOB-99\",\"title\":\"Engineer\"}";
+            com.fasterxml.jackson.databind.JsonNode node = parse(json);
+            // slug missing, url missing, id present
+            assertThat(extractor.firstNonNullForTest(node, "slug", "url", "id")).isEqualTo("JOB-99");
+        }
+
+        private com.fasterxml.jackson.databind.JsonNode parse(String json) {
+            try {
+                return new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // fetchContent routing
+    // -------------------------------------------------------------------------
+
+    @Test
+    void fetchContent_noPostBody_noJsonApi_callsFetchHtml() {
+        extractor.setHtmlResponse("content");
+        extractor.fetchContent("https://example.com", null, false);
+        assertThat(extractor.htmlFetchCount).isEqualTo(1);
+        assertThat(extractor.jsonFetchCount).isEqualTo(0);
+    }
+
+    @Test
+    void fetchContent_jsonApiTrue_callsFetchJson() {
+        extractor.setJsonResponse("{\"items\":[]}");
+        extractor.fetchContent("https://api.example.com/jobs", null, true);
+        assertThat(extractor.jsonFetchCount).isEqualTo(1);
+        assertThat(extractor.htmlFetchCount).isEqualTo(0);
+    }
+
+    @Test
+    void fetchContent_twoArgOverload_callsFetchHtml() {
+        extractor.setHtmlResponse("html");
+        extractor.fetchContent("https://example.com", null);
+        assertThat(extractor.htmlFetchCount).isEqualTo(1);
+        assertThat(extractor.jsonFetchCount).isEqualTo(0);
+    }
+
+    // -------------------------------------------------------------------------
+    // Full JSON API flow — Reply-style endpoint
+    // -------------------------------------------------------------------------
+
+    @Test
+    void extract_replyStyleJsonApi_extractsJobsWithCityArray() {
+        when(aiProvider.isAvailable()).thenReturn(true);
+
+        extractor.setJsonResponse("""
+                {"total":{"value":3},"items":[
+                  {"id":"JOB-1","title":"Senior Backend Engineer","city":[{"label":"Berlin","key":"berlin"}],"company":{"label":"Cluster Reply","key":"cluster_reply"}},
+                  {"id":"JOB-2","title":"Junior AI Engineer","city":[{"label":"München","key":"munchen"}],"company":{"label":"Axulus Reply","key":"axulus_reply"}},
+                  {"id":"JOB-3","title":"DevOps Engineer","city":[{"label":"Hamburg","key":"hamburg"}],"company":{"label":"Reply","key":"reply"}}
+                ]}""");
+
+        when(aiProvider.extract(anyString(), anyString(), eq(AiExtractionResponse.class)))
+                .thenReturn(new AiExtractionResponse(List.of(
+                        new AiExtractionResponse.AiJobEntry("Senior Backend Engineer", "Berlin", "https://www.reply.com/de/about/careers/de/job-details/JOB-1"),
+                        new AiExtractionResponse.AiJobEntry("Junior AI Engineer", "München", "https://www.reply.com/de/about/careers/de/job-details/JOB-2"),
+                        new AiExtractionResponse.AiJobEntry("DevOps Engineer", "Hamburg", "https://www.reply.com/de/about/careers/de/job-details/JOB-3")
+                )));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://api.reply.com/api/jobpost2?country=de&city=berlin&city=munchen&city=hamburg")
+                .atsSlug("{\"apply_base\":\"https://www.reply.com/de/about/careers/de/job-details/\",\"json_api\":true}")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs()).hasSize(3);
+        assertThat(result.jobs()).extracting(RawAggregatorJob::title)
+                .containsExactly("Senior Backend Engineer", "Junior AI Engineer", "DevOps Engineer");
+        assertThat(result.jobs()).extracting(RawAggregatorJob::location)
+                .containsExactly("Berlin", "München", "Hamburg");
+        assertThat(result.jobs().get(0).applyUrl())
+                .isEqualTo("https://www.reply.com/de/about/careers/de/job-details/JOB-1");
+        assertThat(extractor.jsonFetchCount).isEqualTo(1);
+        assertThat(extractor.htmlFetchCount).isEqualTo(0);
+    }
+
+    @Test
+    void extract_jsonApi_invalidAtsSlug_fallsBackToHtml() {
+        when(aiProvider.isAvailable()).thenReturn(true);
+        extractor.setHtmlResponse("<html><body><main><p>Jobs here</p></main></body></html>");
+        when(aiProvider.extract(anyString(), anyString(), eq(AiExtractionResponse.class)))
+                .thenReturn(new AiExtractionResponse(List.of()));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://example.com/careers")
+                .atsSlug("not-json")       // invalid JSON — should be ignored gracefully
+                .build();
+
+        extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(extractor.htmlFetchCount).isEqualTo(1);
+        assertThat(extractor.jsonFetchCount).isEqualTo(0);
+    }
+
+    // -------------------------------------------------------------------------
+    // generateExternalId
+    // -------------------------------------------------------------------------
+
+    @Test
+    void generateExternalId_deterministic() {
+        String id1 = extractor.generateExternalId("Backend Engineer", "https://example.com/jobs/1");
+        String id2 = extractor.generateExternalId("Backend Engineer", "https://example.com/jobs/1");
+        String id3 = extractor.generateExternalId("Frontend Dev", "https://example.com/jobs/2");
+
+        assertThat(id1).isEqualTo(id2);
+        assertThat(id1).isNotEqualTo(id3);
+        assertThat(id1).hasSize(16);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test double
+    // -------------------------------------------------------------------------
+
     /**
-     * Test-friendly subclass that overrides fetchHtml to avoid network calls.
+     * Overrides both fetchHtml and fetchJson to avoid network calls.
+     * Exposes firstNonNull for unit testing and tracks call counts.
      */
     private static class TestableAiPageStrategy extends AiPageStrategy {
+
         private String htmlResponse;
+        private String jsonResponse;
+        int htmlFetchCount = 0;
+        int jsonFetchCount = 0;
 
         TestableAiPageStrategy(WebClient webClient, AiProvider aiProvider, int maxContentChars) {
             super(webClient, aiProvider, maxContentChars);
         }
 
-        void setHtmlResponse(String html) {
-            this.htmlResponse = html;
-        }
+        void setHtmlResponse(String html) { this.htmlResponse = html; }
+        void setJsonResponse(String json) { this.jsonResponse = json; }
 
         @Override
         String fetchHtml(String url) {
+            htmlFetchCount++;
             return htmlResponse;
+        }
+
+        @Override
+        String fetchJson(String url) {
+            jsonFetchCount++;
+            return jsonResponse;
+        }
+
+        /** Expose package-private firstNonNull for direct unit testing. */
+        String firstNonNullForTest(com.fasterxml.jackson.databind.JsonNode node, String... fields) {
+            return firstNonNull(node, fields);
         }
     }
 }
