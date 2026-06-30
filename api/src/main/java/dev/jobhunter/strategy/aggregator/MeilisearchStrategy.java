@@ -78,7 +78,8 @@ public class MeilisearchStrategy implements FetchStrategy {
                         .bodyValue(body)
                         .retrieve()
                         .bodyToMono(String.class)
-                        .block(Duration.ofSeconds(30));
+                        .retry(1)
+                        .block(Duration.ofSeconds(45));
 
                 if (responseBody == null || responseBody.isBlank()) {
                     break;
