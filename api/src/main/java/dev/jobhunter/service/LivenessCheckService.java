@@ -223,7 +223,7 @@ public class LivenessCheckService {
         if (status == LivenessStatus.EXPIRED) {
             entityManager.createNativeQuery(
                     "UPDATE job_posting SET liveness_status = :status, last_liveness_check = :checkedAt, " +
-                            "is_active = false, deactivated_at = :checkedAt WHERE id = :id")
+                            "is_active = false, deactivated_at = :checkedAt WHERE id = :id AND applied = false")
                     .setParameter("status", status.name())
                     .setParameter("checkedAt", checkedAt)
                     .setParameter("id", jobId)

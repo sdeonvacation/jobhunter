@@ -318,10 +318,10 @@ public class CrawlService {
 
     private void deactivateMissingJobs(CareerEndpoint endpoint, Set<String> seenExternalIds) {
         if (seenExternalIds.isEmpty()) {
-            // No jobs seen; deactivate all active jobs for this endpoint individually
+            // No jobs seen; deactivate all active unapplied jobs for this endpoint individually
             List<JobPosting> activeJobs = jobPostingRepository.findByEndpointIdAndIsActiveTrue(endpoint.getId());
             LocalDateTime now = LocalDateTime.now();
-            activeJobs.forEach(job -> {
+            activeJobs.stream().filter(job -> !job.isApplied()).forEach(job -> {
                 job.setActive(false);
                 job.setDeactivatedAt(now);
             });

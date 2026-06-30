@@ -88,9 +88,9 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
     Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndCompanyNameAndLocationContainingIgnoreCase(
             FilterDecision filter, String companyName, String location, Pageable pageable);
 
-    Page<JobPosting> findByIsActiveTrueAndAppliedTrue(Pageable pageable);
+    Page<JobPosting> findByAppliedTrue(Pageable pageable);
 
-    @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.applied = true " +
+    @Query("SELECT j FROM JobPosting j WHERE j.applied = true " +
            "AND (:query IS NULL OR LOWER(j.title) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')) " +
            "     OR LOWER(j.company.name) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')))")
     Page<JobPosting> searchApplied(@Param("query") String query, Pageable pageable);
@@ -147,7 +147,7 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
     @Modifying(clearAutomatically = true)
     @Transactional
     @Query("UPDATE JobPosting j SET j.isActive = false, j.deactivatedAt = :now " +
-           "WHERE j.endpoint.id = :endpointId AND j.isActive = true AND j.externalId NOT IN :seenExternalIds")
+           "WHERE j.endpoint.id = :endpointId AND j.isActive = true AND j.applied = false AND j.externalId NOT IN :seenExternalIds")
     int bulkDeactivateByEndpointExcluding(
         @Param("endpointId") UUID endpointId,
         @Param("seenExternalIds") Collection<String> seenExternalIds,
