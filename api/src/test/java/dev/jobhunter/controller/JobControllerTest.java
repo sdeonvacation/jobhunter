@@ -175,7 +175,7 @@ class JobControllerTest {
     void getDailyDigest_returnsDigest() {
         DigestSnapshot snapshot = new DigestSnapshot(LocalDate.now(), 5, "Backend Dev", "Acme", 90);
         when(dailyDigestService.computeDigest()).thenReturn(snapshot);
-        when(jobPostingRepository.findRecentlyPostedJobs(eq(FilterDecision.KEEP), any(), any(Pageable.class)))
+        when(jobPostingRepository.findRecentlyPostedJobs(eq(FilterDecision.KEEP), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
         var response = controller.getDailyDigest();

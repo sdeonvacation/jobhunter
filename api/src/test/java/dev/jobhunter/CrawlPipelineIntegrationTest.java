@@ -107,7 +107,6 @@ class CrawlPipelineIntegrationTest {
                 .url("https://boards-api.greenhouse.io/v1/boards/personio-test-integration/jobs")
                 .atsType(AtsType.GREENHOUSE)
                 .atsSlug("personio-test-integration")
-                .extractionMethod(ExtractionMethod.STRUCTURED_API)
                 .confidence(Confidence.HIGH)
                 .isActive(true)
                 .build();

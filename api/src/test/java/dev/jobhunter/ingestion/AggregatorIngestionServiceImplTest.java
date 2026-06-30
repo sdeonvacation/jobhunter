@@ -183,8 +183,8 @@ class AggregatorIngestionServiceImplTest {
                 .externalId("gh-456").title("Backend Engineer")
                 .externalLinks(new java.util.HashMap<>())
                 .build();
-        when(jobPostingRepository.findAtsJobByFingerprint("fingerprint-xyz", JobSource.aggregators()))
-                .thenReturn(Optional.of(existingAtsJob));
+        when(jobPostingRepository.findAtsJobsByFingerprint("fingerprint-xyz", JobSource.aggregators()))
+                .thenReturn(List.of(existingAtsJob));
         when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
         when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
         when(aggregatorRunRepository.save(any(AggregatorRun.class))).thenAnswer(i -> i.getArgument(0));
@@ -360,7 +360,7 @@ class AggregatorIngestionServiceImplTest {
         verify(jobPostingRepository).save(captor.capture());
         assertThat(captor.getValue().getCompany()).isEqualTo(unknownCompany);
         // Verify ATS fingerprint lookup was NOT called (null company skips it)
-        verify(jobPostingRepository, never()).findAtsJobByFingerprint(anyString(), any());
+        verify(jobPostingRepository, never()).findAtsJobsByFingerprint(anyString(), any());
     }
 
     @Test
@@ -388,7 +388,7 @@ class AggregatorIngestionServiceImplTest {
         IngestionStats stats = service.ingest(sourceConfig);
 
         assertThat(stats.created()).isEqualTo(1);
-        verify(jobPostingRepository, never()).findAtsJobByFingerprint(anyString(), any());
+        verify(jobPostingRepository, never()).findAtsJobsByFingerprint(anyString(), any());
     }
 
     @Test
