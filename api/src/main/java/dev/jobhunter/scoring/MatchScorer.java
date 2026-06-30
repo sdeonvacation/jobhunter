@@ -68,7 +68,7 @@ public class MatchScorer {
     private final int applyMinMatches;
     private final int maybeScore;
     private final int maybeMinMatches;
-    private final List<String> bonusSignals;
+    private final List<Pattern> bonusSignalPatterns;
     private final double bonusWeight;
     private final List<String> primarySkills;
     private final int primarySkillCap;
@@ -87,7 +87,7 @@ public class MatchScorer {
             this.skillWeights = scoring.skillWeights().isEmpty()
                     ? DEFAULT_SKILL_WEIGHTS : scoring.skillWeights();
             this.benchmarkWeight = scoring.benchmarkWeight();
-            this.bonusSignals = scoring.bonusSignals();
+            this.bonusSignalPatterns = compileBonusSignals(scoring.bonusSignals());
             this.bonusWeight = scoring.bonusWeight();
 
             if (scoring.thresholds() != null) {
@@ -121,7 +121,7 @@ public class MatchScorer {
             this.applyMinMatches = DEFAULT_APPLY_MIN_MATCHES;
             this.maybeScore = DEFAULT_MAYBE_SCORE;
             this.maybeMinMatches = DEFAULT_MAYBE_MIN_MATCHES;
-            this.bonusSignals = List.of();
+            this.bonusSignalPatterns = List.of();
             this.bonusWeight = DEFAULT_BONUS_WEIGHT;
             this.compiledVariants = Map.of();
             this.primarySkills = List.of();
@@ -157,6 +157,19 @@ public class MatchScorer {
         return patterns;
     }
 
+    private List<Pattern> compileBonusSignals(List<String> signals) {
+        if (signals == null || signals.isEmpty()) return List.of();
+        List<Pattern> patterns = new ArrayList<>();
+        for (String signal : signals) {
+            // Wrap bare tokens in word boundaries to prevent substring false positives
+            // (e.g. "ai" matching "paid"). Signals already containing \b or other
+            // metacharacters are used as-is.
+            String regex = signal.contains("\\b") ? signal : "\\b" + signal + "\\b";
+            patterns.add(Pattern.compile(regex, Pattern.CASE_INSENSITIVE));
+        }
+        return patterns;
+    }
+
     /**
      * Score a job by matching profile skills against the description text.
      */
@@ -187,8 +200,8 @@ public class MatchScorer {
             }
         }
 
-        // Check for bonus signals
-        boolean bonusMatched = bonusSignals.stream().anyMatch(textLower::contains);
+        // Check for bonus signals (word-boundary pattern match, not substring)
+        boolean bonusMatched = bonusSignalPatterns.stream().anyMatch(p -> p.matcher(textLower).find());
         if (bonusMatched) {
             earnedScore += bonusWeight;
             totalWeight += bonusWeight;

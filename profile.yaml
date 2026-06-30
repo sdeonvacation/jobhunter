@@ -121,8 +121,8 @@ filters:
       - "architect"
       - "analyst"
       - "director"
-      - "\\blead\\s"
-      - "\\bprincipal\\s"
+      - "lead"
+      - "principal"
       - "counsel"
       - "legal"
       - "recruiter"
@@ -163,6 +163,7 @@ filters:
       - "support"
       - "consultant"
       - "industrial"
+      - "expert"
   location:
     remote-patterns:
       - "^(remote|remote\\s*-\\s*(eu|europe|emea|global|worldwide|dach|ger(many)?))$"
@@ -369,7 +370,7 @@ scoring:
     javascript: ["javascript", "\\bjs\\b"]
     go: ["\\bgolang\\b", "\\bgo\\b"]
     react: ["\\breact\\b"]
-    ai/ml: ["ai", "machine learning", "llm"]
+    ai/ml: ["\\bai\\b", "machine learning", "llm"]
 
 # People module configuration
 people:
