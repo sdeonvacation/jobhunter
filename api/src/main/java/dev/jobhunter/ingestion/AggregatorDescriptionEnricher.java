@@ -11,6 +11,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -24,6 +25,7 @@ import java.util.List;
  * by fetching the full job page from applyUrl and extracting text via Jsoup.
  */
 @Slf4j
+@Order(2)
 @Component
 @ConditionalOnProperty(prefix = "aggregator.enrichment", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class AggregatorDescriptionEnricher implements PostIngestionEnricher {

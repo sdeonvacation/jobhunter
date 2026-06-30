@@ -214,4 +214,7 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.visaSponsorship = 'PENDING' AND j.discoveredDate < :cutoff")
     List<JobPosting> findActivePendingVisaJobsDiscoveredBefore(@Param("cutoff") LocalDate cutoff);
+
+    @Query("SELECT j FROM JobPosting j WHERE j.source = :source AND j.applyUrl LIKE '%berlinstartupjobs.com%' AND j.isActive = true")
+    List<JobPosting> findJobsWithUnresolvedBsjUrl(@Param("source") JobSource source);
 }
