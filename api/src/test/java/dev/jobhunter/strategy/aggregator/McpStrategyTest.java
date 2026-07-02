@@ -17,6 +17,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -458,6 +459,40 @@ class McpStrategyTest {
             String[] lines = {"Some Title", "Some Company", "Berlin, Germany"};
             var result = strategy.parseJobLines(lines);
             assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Should parse posted date when 'Reposted' badge pushes date past 6-line window")
+        void shouldParseDateBeyondDefaultScanWindow() {
+            String[] lines = {
+                "Backend Developer",          // 0
+                "Holidu",                     // 1
+                "Munich (Hybrid)",            // 2  ← location line i=2
+                "Promoted",                   // 3  = i+1
+                "Easy Apply",                 // 4  = i+2
+                "Actively recruiting",        // 5  = i+3
+                "Be an early applicant",      // 6  = i+4
+                "Reposted",                   // 7  = i+5
+                "Senior position",            // 8  = i+6  (extra noise line)
+                "2 weeks ago"                 // 9  = i+7  ← beyond old i+6 window
+            };
+            var result = strategy.parseJobLines(lines);
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).postedDate()).isEqualTo(LocalDate.now().minusWeeks(2));
+        }
+
+        @Test
+        @DisplayName("Should parse 'Reposted X weeks ago' as a single line")
+        void shouldParseRepostedSingleLine() {
+            String[] lines = {
+                "Backend Developer",
+                "Holidu",
+                "Munich (Hybrid)",
+                "Reposted 2 weeks ago"
+            };
+            var result = strategy.parseJobLines(lines);
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).postedDate()).isEqualTo(LocalDate.now().minusWeeks(2));
         }
     }
 }
