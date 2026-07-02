@@ -4,6 +4,7 @@ import dev.jobhunter.filter.DescriptionFilterChain;
 import dev.jobhunter.ingestion.DescriptionBackfiller;
 import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.FilterDecision;
+import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.JobPostingRepository;
 import dev.jobhunter.repository.MatchScoreRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -59,11 +60,17 @@ public class ApplyUrlDescriptionBackfiller implements DescriptionBackfiller {
 
         if (jobs.isEmpty()) return;
 
-        log.info("ApplyUrl backfill: {} jobs with apply_url but no description", jobs.size());
+        List<JobSource> SKIP_SOURCES = List.of(JobSource.SMARTRECRUITERS, JobSource.WORKDAY, JobSource.WORKDAY_PROTECTED);
+        List<JobPosting> eligibleJobs = jobs.stream()
+                .filter(j -> !SKIP_SOURCES.contains(j.getSource()))
+                .toList();
+
+        log.info("ApplyUrl backfill: {} jobs with apply_url but no description ({} skipped — dedicated backfiller)",
+                eligibleJobs.size(), jobs.size() - eligibleJobs.size());
         int filled = 0;
         int errors = 0;
 
-        for (JobPosting job : jobs) {
+        for (JobPosting job : eligibleJobs) {
             String applyUrl = job.getApplyUrl();
             if (applyUrl == null || applyUrl.isBlank()) continue;
 
@@ -89,7 +96,7 @@ public class ApplyUrlDescriptionBackfiller implements DescriptionBackfiller {
             }
         }
 
-        log.info("ApplyUrl backfill: {}/{} descriptions filled, {} errors", filled, jobs.size(), errors);
+        log.info("ApplyUrl backfill: {}/{} descriptions filled, {} errors", filled, eligibleJobs.size(), errors);
     }
 
     /**

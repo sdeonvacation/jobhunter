@@ -115,12 +115,18 @@ public class SmartRecruitersStrategy extends AbstractAtsStrategy {
             }
             String title = truncate(node.path("name").asText(null), 500);
 
-            // Location: city + country
+            // Location: prefer fullLocation (has country name written out, avoids
+            // ISO region code "BE" being misread as Belgium by CityCountryResolver)
             JsonNode loc = node.path("location");
             String city = loc.path("city").asText("");
             String country = loc.path("country").asText("");
-            String region = loc.path("region").asText("");
-            String location = truncate(buildLocation(city, region, country), 500);
+            String fullLocation = loc.path("fullLocation").asText("").trim();
+            String location;
+            if (!fullLocation.isBlank()) {
+                location = truncate(fullLocation, 500);
+            } else {
+                location = truncate(buildLocation(city, "", country), 500);
+            }
 
             // Apply URL - use public jobs site, not the API ref
             String companyId = node.path("company").path("identifier").asText("");
