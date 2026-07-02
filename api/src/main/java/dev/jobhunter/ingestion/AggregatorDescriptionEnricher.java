@@ -18,6 +18,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -61,17 +62,17 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
 
     @Override
     public void enrich(JobSource source, int created) {
-        if (source == JobSource.LINKEDIN || !source.isAggregator() || created <= 0) {
-            return;
-        }
+        if (source == JobSource.LINKEDIN || created <= 0) return;
+        if (!source.isAggregator() && source != JobSource.DIRECT) return;
         enrichDescriptions();
     }
 
     void enrichDescriptions() {
-        List<JobSource> aggregatorSources = JobSource.aggregators();
+        List<JobSource> sourcesToEnrich = new ArrayList<>(JobSource.aggregators());
+        sourcesToEnrich.add(JobSource.DIRECT);
 
         List<JobPosting> jobs = jobPostingRepository
-                .findAggregatorJobsNeedingDescription(aggregatorSources, minDescriptionLength);
+                .findAggregatorJobsNeedingDescription(sourcesToEnrich, minDescriptionLength);
 
         if (jobs.isEmpty()) {
             return;

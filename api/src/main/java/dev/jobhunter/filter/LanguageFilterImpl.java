@@ -67,6 +67,12 @@ public class LanguageFilterImpl implements LanguageFilter {
     @Override
     public FilterResult filter(String jobTitle, String jobDescription) {
         if (jobDescription == null || jobDescription.isBlank()) {
+            // No description — still check title against deterministic exclude patterns
+            if (excludePattern != null && jobTitle != null && !jobTitle.isBlank()) {
+                if (hasStrictExcludeMatch(jobTitle)) {
+                    return FilterResult.skip("non-English title");
+                }
+            }
             return FilterResult.keep();
         }
 
