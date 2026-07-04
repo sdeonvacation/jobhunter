@@ -20,6 +20,7 @@ import {
   prepareInterviewTool,
   getApplicationPatternsTool,
   getFollowUpScheduleTool,
+  searchAlumniTool,
 } from './tools/index.js';
 import { profileResources, jobResources } from './resources/index.js';
 
@@ -49,6 +50,7 @@ const tools = [
   prepareInterviewTool,
   getApplicationPatternsTool,
   getFollowUpScheduleTool,
+  searchAlumniTool,
 ] as const;
 
 for (const tool of tools) {

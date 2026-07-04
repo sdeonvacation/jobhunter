@@ -159,6 +159,13 @@ export class JobHunterClient {
     return this.request(`/api/linkedin/profile?url=${encodeURIComponent(linkedinUrl)}`);
   }
 
+  async searchLinkedInByKeywords(keywords: string, location?: string, network?: string[]): Promise<any[]> {
+    return this.request<any[]>('/api/linkedin/contacts/search-keywords', {
+      method: 'POST',
+      body: JSON.stringify({ keywords, location, network }),
+    });
+  }
+
   async getConnectionsRemaining(): Promise<{ remaining: number }> {
     return this.request('/api/linkedin/contacts/remaining');
   }

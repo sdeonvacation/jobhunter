@@ -15,3 +15,4 @@ export { checkJobLivenessTool } from './checkJobLiveness.js';
 export { prepareInterviewTool } from './prepareInterview.js';
 export { getApplicationPatternsTool } from './getApplicationPatterns.js';
 export { getFollowUpScheduleTool } from './getFollowUpSchedule.js';
+export { searchAlumniTool } from './searchAlumni.js';

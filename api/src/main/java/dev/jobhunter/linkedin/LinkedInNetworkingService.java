@@ -2,6 +2,7 @@ package dev.jobhunter.linkedin;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.jobhunter.model.Company;
+import dev.jobhunter.people.model.enums.ContactDiscoverySource;
 import dev.jobhunter.repository.CompanyRepository;
 import dev.jobhunter.repository.OutreachContactRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -62,6 +63,33 @@ public class LinkedInNetworkingService {
 
         contactRepository.saveAll(contacts);
         log.info("Found {} contacts at '{}'", contacts.size(), company.getName());
+        return contacts;
+    }
+
+    /**
+     * Search for people by keywords and location (school/alumni search).
+     * Keywords can include school names, roles, etc.
+     */
+    public List<OutreachContact> searchByKeywords(String keywords, String location, List<String> network) {
+        if (!rateLimiter.acquire(ToolCategory.SEARCH)) {
+            log.warn("Rate limit reached for SEARCH, cannot search by keywords '{}'", keywords);
+            return List.of();
+        }
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("keywords", keywords);
+        if (location != null && !location.isBlank()) {
+            params.put("location", location);
+        }
+        if (network != null && !network.isEmpty()) {
+            params.put("network", network);
+        }
+
+        JsonNode response = httpMcpClient.callTool("search_people", params);
+        List<OutreachContact> contacts = parseKeywordSearchResults(response);
+
+        contactRepository.saveAll(contacts);
+        log.info("Found {} contacts for keywords '{}'", contacts.size(), keywords);
         return contacts;
     }
 
@@ -199,6 +227,115 @@ public class LinkedInNetworkingService {
         }
 
         return contacts;
+    }
+
+    private List<OutreachContact> parseKeywordSearchResults(JsonNode response) {
+        List<OutreachContact> contacts = new ArrayList<>();
+
+        // Try structuredContent format (linkedin-scraper-mcp response)
+        JsonNode structuredContent = response.path("structuredContent");
+        JsonNode references = structuredContent.path("references").path("search_results");
+
+        if (references.isArray() && !references.isEmpty()) {
+            String sectionsText = structuredContent.path("sections").path("search_results").asText("");
+            List<PersonInfo> infos = parseSectionsText(sectionsText);
+
+            for (int i = 0; i < references.size(); i++) {
+                JsonNode ref = references.get(i);
+                if (!"person".equals(ref.path("kind").asText())) continue;
+
+                String name = ref.path("text").asText(null);
+                String relativeUrl = ref.path("url").asText(null);
+                if (name == null || relativeUrl == null) continue;
+
+                String linkedinUrl = "https://www.linkedin.com" + relativeUrl;
+                String title = (i < infos.size()) ? infos.get(i).headline() : null;
+                String location = (i < infos.size()) ? infos.get(i).location() : null;
+
+                Optional<OutreachContact> existing = contactRepository.findByLinkedinUrl(linkedinUrl);
+                if (existing.isPresent()) {
+                    contacts.add(existing.get());
+                } else {
+                    contacts.add(OutreachContact.builder()
+                            .linkedinUrl(linkedinUrl)
+                            .personName(name)
+                            .title(title)
+                            .location(location)
+                            .connectionStatus(ConnectionStatus.NONE)
+                            .discoveredVia(ContactDiscoverySource.ALUMNI_SEARCH)
+                            .build());
+                }
+            }
+            return contacts;
+        }
+
+        // Fallback: old format (people/results array)
+        JsonNode people = response.path("people");
+        if (!people.isArray()) {
+            people = response.isArray() ? response : response.path("results");
+        }
+
+        if (people.isArray()) {
+            for (JsonNode person : people) {
+                String name = getTextOrNull(person, "name", "full_name");
+                String linkedinUrl = getTextOrNull(person, "linkedin_url", "url", "profile_url");
+                String title = getTextOrNull(person, "title", "headline");
+                String personLocation = getTextOrNull(person, "location");
+
+                if (name != null && linkedinUrl != null) {
+                    Optional<OutreachContact> existing = contactRepository.findByLinkedinUrl(linkedinUrl);
+                    if (existing.isPresent()) {
+                        contacts.add(existing.get());
+                    } else {
+                        contacts.add(OutreachContact.builder()
+                                .linkedinUrl(linkedinUrl)
+                                .personName(name)
+                                .title(title)
+                                .location(personLocation)
+                                .connectionStatus(ConnectionStatus.NONE)
+                                .discoveredVia(ContactDiscoverySource.ALUMNI_SEARCH)
+                                .build());
+                    }
+                }
+            }
+        }
+
+        return contacts;
+    }
+
+    private record PersonInfo(String headline, String location) {}
+
+    private List<PersonInfo> parseSectionsText(String text) {
+        List<PersonInfo> infos = new ArrayList<>();
+        if (text == null || text.isBlank()) return infos;
+
+        // Each person block starts with "Name • degree" pattern
+        // Split on double-newline that precedes a name line containing •
+        String[] blocks = text.split("\\n\\n(?=[^\\n]+ \u2022 )");
+
+        for (String block : blocks) {
+            String trimmed = block.trim();
+            if (trimmed.isEmpty()) continue;
+
+            // Person block lines separated by \n\n:
+            // [0] = "Name • 3rd+"
+            // [1] = headline
+            // [2] = location
+            // [3] = "Connect" or "Follow"
+            // [4] = "Current: ..." (optional)
+            String[] parts = trimmed.split("\n\n");
+            String headline = parts.length > 1 ? parts[1].trim() : null;
+            String location = parts.length > 2 ? parts[2].trim() : null;
+
+            // Skip if extracted "location" is actually a button label
+            if (location != null && (location.equals("Connect") || location.equals("Follow"))) {
+                location = null;
+            }
+
+            infos.add(new PersonInfo(headline, location));
+        }
+
+        return infos;
     }
 
     private String getTextOrNull(JsonNode node, String... fieldNames) {

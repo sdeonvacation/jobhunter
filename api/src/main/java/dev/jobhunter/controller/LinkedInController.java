@@ -56,6 +56,20 @@ public class LinkedInController {
         }
     }
 
+    @PostMapping("/contacts/search-keywords")
+    public ResponseEntity<List<OutreachContact>> searchByKeywords(@RequestBody KeywordSearchRequest request) {
+        if (request.keywords() == null || request.keywords().isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        try {
+            List<OutreachContact> contacts = networkingService.searchByKeywords(
+                    request.keywords(), request.location(), request.network());
+            return ResponseEntity.ok(contacts);
+        } catch (Exception e) {
+            return ResponseEntity.ok(List.of());
+        }
+    }
+
     @PostMapping("/contacts/{id}/connect")
     public ResponseEntity<ConnectionResult> connect(@PathVariable UUID id,
                                                     @RequestBody ConnectRequest request) {
@@ -135,6 +149,8 @@ public class LinkedInController {
     // Request records
 
     public record ContactSearchRequest(UUID companyId, List<String> titleKeywords) {}
+
+    public record KeywordSearchRequest(String keywords, String location, List<String> network) {}
 
     public record ConnectRequest(String note) {}
 
