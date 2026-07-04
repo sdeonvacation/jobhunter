@@ -80,17 +80,13 @@ public class AiPageStrategy implements FetchStrategy {
         CareerEndpoint endpoint = context.endpoint();
         Instant start = Instant.now();
 
-        if (!aiProvider.isAvailable()) {
-            log.debug("AI provider not available, skipping CUSTOM endpoint [{}]", endpoint.getId());
-            return FetchResult.error("AI provider not available", elapsed(start));
-        }
-
         try {
-            // Parse ats_slug as JSON config if present: {"post_body":{...}, "apply_base":"..."}
+            // Parse ats_slug as JSON config if present: {"post_body":{...}, "apply_base":"...", "headers":{...}}
             String atsSlug = endpoint.getAtsSlug();
             String postBody = null;
             String applyBase = null;
             boolean jsonApi = false;
+            Map<String, String> extraHeaders = new HashMap<>();
             if (atsSlug != null && atsSlug.startsWith("{")) {
                 try {
                     JsonNode cfg = objectMapper.readTree(atsSlug);
@@ -100,12 +96,39 @@ public class AiPageStrategy implements FetchStrategy {
                     if (!ab.isMissingNode() && !ab.isNull()) applyBase = ab.asText();
                     JsonNode ja = cfg.path("json_api");
                     if (!ja.isMissingNode() && ja.asBoolean()) jsonApi = true;
+                    JsonNode hn = cfg.path("headers");
+                    if (hn.isObject()) {
+                        hn.fields().forEachRemaining(e -> extraHeaders.put(e.getKey(), e.getValue().asText()));
+                    }
                 } catch (Exception ex) {
                     log.debug("AiPageStrategy: could not parse ats_slug as config for [{}]: {}", endpoint.getId(), ex.getMessage());
                 }
             }
 
-            String content = fetchContent(endpoint.getUrl(), postBody, jsonApi);
+            // JSON API endpoints don't need AI — skip availability check and map directly
+            if (jsonApi) {
+                String content = fetchContent(endpoint.getUrl(), postBody, true, extraHeaders);
+                if (content == null || content.isBlank()) return FetchResult.empty(elapsed(start));
+                List<CandidateJob> candidates = extractCandidatesFromJson(
+                        content, applyBase != null ? applyBase : endpoint.getUrl());
+                if (candidates.isEmpty()) return FetchResult.empty(elapsed(start));
+                List<RawAggregatorJob> jobs = candidates.stream()
+                        .filter(c -> c.title() != null && !c.title().isBlank())
+                        .map(c -> new RawAggregatorJob(
+                                generateExternalId(c.title(), c.applyUrl()),
+                                c.title(), null, c.location(), null, c.applyUrl(), null, null, null, null, null))
+                        .toList();
+                if (jobs.isEmpty()) return FetchResult.empty(elapsed(start));
+                log.info("JsonApi [{}]: extracted {} jobs", endpoint.getUrl(), jobs.size());
+                return FetchResult.success(jobs, elapsed(start));
+            }
+
+            if (!aiProvider.isAvailable()) {
+                log.debug("AI provider not available, skipping CUSTOM endpoint [{}]", endpoint.getId());
+                return FetchResult.error("AI provider not available", elapsed(start));
+            }
+
+            String content = fetchContent(endpoint.getUrl(), postBody, false, extraHeaders);
             if (content == null || content.isBlank()) {
                 return FetchResult.empty(elapsed(start));
             }
@@ -171,6 +194,11 @@ public class AiPageStrategy implements FetchStrategy {
 
     /** Fetch via POST (if postBody non-null), JSON GET (if jsonApi), or HTML GET. */
     String fetchContent(String url, String postBody, boolean jsonApi) {
+        return fetchContent(url, postBody, jsonApi, Map.of());
+    }
+
+    /** Fetch via POST (if postBody non-null), JSON GET (if jsonApi), or HTML GET. */
+    String fetchContent(String url, String postBody, boolean jsonApi, Map<String, String> extraHeaders) {
         if (postBody != null) {
             return webClient.post()
                     .uri(url)
@@ -183,7 +211,7 @@ public class AiPageStrategy implements FetchStrategy {
                     .block(Duration.ofSeconds(30));
         }
         if (jsonApi) {
-            return fetchJson(url);
+            return fetchJson(url, extraHeaders);
         }
         return fetchHtml(url);
     }
@@ -234,9 +262,9 @@ public class AiPageStrategy implements FetchStrategy {
                 JsonNode src = job.has("_source") ? job.path("_source") : job;
                 String title = firstNonNull(src, "job_title", "title", "name", "position", "jobTitle");
                 if (title == null) continue;
-                String location = firstNonNull(src, "city", "location", "office", "address", "country",
+                String location = firstNonNull(src, "city", "location", "locations", "office", "address", "country",
                                                "field_keyword_19", "field_keyword_05");
-                String slugOrUrl = firstNonNull(src, "slug", "url", "link", "applyUrl", "apply_url", "externalUrl", "id");
+                String slugOrUrl = firstNonNull(src, "httpLink", "slug", "url", "link", "applyUrl", "apply_url", "externalUrl", "id");
                 String applyUrl = buildApplyUrl(slugOrUrl, applyBase);
                 candidates.add(new CandidateJob(title, location, applyUrl));
             }
@@ -297,10 +325,17 @@ public class AiPageStrategy implements FetchStrategy {
     }
 
     String fetchJson(String url) {
-        return webClient.get()
+        return fetchJson(url, Map.of());
+    }
+
+    String fetchJson(String url, Map<String, String> extraHeaders) {
+        var req = webClient.get()
                 .uri(URI.create(url))
-                .header("Accept", "application/json")
-                .retrieve()
+                .header("Accept", "application/json");
+        for (var entry : extraHeaders.entrySet()) {
+            req = req.header(entry.getKey(), entry.getValue());
+        }
+        return req.retrieve()
                 .bodyToMono(String.class)
                 .block(Duration.ofSeconds(30));
     }
