@@ -229,6 +229,13 @@ public class CrawlService {
                              existing.getId(), existing.getTitle(), rawJob.title());
                     existing.setTitle(rawJob.title());
                 }
+                // Refresh postedDate if crawl returns a newer date (repost detection)
+                if (rawJob.postedDate() != null
+                        && (existing.getPostedDate() == null || rawJob.postedDate().isAfter(existing.getPostedDate()))) {
+                    log.debug("CrawlService: repost detected for job {} — postedDate refreshed [{} → {}]",
+                              existing.getId(), existing.getPostedDate(), rawJob.postedDate());
+                    existing.setPostedDate(rawJob.postedDate());
+                }
                 existing.setLastCrawledAt(LocalDateTime.now());
                 if ((existing.getDescription() == null || existing.getDescription().isBlank()) && rawJob.description() != null && !rawJob.description().isBlank()) {
                     existing.setDescription(rawJob.description());

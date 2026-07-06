@@ -134,16 +134,132 @@ class CrawlServiceTest {
         when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(result);
         when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-1"))
                 .thenReturn(Optional.of(existingPosting));
-        when(jobPostingRepository.findByEndpointIdAndIsActiveTrue(endpoint.getId()))
-                .thenReturn(List.of(existingPosting));
         when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
         when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
         when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(0);
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp");
 
         int newJobs = crawlService.crawlEndpoint(endpoint);
 
         assertThat(newJobs).isZero();
         verify(jobFilterChain, never()).apply(any(), anyBoolean(), anyBoolean());
+    }
+
+    @Test
+    void crawlEndpoint_existingJob_repostDetected_updatesPostedDate() {
+        var company = Company.builder().id(UUID.randomUUID()).name("TestCo").build();
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("testco")
+                .company(company)
+                .build();
+
+        LocalDate oldDate = LocalDate.now().minusDays(30);
+        LocalDate newDate = LocalDate.now();
+
+        var rawJob = new RawAggregatorJob("ext-1", "Engineer", null, "Berlin", "desc",
+                "url", newDate, null, null, null, "{}");
+        var result = FetchResult.success(List.of(rawJob), Duration.ofMillis(100));
+
+        var existingPosting = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .externalId("ext-1")
+                .source(JobSource.GREENHOUSE)
+                .postedDate(oldDate)
+                .lastCrawledAt(LocalDateTime.now().minusDays(1))
+                .build();
+
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(result);
+        when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-1"))
+                .thenReturn(Optional.of(existingPosting));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+        when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(0);
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp");
+
+        crawlService.crawlEndpoint(endpoint);
+
+        assertThat(existingPosting.getPostedDate()).isEqualTo(newDate);
+    }
+
+    @Test
+    void crawlEndpoint_existingJob_olderPostedDate_doesNotBackdate() {
+        var company = Company.builder().id(UUID.randomUUID()).name("TestCo").build();
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("testco")
+                .company(company)
+                .build();
+
+        LocalDate existingDate = LocalDate.now();
+        LocalDate olderDate = LocalDate.now().minusDays(10);
+
+        var rawJob = new RawAggregatorJob("ext-1", "Engineer", null, "Berlin", "desc",
+                "url", olderDate, null, null, null, "{}");
+        var result = FetchResult.success(List.of(rawJob), Duration.ofMillis(100));
+
+        var existingPosting = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .externalId("ext-1")
+                .source(JobSource.GREENHOUSE)
+                .postedDate(existingDate)
+                .lastCrawledAt(LocalDateTime.now().minusDays(1))
+                .build();
+
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(result);
+        when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-1"))
+                .thenReturn(Optional.of(existingPosting));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+        when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(0);
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp");
+
+        crawlService.crawlEndpoint(endpoint);
+
+        // Must NOT backdate
+        assertThat(existingPosting.getPostedDate()).isEqualTo(existingDate);
+    }
+
+    @Test
+    void crawlEndpoint_existingJob_nullExistingPostedDate_setsNewDate() {
+        var company = Company.builder().id(UUID.randomUUID()).name("TestCo").build();
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID())
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("testco")
+                .company(company)
+                .build();
+
+        LocalDate newDate = LocalDate.now();
+
+        var rawJob = new RawAggregatorJob("ext-1", "Engineer", null, "Berlin", "desc",
+                "url", newDate, null, null, null, "{}");
+        var result = FetchResult.success(List.of(rawJob), Duration.ofMillis(100));
+
+        var existingPosting = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .externalId("ext-1")
+                .source(JobSource.GREENHOUSE)
+                .postedDate(null)
+                .lastCrawledAt(LocalDateTime.now().minusDays(1))
+                .build();
+
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(result);
+        when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-1"))
+                .thenReturn(Optional.of(existingPosting));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+        when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(0);
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp");
+
+        crawlService.crawlEndpoint(endpoint);
+
+        assertThat(existingPosting.getPostedDate()).isEqualTo(newDate);
     }
 
     @Test
@@ -172,10 +288,10 @@ class CrawlServiceTest {
         when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(result);
         when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-1"))
                 .thenReturn(Optional.of(existingPosting));
-        when(jobPostingRepository.findByEndpointIdAndIsActiveTrue(endpoint.getId())).thenReturn(List.of());
         when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
         when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
         when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(0);
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp");
 
         crawlService.crawlEndpoint(endpoint);
 
@@ -540,7 +656,7 @@ class CrawlServiceTest {
         var serviceWithProcessor = new CrawlService(
                 endpointRepository, jobPostingRepository, strategyRegistry,
                 jobFilterChain, deduplicationFilter, descriptionFilterChain,
-                List.of(), List.of(backfillProcessor), scoringService, postCrawlPipeline);
+                List.of(), List.of(backfillProcessor), scoringService, postCrawlPipeline, matchScoreRepository);
         ReflectionTestUtils.setField(serviceWithProcessor, "crawlConcurrency", 10);
 
         when(endpointRepository.findAllActiveNonCustom()).thenReturn(List.of());
