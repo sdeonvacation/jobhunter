@@ -164,6 +164,14 @@ filters:
       - "consultant"
       - "industrial"
       - "expert"
+      - "phd"
+      - "manufacturing"
+      - "praktikum"
+      - "promotion"
+      - "documentation"
+      - "head of"
+      - "value engineer"
+      - "customer impact"
   location:
     remote-patterns:
       - "^(remote|remote\\s*-\\s*(eu|europe|emea|global|worldwide|dach|ger(many)?))$"
