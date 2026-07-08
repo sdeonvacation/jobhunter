@@ -81,11 +81,12 @@ public class AiPageStrategy implements FetchStrategy {
         Instant start = Instant.now();
 
         try {
-            // Parse ats_slug as JSON config if present: {"post_body":{...}, "apply_base":"...", "headers":{...}}
+            // Parse ats_slug as JSON config if present: {"post_body":{...}, "apply_base":"...", "headers":{...}, "jobs_path":"a.b.c"}
             String atsSlug = endpoint.getAtsSlug();
             String postBody = null;
             String applyBase = null;
             boolean jsonApi = false;
+            String jobsPath = null;
             Map<String, String> extraHeaders = new HashMap<>();
             if (atsSlug != null && atsSlug.startsWith("{")) {
                 try {
@@ -96,6 +97,8 @@ public class AiPageStrategy implements FetchStrategy {
                     if (!ab.isMissingNode() && !ab.isNull()) applyBase = ab.asText();
                     JsonNode ja = cfg.path("json_api");
                     if (!ja.isMissingNode() && ja.asBoolean()) jsonApi = true;
+                    JsonNode jp = cfg.path("jobs_path");
+                    if (!jp.isMissingNode() && !jp.isNull()) jobsPath = jp.asText();
                     JsonNode hn = cfg.path("headers");
                     if (hn.isObject()) {
                         hn.fields().forEachRemaining(e -> extraHeaders.put(e.getKey(), e.getValue().asText()));
@@ -110,7 +113,7 @@ public class AiPageStrategy implements FetchStrategy {
                 String content = fetchContent(endpoint.getUrl(), postBody, true, extraHeaders);
                 if (content == null || content.isBlank()) return FetchResult.empty(elapsed(start));
                 List<CandidateJob> candidates = extractCandidatesFromJson(
-                        content, applyBase != null ? applyBase : endpoint.getUrl());
+                        content, applyBase != null ? applyBase : endpoint.getUrl(), jobsPath);
                 if (candidates.isEmpty()) return FetchResult.empty(elapsed(start));
                 List<RawAggregatorJob> jobs = candidates.stream()
                         .filter(c -> c.title() != null && !c.title().isBlank())
@@ -234,23 +237,44 @@ public class AiPageStrategy implements FetchStrategy {
      * Apply URLs are constructed from slug/url/link fields using applyBase when needed.
      */
     List<CandidateJob> extractCandidatesFromJson(String json, String applyBase) {
+        return extractCandidatesFromJson(json, applyBase, null);
+    }
+
+    /**
+     * Extract CandidateJobs from a JSON API response.
+     * If jobsPath is non-null (e.g. "refineSearch.data.jobs"), navigates that dot-notation
+     * path to find the array. Otherwise falls back to probing common wrapper keys.
+     */
+    List<CandidateJob> extractCandidatesFromJson(String json, String applyBase, String jobsPath) {
         List<CandidateJob> candidates = new ArrayList<>();
         try {
             JsonNode root = objectMapper.readTree(json);
             JsonNode jobArray = null;
-            // Try standard wrappers first
-            for (String key : List.of("hits", "data", "jobs", "results", "items")) {
-                JsonNode node = root.path(key);
-                if (node.isArray() && !node.isEmpty()) {
-                    jobArray = node;
-                    break;
+
+            // Explicit dot-notation path takes priority (e.g. "refineSearch.data.jobs")
+            if (jobsPath != null && !jobsPath.isBlank()) {
+                jobArray = resolvePath(root, jobsPath);
+                if (jobArray == null || !jobArray.isArray()) {
+                    log.debug("AiPageStrategy: jobs_path '{}' did not resolve to an array", jobsPath);
+                    jobArray = null;
                 }
-                // Elasticsearch: hits is an object containing a hits array
-                if (node.isObject()) {
-                    JsonNode nested = node.path("hits");
-                    if (nested.isArray() && !nested.isEmpty()) {
-                        jobArray = nested;
+            }
+
+            // Generic wrapper fallback
+            if (jobArray == null) {
+                for (String key : List.of("hits", "data", "jobs", "results", "items")) {
+                    JsonNode node = root.path(key);
+                    if (node.isArray() && !node.isEmpty()) {
+                        jobArray = node;
                         break;
+                    }
+                    // Elasticsearch: hits is an object containing a hits array
+                    if (node.isObject()) {
+                        JsonNode nested = node.path("hits");
+                        if (nested.isArray() && !nested.isEmpty()) {
+                            jobArray = nested;
+                            break;
+                        }
                     }
                 }
             }
@@ -283,6 +307,19 @@ public class AiPageStrategy implements FetchStrategy {
             return base + slug;
         }
         return slugOrUrl;
+    }
+
+    /**
+     * Navigates a dot-notation path (e.g. "refineSearch.data.jobs") through a JsonNode tree.
+     * Returns the node at the end of the path, or null if any segment is missing.
+     */
+    JsonNode resolvePath(JsonNode root, String dotPath) {
+        JsonNode current = root;
+        for (String segment : dotPath.split("\\.")) {
+            if (current == null || current.isMissingNode() || current.isNull()) return null;
+            current = current.path(segment);
+        }
+        return (current == null || current.isMissingNode() || current.isNull()) ? null : current;
     }
 
     String firstNonNull(com.fasterxml.jackson.databind.JsonNode node, String... fields) {
