@@ -6,12 +6,11 @@ import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.JobPostingRepository;
-import dev.jobhunter.repository.MatchScoreRepository;
 import dev.jobhunter.strategy.ats.SmartRecruitersStrategy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -20,33 +19,31 @@ import java.util.List;
  */
 @Slf4j
 @Service
-public class SmartRecruitersDescriptionBackfiller implements DescriptionBackfiller {
+public class SmartRecruitersDescriptionBackfiller extends DescriptionBackfiller {
 
     private final JobPostingRepository jobPostingRepository;
     private final SmartRecruitersStrategy smartRecruitersStrategy;
     private final DescriptionFilterChain descriptionFilterChain;
-    private final MatchScoreRepository matchScoreRepository;
 
     public SmartRecruitersDescriptionBackfiller(JobPostingRepository jobPostingRepository,
                                                 SmartRecruitersStrategy smartRecruitersStrategy,
                                                 DescriptionFilterChain descriptionFilterChain,
-                                                MatchScoreRepository matchScoreRepository) {
+                                                MatchScoringService matchScoringService) {
+        super(matchScoringService);
         this.jobPostingRepository = jobPostingRepository;
         this.smartRecruitersStrategy = smartRecruitersStrategy;
         this.descriptionFilterChain = descriptionFilterChain;
-        this.matchScoreRepository = matchScoreRepository;
     }
 
     @Override
-    @Transactional
-    public void backfill() {
+    protected List<JobPosting> doBackfill() {
         List<JobPosting> jobs = jobPostingRepository
                 .findBySourceAndLanguageFilterAndDescriptionIsNull(JobSource.SMARTRECRUITERS, FilterDecision.KEEP);
 
-        if (jobs.isEmpty()) return;
+        if (jobs.isEmpty()) return List.of();
 
         log.info("Backfilling descriptions for {} SmartRecruiters KEEP jobs", jobs.size());
-        int filled = 0;
+        List<JobPosting> filled = new ArrayList<>();
 
         for (JobPosting job : jobs) {
             String slug = job.getEndpoint() != null ? job.getEndpoint().getAtsSlug() : null;
@@ -57,11 +54,11 @@ public class SmartRecruitersDescriptionBackfiller implements DescriptionBackfill
                 job.setDescription(description);
                 descriptionFilterChain.refilter(job);
                 jobPostingRepository.save(job);
-                matchScoreRepository.deleteByJobId(job.getId());
-                filled++;
+                filled.add(job);
             }
         }
 
-        log.info("SmartRecruiters backfill: {}/{} descriptions filled", filled, jobs.size());
+        log.info("SmartRecruiters backfill: {}/{} descriptions filled", filled.size(), jobs.size());
+        return filled;
     }
 }

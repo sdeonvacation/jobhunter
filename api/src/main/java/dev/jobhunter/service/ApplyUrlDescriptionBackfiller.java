@@ -6,20 +6,19 @@ import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.JobPostingRepository;
-import dev.jobhunter.repository.MatchScoreRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.data.domain.PageRequest;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -29,7 +28,7 @@ import java.util.List;
  */
 @Slf4j
 @Service
-public class ApplyUrlDescriptionBackfiller implements DescriptionBackfiller {
+public class ApplyUrlDescriptionBackfiller extends DescriptionBackfiller {
 
     private static final int BATCH_SIZE = 100;
     private static final int FETCH_TIMEOUT_MS = 15_000;
@@ -39,26 +38,24 @@ public class ApplyUrlDescriptionBackfiller implements DescriptionBackfiller {
 
     private final JobPostingRepository jobPostingRepository;
     private final DescriptionFilterChain descriptionFilterChain;
-    private final MatchScoreRepository matchScoreRepository;
     private final ObjectMapper objectMapper;
 
     public ApplyUrlDescriptionBackfiller(JobPostingRepository jobPostingRepository,
                                          DescriptionFilterChain descriptionFilterChain,
-                                         MatchScoreRepository matchScoreRepository,
+                                         MatchScoringService matchScoringService,
                                          ObjectMapper objectMapper) {
+        super(matchScoringService);
         this.jobPostingRepository = jobPostingRepository;
         this.descriptionFilterChain = descriptionFilterChain;
-        this.matchScoreRepository = matchScoreRepository;
         this.objectMapper = objectMapper;
     }
 
     @Override
-    @Transactional
-    public void backfill() {
+    protected List<JobPosting> doBackfill() {
         List<JobPosting> jobs = jobPostingRepository
                 .findActiveKeepJobsWithApplyUrlButNoDescription(FilterDecision.KEEP, PageRequest.of(0, BATCH_SIZE));
 
-        if (jobs.isEmpty()) return;
+        if (jobs.isEmpty()) return List.of();
 
         List<JobSource> SKIP_SOURCES = List.of(JobSource.SMARTRECRUITERS, JobSource.WORKDAY, JobSource.WORKDAY_PROTECTED);
         List<JobPosting> eligibleJobs = jobs.stream()
@@ -67,7 +64,7 @@ public class ApplyUrlDescriptionBackfiller implements DescriptionBackfiller {
 
         log.info("ApplyUrl backfill: {} jobs with apply_url but no description ({} skipped — dedicated backfiller)",
                 eligibleJobs.size(), jobs.size() - eligibleJobs.size());
-        int filled = 0;
+        List<JobPosting> filled = new ArrayList<>();
         int errors = 0;
 
         for (JobPosting job : eligibleJobs) {
@@ -80,23 +77,23 @@ public class ApplyUrlDescriptionBackfiller implements DescriptionBackfiller {
                     job.setDescription(description);
                     descriptionFilterChain.refilter(job);
                     jobPostingRepository.save(job);
-                    matchScoreRepository.deleteByJobId(job.getId());
-                    filled++;
+                    filled.add(job);
                     log.debug("ApplyUrl backfill: filled {} ({}) from {}", job.getId(), job.getTitle(), applyUrl);
                 }
 
                 Thread.sleep(DELAY_BETWEEN_FETCHES_MS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                log.warn("ApplyUrl backfill interrupted after {}/{}", filled, jobs.size());
-                break;
+                log.warn("ApplyUrl backfill interrupted after {}/{}", filled.size(), jobs.size());
+                return filled;
             } catch (Exception e) {
                 errors++;
                 log.debug("ApplyUrl backfill: failed for {} ({}): {}", job.getId(), applyUrl, e.getMessage());
             }
         }
 
-        log.info("ApplyUrl backfill: {}/{} descriptions filled, {} errors", filled, eligibleJobs.size(), errors);
+        log.info("ApplyUrl backfill: {}/{} descriptions filled, {} errors", filled.size(), eligibleJobs.size(), errors);
+        return filled;
     }
 
     /**

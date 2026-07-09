@@ -9,8 +9,8 @@ import dev.jobhunter.repository.JobPostingRepository;
 import dev.jobhunter.strategy.ats.WorkdayStrategy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -20,7 +20,7 @@ import java.util.List;
  */
 @Slf4j
 @Service
-public class WorkdayDescriptionBackfiller implements DescriptionBackfiller {
+public class WorkdayDescriptionBackfiller extends DescriptionBackfiller {
 
     /** Jobs with description shorter than this are considered stubs needing backfill. */
     private static final int MAX_STUB_LENGTH = 500;
@@ -29,28 +29,26 @@ public class WorkdayDescriptionBackfiller implements DescriptionBackfiller {
     private final JobPostingRepository jobPostingRepository;
     private final WorkdayStrategy workdayStrategy;
     private final DescriptionFilterChain descriptionFilterChain;
-    private final MatchScoringService matchScoringService;
 
     public WorkdayDescriptionBackfiller(JobPostingRepository jobPostingRepository,
                                         WorkdayStrategy workdayStrategy,
                                         DescriptionFilterChain descriptionFilterChain,
                                         MatchScoringService matchScoringService) {
+        super(matchScoringService);
         this.jobPostingRepository = jobPostingRepository;
         this.workdayStrategy = workdayStrategy;
         this.descriptionFilterChain = descriptionFilterChain;
-        this.matchScoringService = matchScoringService;
     }
 
     @Override
-    @Transactional
-    public void backfill() {
+    protected List<JobPosting> doBackfill() {
         List<JobPosting> jobs = jobPostingRepository
                 .findBySourceAndLanguageFilterAndShortDescription(JobSource.WORKDAY, FilterDecision.KEEP, MAX_STUB_LENGTH);
 
-        if (jobs.isEmpty()) return;
+        if (jobs.isEmpty()) return List.of();
 
         log.info("Workday backfill: {} KEEP jobs with stub descriptions", jobs.size());
-        int filled = 0;
+        List<JobPosting> filled = new ArrayList<>();
 
         for (JobPosting job : jobs) {
             if (job.getEndpoint() == null) {
@@ -63,20 +61,20 @@ public class WorkdayDescriptionBackfiller implements DescriptionBackfiller {
                 job.setDescription(description);
                 descriptionFilterChain.refilter(job);
                 jobPostingRepository.save(job);
-                matchScoringService.rescoreJob(job);
-                filled++;
+                filled.add(job);
                 log.debug("Workday backfill: filled description for {} ({})", job.getId(), job.getTitle());
 
                 try {
                     Thread.sleep(DELAY_MS);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    log.warn("Workday backfill interrupted after {}/{}", filled, jobs.size());
-                    return;
+                    log.warn("Workday backfill interrupted after {}/{}", filled.size(), jobs.size());
+                    return filled;
                 }
             }
         }
 
-        log.info("Workday backfill: {}/{} descriptions filled", filled, jobs.size());
+        log.info("Workday backfill: {}/{} descriptions filled", filled.size(), jobs.size());
+        return filled;
     }
 }

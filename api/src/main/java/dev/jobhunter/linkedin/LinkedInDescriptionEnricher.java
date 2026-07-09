@@ -9,10 +9,12 @@ import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.JobPostingRepository;
+import dev.jobhunter.service.MatchScoringService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,7 +29,7 @@ import java.util.Optional;
 @Slf4j
 @Component
 @ConditionalOnProperty(prefix = "linkedin-mcp", name = "enabled", havingValue = "true")
-public class LinkedInDescriptionEnricher implements PostIngestionEnricher, DescriptionBackfiller {
+public class LinkedInDescriptionEnricher extends DescriptionBackfiller implements PostIngestionEnricher {
 
     private final HttpMcpClient httpMcpClient;
     private final Optional<LinkedInRateLimiter> rateLimiter;
@@ -39,7 +41,9 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher, Descr
                                        Optional<LinkedInRateLimiter> rateLimiter,
                                        LinkedInMcpProperties mcpProperties,
                                        JobPostingRepository jobPostingRepository,
-                                       DescriptionFilterChain descriptionFilterChain) {
+                                       DescriptionFilterChain descriptionFilterChain,
+                                       MatchScoringService matchScoringService) {
+        super(matchScoringService);
         this.httpMcpClient = httpMcpClient;
         this.rateLimiter = rateLimiter;
         this.mcpProperties = mcpProperties;
@@ -56,17 +60,17 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher, Descr
     }
 
     @Override
-    public void backfill() {
+    protected List<JobPosting> doBackfill() {
         LinkedInMcpProperties.EnrichmentConfig enrichment = mcpProperties.enrichment();
         if (!enrichment.enabled()) {
-            return;
+            return List.of();
         }
 
         List<JobPosting> jobsWithoutDescription = jobPostingRepository
                 .findBySourceAndLanguageFilterAndDescriptionIsNull(JobSource.LINKEDIN, FilterDecision.KEEP);
 
         if (jobsWithoutDescription.isEmpty()) {
-            return;
+            return List.of();
         }
 
         int batchSize = enrichment.batchSize();
@@ -75,14 +79,14 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher, Descr
                 ? jobsWithoutDescription.subList(0, batchSize)
                 : jobsWithoutDescription;
 
-        int enrichedCount = 0;
+        List<JobPosting> updated = new ArrayList<>();
 
         for (JobPosting job : batch) {
             try {
                 if (rateLimiter.isPresent() && !rateLimiter.get().acquire(ToolCategory.PROFILE)) {
                     log.warn("Rate limit reached for PROFILE, stopping LinkedIn description enrichment at {}/{}",
-                            enrichedCount, batch.size());
-                    break;
+                            updated.size(), batch.size());
+                    return updated;
                 }
 
                 JsonNode response = httpMcpClient.callTool("get_job_details", Map.of("job_id", job.getExternalId()));
@@ -92,7 +96,7 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher, Descr
                     job.setDescription(description);
                     descriptionFilterChain.refilter(job);
                     jobPostingRepository.save(job);
-                    enrichedCount++;
+                    updated.add(job);
                 }
 
                 if (delayBetweenMs > 0) {
@@ -102,14 +106,15 @@ public class LinkedInDescriptionEnricher implements PostIngestionEnricher, Descr
                 log.warn("Failed to fetch description for LinkedIn job [{}]: {}", job.getExternalId(), e.getMessage());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                log.warn("LinkedIn enrichment interrupted after {}/{} jobs", enrichedCount, batch.size());
-                break;
+                log.warn("LinkedIn enrichment interrupted after {}/{} jobs", updated.size(), batch.size());
+                return updated;
             } catch (Exception e) {
                 log.warn("Unexpected error enriching LinkedIn job [{}]: {}", job.getExternalId(), e.getMessage());
             }
         }
 
-        log.info("LinkedIn description backfill: {}/{} enriched", enrichedCount, batch.size());
+        log.info("LinkedIn description backfill: {}/{} enriched", updated.size(), batch.size());
+        return updated;
     }
 
     /**
