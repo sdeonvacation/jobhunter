@@ -43,6 +43,8 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     Optional<JobPosting> findFirstByApplyUrl(String applyUrl);
 
+    Optional<JobPosting> findFirstByApplyUrlStartingWith(String applyUrlPrefix);
+
     List<JobPosting> findByEndpointIdAndIsActiveTrue(UUID endpointId);
 
     List<JobPosting> findByCompanyIdAndIsActiveTrue(UUID companyId);

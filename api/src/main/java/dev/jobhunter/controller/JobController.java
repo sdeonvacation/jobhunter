@@ -169,7 +169,13 @@ public class JobController {
 
     @GetMapping("/by-url")
     public ResponseEntity<JobDetailDto> getJobByUrl(@RequestParam String url) {
-        Optional<JobPosting> jobOpt = jobPostingRepository.findFirstByApplyUrl(url);
+        // Exact match first; fall back to prefix match only when the stored URL is a strict
+        // path extension of the input (e.g. input ".../uuid", stored ".../uuid/application").
+        // Guarding with url + "/" prevents a shorter ID (e.g. "/jobs/123") from accidentally
+        // matching a different job whose ID starts with the same digits ("/jobs/1234").
+        String urlWithSlash = url.endsWith("/") ? url : url + "/";
+        Optional<JobPosting> jobOpt = jobPostingRepository.findFirstByApplyUrl(url)
+                .or(() -> jobPostingRepository.findFirstByApplyUrlStartingWith(urlWithSlash));
         if (jobOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
