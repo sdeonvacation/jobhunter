@@ -111,7 +111,7 @@ public class AshbyStrategy extends AbstractAtsStrategy {
         try {
             String externalId = node.path("id").asText(null);
             String title = truncate(node.path("title").asText(null), 500);
-            String location = truncate(node.path("location").asText(null), 500);
+            String location = buildLocation(node);
 
             String description = node.path("descriptionPlain").asText("");
             if (description.isBlank()) {
@@ -147,6 +147,30 @@ public class AshbyStrategy extends AbstractAtsStrategy {
             log.warn("Ashby: failed to map job node: {}", e.getMessage());
             return null;
         }
+    }
+
+    private String buildLocation(JsonNode node) {
+        String primary = node.path("location").asText(null);
+        JsonNode secondaryLocations = node.path("secondaryLocations");
+
+        if (!secondaryLocations.isArray() || secondaryLocations.isEmpty()) {
+            return truncate(primary, 500);
+        }
+
+        StringBuilder sb = new StringBuilder();
+        if (primary != null && !primary.isBlank()) {
+            sb.append(primary);
+        }
+        for (JsonNode secondary : secondaryLocations) {
+            String loc = secondary.path("location").asText(null);
+            if (loc != null && !loc.isBlank()) {
+                if (!sb.isEmpty()) {
+                    sb.append(", ");
+                }
+                sb.append(loc);
+            }
+        }
+        return truncate(sb.isEmpty() ? null : sb.toString(), 500);
     }
 
     private BigDecimal[] parseCompensationRange(String summary) {

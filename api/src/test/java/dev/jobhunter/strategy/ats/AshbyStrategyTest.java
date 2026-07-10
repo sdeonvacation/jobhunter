@@ -355,4 +355,130 @@ class AshbyStrategyTest {
         assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
         assertThat(result.jobs().get(0).postedDate()).isEqualTo(LocalDate.of(2024, 6, 15));
     }
+
+    @Test
+    void extract_secondaryLocations_concatenatedWithPrimary() {
+        String json = """
+                {
+                  "jobs": [
+                    {
+                      "id": "loc-job",
+                      "title": "Backend Engineer",
+                      "location": "Belgrade",
+                      "secondaryLocations": [
+                        {"location": "London"},
+                        {"location": "Berlin"}
+                      ],
+                      "descriptionPlain": "Build APIs.",
+                      "applyUrl": "https://jobs.ashbyhq.com/co/loc-job",
+                      "publishedDate": "2024-07-01"
+                    }
+                  ]
+                }
+                """;
+        stubFor(get(urlPathMatching("/posting-api/job-board/.*"))
+                .willReturn(okJson(json)));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.ASHBY)
+                .atsSlug("locco")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs()).hasSize(1);
+        assertThat(result.jobs().get(0).location()).isEqualTo("Belgrade, London, Berlin");
+    }
+
+    @Test
+    void extract_secondaryLocationsEmpty_usesOnlyPrimary() {
+        String json = """
+                {
+                  "jobs": [
+                    {
+                      "id": "single-loc",
+                      "title": "Frontend Dev",
+                      "location": "Munich",
+                      "secondaryLocations": [],
+                      "descriptionPlain": "Build UIs.",
+                      "applyUrl": "https://jobs.ashbyhq.com/co/single-loc",
+                      "publishedDate": "2024-07-02"
+                    }
+                  ]
+                }
+                """;
+        stubFor(get(urlPathMatching("/posting-api/job-board/.*"))
+                .willReturn(okJson(json)));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.ASHBY)
+                .atsSlug("singleco")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs().get(0).location()).isEqualTo("Munich");
+    }
+
+    @Test
+    void extract_noSecondaryLocationsField_usesOnlyPrimary() {
+        String json = """
+                {
+                  "jobs": [
+                    {
+                      "id": "no-sec",
+                      "title": "DevOps",
+                      "location": "Hamburg",
+                      "descriptionPlain": "Infra work.",
+                      "applyUrl": "https://jobs.ashbyhq.com/co/no-sec",
+                      "publishedDate": "2024-07-03"
+                    }
+                  ]
+                }
+                """;
+        stubFor(get(urlPathMatching("/posting-api/job-board/.*"))
+                .willReturn(okJson(json)));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.ASHBY)
+                .atsSlug("nosecco")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs().get(0).location()).isEqualTo("Hamburg");
+    }
+
+    @Test
+    void extract_nullPrimaryWithSecondaryLocations_usesSecondaryOnly() {
+        String json = """
+                {
+                  "jobs": [
+                    {
+                      "id": "null-primary",
+                      "title": "SRE",
+                      "location": null,
+                      "secondaryLocations": [
+                        {"location": "Vienna"},
+                        {"location": "Zurich"}
+                      ],
+                      "descriptionPlain": "Reliability.",
+                      "applyUrl": "https://jobs.ashbyhq.com/co/null-primary",
+                      "publishedDate": "2024-07-04"
+                    }
+                  ]
+                }
+                """;
+        stubFor(get(urlPathMatching("/posting-api/job-board/.*"))
+                .willReturn(okJson(json)));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.ASHBY)
+                .atsSlug("nullprimco")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs().get(0).location()).isEqualTo("Vienna, Zurich");
+    }
 }

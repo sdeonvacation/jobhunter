@@ -329,6 +329,52 @@ class LocationFilterImplTest {
         assertThat(filter.filter("san francisco").decision()).isEqualTo(FilterDecision.SKIP);
     }
 
+    // --- Multi-location comma-separated strings ---
+
+    @Test
+    void multiLocation_targetAmongNonTarget_keep() {
+        // Berlin (DE) is target, even though Belgrade (RS) and London (GB) are not
+        var result = filter.filter("Belgrade, London, Berlin");
+        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+        assertThat(result.countryIso()).isEqualTo("DE");
+    }
+
+    @Test
+    void multiLocation_allNonTarget_skip() {
+        var result = filter.filter("New York, San Francisco");
+        assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
+        assertThat(result.reason()).contains("not a target country");
+    }
+
+    @Test
+    void multiLocation_targetFirst_keep() {
+        var result = filter.filter("Amsterdam, London, New York");
+        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+        assertThat(result.countryIso()).isEqualTo("NL");
+    }
+
+    @Test
+    void multiLocation_targetLast_keep() {
+        var result = filter.filter("London, New York, Munich");
+        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+        assertThat(result.countryIso()).isEqualTo("DE");
+    }
+
+    @Test
+    void multiLocation_remotePatternStillWorksFirst() {
+        var result = filter.filter("Remote - EU");
+        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+        assertThat(result.countryIso()).isEqualTo("REMOTE_EU");
+    }
+
+    @Test
+    void multiLocation_singleSegmentStillWorks() {
+        // No comma — single segment behaves same as before
+        var result = filter.filter("Berlin");
+        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+        assertThat(result.countryIso()).isEqualTo("DE");
+    }
+
     // --- unknownAction=keep ---
 
     @Nested

@@ -70,17 +70,44 @@ public class LocationFilterImpl implements LocationFilter {
             return LocationFilterResult.keep("REMOTE_EU");
         }
 
-        // 2. Resolve free-text location to ISO2 country code
-        Optional<String> iso = cityCountryResolver.resolve(location);
-        if (iso.isPresent()) {
-            String code = iso.get();
-            if (cityCountryResolver.isTargetCountry(code)) {
-                return LocationFilterResult.keep(code);
-            }
-            return LocationFilterResult.skip("location: " + code + " not a target country");
+        // 2. Try full string first (handles "Los Angeles, CA" as a single location)
+        Optional<String> fullIso = cityCountryResolver.resolve(location);
+        if (fullIso.isPresent() && cityCountryResolver.isTargetCountry(fullIso.get())) {
+            return LocationFilterResult.keep(fullIso.get());
         }
 
-        // 3. Unknown location — apply configured policy
+        // 3. Multi-location: resolve each comma-separated segment; keep if ANY is a target country
+        //    Skip per-segment splitting for "City, STATE" patterns (2-letter suffix = US state)
+        String[] segments = location.split(",");
+        String firstResolvedNonTarget = fullIso.orElse(null);
+
+        boolean isMultiCity = segments.length > 1
+                && !(segments.length == 2 && segments[1].trim().length() <= 2);
+
+        if (isMultiCity) {
+            for (String segment : segments) {
+                String trimmed = segment.trim();
+                if (trimmed.isEmpty()) continue;
+
+                Optional<String> iso = cityCountryResolver.resolve(trimmed);
+                if (iso.isPresent()) {
+                    String code = iso.get();
+                    if (cityCountryResolver.isTargetCountry(code)) {
+                        return LocationFilterResult.keep(code);
+                    }
+                    if (firstResolvedNonTarget == null) {
+                        firstResolvedNonTarget = code;
+                    }
+                }
+            }
+        }
+
+        // All resolved but none matched a target country
+        if (firstResolvedNonTarget != null) {
+            return LocationFilterResult.skip("location: " + firstResolvedNonTarget + " not a target country");
+        }
+
+        // 3. No segment resolved — apply configured policy
         if ("keep".equalsIgnoreCase(unknownAction)) {
             return LocationFilterResult.keep(null);
         }
