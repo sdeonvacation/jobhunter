@@ -25,6 +25,8 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @RestController
 @RequestMapping("/api/companies")
@@ -120,10 +122,12 @@ public class CompanyController {
                     .stream().anyMatch(ep -> ep.getUrl().equalsIgnoreCase(request.careersUrl()));
             if (!endpointExists) {
                 AtsType atsType = request.atsType() != null ? request.atsType() : AtsType.UNKNOWN;
+                String slug = extractSlugFromUrl(request.careersUrl());
                 CareerEndpoint endpoint = CareerEndpoint.builder()
                         .company(company)
                         .url(request.careersUrl())
                         .atsType(atsType)
+                        .atsSlug(slug)
                         .confidence(Confidence.MEDIUM)
                         .verified(false)
                         .isActive(true)
@@ -155,4 +159,27 @@ public class CompanyController {
     public record AddCompanyRequest(String name, String domain, String country, String careersUrl, AtsType atsType) {}
 
     public record PriorityRequest(int priority) {}
+
+    private static final Pattern[] SLUG_PATTERNS = {
+            Pattern.compile("https?://boards(?:-api)?\\.greenhouse\\.io/(?:v1/boards/)?([\\w-]+)/?.*"),
+            Pattern.compile("https?://jobs\\.eu\\.lever\\.co/([\\w-]+)/?.*"),
+            Pattern.compile("https?://jobs\\.lever\\.co/([\\w-]+)/?.*"),
+            Pattern.compile("https?://jobs\\.ashbyhq\\.com/([\\w-]+)/?.*"),
+            Pattern.compile("https?://([\\w-]+)\\.recruitee\\.com/?.*"),
+            Pattern.compile("https?://([\\w-]+)\\.jobs\\.personio\\.de/?.*"),
+            Pattern.compile("https?://([\\w-]+)\\.join\\.com/?.*"),
+            Pattern.compile("https?://([\\w-]+)\\.pinpointhq\\.com/?.*"),
+            Pattern.compile("https?://(?!boards)([\\w-]+)\\.greenhouse\\.io/?.*"),
+    };
+
+    static String extractSlugFromUrl(String url) {
+        if (url == null || url.isBlank()) return null;
+        for (Pattern pattern : SLUG_PATTERNS) {
+            Matcher matcher = pattern.matcher(url);
+            if (matcher.matches()) {
+                return matcher.group(1);
+            }
+        }
+        return null;
+    }
 }
