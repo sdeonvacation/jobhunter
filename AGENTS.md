@@ -182,7 +182,25 @@ DOCKER_HOST=unix://$HOME/.colima/default/docker.sock docker compose logs db --ta
 # Should show: "database system is ready to accept connections"
 ```
 
-### Step 2: Start API (via launchd)
+### Step 2: Start Full Dev Stack (preferred)
+
+```bash
+make dev        # starts DB + API + Dashboard + MCP; sources ~/.zshenv for AI keys
+make restart    # rebuild JAR and restart all services
+make stop       # stop all (DB left running)
+make status     # check what's running
+make logs       # tail API log
+make logs-all   # tail all service logs
+```
+
+Services run as background processes via `scripts/dev.sh`. Logs in `/tmp/jobhunter/*.log`.
+
+The `make dev` / `make restart` approach is preferred over launchd plists. It:
+- Sources `~/.zshenv` for `JOBHUNTER_AI_*` env vars
+- Runs the fat JAR directly (not via Gradle bootRun)
+- Auto-waits for API readiness before starting dependent services
+
+### Step 2 (alternative): Start API via launchd
 
 ```bash
 launchctl bootstrap gui/$(id -u) /tmp/dev.jobhunter.api.plist
@@ -199,7 +217,7 @@ launchctl bootout gui/$(id -u)/dev.jobhunter.api
 launchctl bootstrap gui/$(id -u) /tmp/dev.jobhunter.api.plist
 ```
 
-### Step 3: Start Dashboard (via launchd)
+### Step 3: Start Dashboard (via launchd, only if not using `make dev`)
 
 ```bash
 launchctl bootstrap gui/$(id -u) /tmp/dev.jobhunter.dashboard.plist
