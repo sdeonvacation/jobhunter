@@ -43,6 +43,10 @@ public class AiCrawlScheduler implements Job {
 
     @Override
     public void execute(JobExecutionContext context) throws JobExecutionException {
+        runAiCrawl();
+    }
+
+    public void runAiCrawl() {
         if (!enabled) {
             log.debug("AI crawl disabled, skipping");
             return;

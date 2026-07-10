@@ -17,6 +17,7 @@ import dev.jobhunter.repository.CareerEndpointRepository;
 import dev.jobhunter.repository.JobPostingRepository;
 import dev.jobhunter.repository.MatchScoreRepository;
 import dev.jobhunter.repository.OpportunityScoreRepository;
+import dev.jobhunter.scheduler.AiCrawlScheduler;
 import dev.jobhunter.scheduler.PipelineScheduler;
 import dev.jobhunter.scheduler.ScoringScheduler;
 import dev.jobhunter.filter.FilterResult;
@@ -47,6 +48,7 @@ public class AdminController {
     private final ScoringScheduler scoringScheduler;
     private final DiscoveryService discoveryService;
     private final PipelineScheduler pipelineScheduler;
+    private final AiCrawlScheduler aiCrawlScheduler;
     private final AggregatorIngestionService aggregatorIngestionService;
     private final AggregatorRunRepository aggregatorRunRepository;
     private final MatchScoreRepository matchScoreRepository;
@@ -61,6 +63,7 @@ public class AdminController {
     public AdminController(CrawlService crawlService, CareerEndpointRepository careerEndpointRepository,
                            ScoringScheduler scoringScheduler, DiscoveryService discoveryService,
                            PipelineScheduler pipelineScheduler,
+                           AiCrawlScheduler aiCrawlScheduler,
                            AggregatorIngestionService aggregatorIngestionService,
                            AggregatorRunRepository aggregatorRunRepository,
                            MatchScoreRepository matchScoreRepository,
@@ -76,6 +79,7 @@ public class AdminController {
         this.scoringScheduler = scoringScheduler;
         this.discoveryService = discoveryService;
         this.pipelineScheduler = pipelineScheduler;
+        this.aiCrawlScheduler = aiCrawlScheduler;
         this.aggregatorIngestionService = aggregatorIngestionService;
         this.aggregatorRunRepository = aggregatorRunRepository;
         this.matchScoreRepository = matchScoreRepository;
@@ -92,6 +96,12 @@ public class AdminController {
     public ResponseEntity<String> triggerPipeline() {
         CompletableFuture.runAsync(pipelineScheduler::runPipeline);
         return ResponseEntity.accepted().body("Pipeline triggered");
+    }
+
+    @PostMapping("/crawl/custom")
+    public ResponseEntity<String> triggerAiCrawl() {
+        CompletableFuture.runAsync(aiCrawlScheduler::runAiCrawl);
+        return ResponseEntity.accepted().body("AI crawl triggered");
     }
 
     @PostMapping("/crawl")
