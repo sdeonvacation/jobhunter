@@ -172,6 +172,7 @@ filters:
       - "head of"
       - "value engineer"
       - "customer impact"
+      - "embedded"
   location:
     remote-patterns:
       - "^(remote|remote\\s*-\\s*(eu|europe|emea|global|worldwide|dach|ger(many)?))$"
@@ -349,8 +350,8 @@ scoring:
     react: 0.3
   seniority-discount:
     enabled: true
-    keywords: ["senior", "staff", "expert"]
-    multiplier: 0.70
+    keywords: ["senior"]
+    multiplier: 0.85
   skill-variants:
     java: ["\\bjava\\b", "jvm"]
     spring boot: ["spring", "springboot"]
