@@ -219,4 +219,18 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     @Query("SELECT j FROM JobPosting j WHERE j.source = :source AND j.applyUrl LIKE '%berlinstartupjobs.com%' AND j.isActive = true")
     List<JobPosting> findJobsWithUnresolvedBsjUrl(@Param("source") JobSource source);
+
+    // --- Projections for AggregatorEndpointDiscoverer ---
+
+    interface ApplyUrlProjection {
+        String getApplyUrl();
+        UUID getCompanyId();
+    }
+
+    @Query(value = "SELECT j.apply_url AS applyUrl, j.company_id AS companyId FROM job_posting j " +
+           "WHERE j.source = :source AND j.language_filter = 'KEEP' AND j.apply_url IS NOT NULL " +
+           "AND j.discovered_date = :discoveredDate AND j.is_active = true",
+           nativeQuery = true)
+    List<ApplyUrlProjection> findApplyUrlsBySourceAndDate(@Param("source") String source,
+                                                          @Param("discoveredDate") LocalDate discoveredDate);
 }

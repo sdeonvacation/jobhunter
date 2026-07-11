@@ -53,4 +53,17 @@ public interface CareerEndpointRepository extends JpaRepository<CareerEndpoint, 
     long countByIsActiveTrueAndLastCrawlStatus(dev.jobhunter.model.enums.CrawlStatus status);
 
     long countByIsActiveTrueAndLastCrawlStatusIsNull();
+
+    // --- Projections for AggregatorEndpointDiscoverer ---
+
+    interface EndpointKeyProjection {
+        UUID getCompanyId();
+        String getAtsType();
+        String getAtsSlug();
+    }
+
+    @Query(value = "SELECT ce.company_id AS companyId, ce.ats_type AS atsType, ce.ats_slug AS atsSlug " +
+           "FROM career_endpoint ce WHERE ce.company_id IN :companyIds",
+           nativeQuery = true)
+    List<EndpointKeyProjection> findEndpointKeysByCompanyIds(@Param("companyIds") List<UUID> companyIds);
 }

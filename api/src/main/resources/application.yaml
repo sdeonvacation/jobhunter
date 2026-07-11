@@ -49,6 +49,8 @@ indeed:
   npx-path: /opt/homebrew/bin/npx
 
 discovery:
+  auto-endpoint:
+    enabled: true
   schedule: "0 0 */6 * * ?"
   providers:
     jobspy:
