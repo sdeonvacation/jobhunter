@@ -6,8 +6,9 @@
 
 SHELL := /bin/zsh
 PROJECT_ROOT := $(shell pwd)
-JAVA_21_HOME := $(shell ls -d $$HOME/.gradle/jdks/*/jdk-21*/Contents/Home 2>/dev/null | head -1)
-JAVA_HOME := $(or $(JAVA_21_HOME),$(JAVA_HOME))
+JAVA_21_HOME := $(shell test -d "$$HOME/.gradle/jdks" && ls -d $$HOME/.gradle/jdks/*/jdk-21*/Contents/Home 2>/dev/null | head -1)
+JAVA_HOME_BREW := $(shell /usr/libexec/java_home -v 21 2>/dev/null)
+JAVA_HOME := $(or $(JAVA_21_HOME),$(JAVA_HOME),$(JAVA_HOME_BREW))
 
 .PHONY: dev stop restart status logs logs-all build build-api build-dashboard test clean
 

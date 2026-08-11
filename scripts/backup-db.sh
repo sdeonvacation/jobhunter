@@ -1,13 +1,13 @@
 #!/bin/bash
 # Daily PostgreSQL backup to iCloud Drive
-# Keeps last 7 days of backups, deletes older ones.
+# Keeps backups from the last 30 days, deletes older ones.
 
 set -euo pipefail
 
 BACKUP_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/jobhunter-backups"
 TIMESTAMP=$(date +%Y-%m-%d_%H%M%S)
 BACKUP_FILE="$BACKUP_DIR/jobhunter_${TIMESTAMP}.sql.gz"
-RETENTION_DAYS=7
+RETENTION_DAYS=30
 
 DB_HOST=localhost
 DB_PORT=5435

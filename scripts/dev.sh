@@ -7,7 +7,10 @@ source ~/.zshenv 2>/dev/null || true
 PROJECT_ROOT="${0:A:h:h}"
 LOG_DIR=/tmp/jobhunter
 DB_PORT=5435
-JAVA_HOME="${JAVA_HOME:-$(ls -d $HOME/.gradle/jdks/*/jdk-21*/Contents/Home 2>/dev/null | head -1)}"
+if [[ -d "$HOME/.gradle/jdks" ]]; then
+  JAVA_HOME="${JAVA_HOME:-$(ls -d $HOME/.gradle/jdks/*/jdk-21*/Contents/Home 2>/dev/null | head -1)}"
+fi
+JAVA_HOME="${JAVA_HOME:-$(/usr/libexec/java_home -v 21 2>/dev/null)}"
 API_JAR="$PROJECT_ROOT/api/build/libs/jobhunter-api-0.0.1-SNAPSHOT.jar"
 DOCKER_HOST="${DOCKER_HOST:-unix://$HOME/.colima/default/docker.sock}"
 
@@ -48,8 +51,13 @@ start_mcp() {
 }
 
 start_api() {
-  if curl -sf http://localhost:8080/api/admin/health >/dev/null 2>&1; then
-    echo "API already running"
+  # Check if already running (read port from file if available)
+  local existing_port=""
+  if [[ -f /tmp/jobhunter-api.port ]]; then
+    existing_port=$(cat /tmp/jobhunter-api.port)
+  fi
+  if [[ -n "$existing_port" ]] && curl -sf "http://localhost:$existing_port/api/admin/health" >/dev/null 2>&1; then
+    echo "API already running on port $existing_port"
     return
   fi
 
@@ -65,18 +73,29 @@ start_api() {
     -- "$PROJECT_ROOT/scripts/start-api.sh"
 
   printf "Waiting for API..."
-  for i in {1..40}; do
-    curl -sf http://localhost:8080/api/admin/health >/dev/null 2>&1 && break
+  local api_port=""
+  for i in {1..90}; do
+    # Extract port from log if not yet found
+    if [[ -z "$api_port" ]]; then
+      api_port=$(grep -o 'Tomcat started on port [0-9]*' "$LOG_DIR/api.log" 2>/dev/null | tail -n1 | grep -o '[0-9]*' || true)
+    fi
+    if [[ -n "$api_port" ]]; then
+      break
+    fi
     printf "."; sleep 2
   done
-  curl -sf http://localhost:8080/api/admin/health >/dev/null 2>&1 && echo " ready" || { echo " FAILED (check: tail $LOG_DIR/api.log)"; exit 1; }
+
+  if [[ -n "$api_port" ]]; then
+    echo " ready"
+    echo "$api_port" > /tmp/jobhunter-api.port
+    echo "VITE_API_URL=http://localhost:$api_port" > "$PROJECT_ROOT/dashboard/.env"
+  else
+    echo " FAILED (check: tail $LOG_DIR/api.log)"
+    exit 1
+  fi
 }
 
 start_dashboard() {
-  if curl -sf http://localhost:3000 >/dev/null 2>&1; then
-    echo "Dashboard already running"
-    return
-  fi
   echo "Starting Dashboard..."
   launchctl remove dev.jobhunter.dashboard 2>/dev/null || true
   launchctl submit -l dev.jobhunter.dashboard \
@@ -97,7 +116,13 @@ stop_all() {
 show_status() {
   echo "=== JobHunter Status ==="
   printf "  %-12s " "DB:"; nc -z localhost $DB_PORT 2>/dev/null && echo "✓ running" || echo "✗ stopped"
-  printf "  %-12s " "API:"; curl -sf http://localhost:8080/api/admin/health >/dev/null 2>&1 && echo "✓ running" || echo "✗ stopped"
+  printf "  %-12s " "API:"
+  if [[ -f /tmp/jobhunter-api.port ]]; then
+    local port=$(cat /tmp/jobhunter-api.port)
+    curl -sf "http://localhost:$port/api/admin/health" >/dev/null 2>&1 && echo "✓ running (port $port)" || echo "✗ stopped"
+  else
+    echo "✗ stopped"
+  fi
   printf "  %-12s " "Dashboard:"; curl -sf http://localhost:3000 >/dev/null 2>&1 && echo "✓ running" || echo "✗ stopped"
   printf "  %-12s " "MCP:"; nc -z localhost 8000 2>/dev/null && echo "✓ running" || echo "✗ stopped"
 }
@@ -112,7 +137,7 @@ case "${1:-dev}" in
     echo "╭──────────────────────────────────────╮"
     echo "│  JobHunter dev stack running          │"
     echo "├──────────────────────────────────────┤"
-    echo "│  API:       http://localhost:8080     │"
+    echo "│  API:       http://localhost:$(cat /tmp/jobhunter-api.port 2>/dev/null || echo '???')     │"
     echo "│  Dashboard: http://localhost:3000     │"
     echo "│  MCP:       http://localhost:8000     │"
     echo "├──────────────────────────────────────┤"
