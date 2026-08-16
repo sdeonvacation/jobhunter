@@ -104,15 +104,7 @@ public class CliStrategy implements FetchStrategy {
         outputFile.deleteOnExit();
 
         try {
-            List<String> command = new ArrayList<>(List.of(
-                    npxPath, "-y", "jobspy-js",
-                    "-s", "indeed",
-                    "-q", keyword,
-                    "-l", location,
-                    "-n", String.valueOf(resultsWanted),
-                    "-c", location.toLowerCase(),
-                    "-o", outputFile.getAbsolutePath()
-            ));
+            List<String> command = buildCommand(keyword, location, resultsWanted, outputFile);
             if (hoursOld > 0) {
                 command.add("--hours-old");
                 command.add(String.valueOf(hoursOld));
@@ -152,6 +144,27 @@ public class CliStrategy implements FetchStrategy {
         } finally {
             outputFile.delete();
         }
+    }
+
+    List<String> buildCommand(String keyword, String location, int resultsWanted, File outputFile) {
+        List<String> command = new ArrayList<>(List.of(
+                npxPath, "-y", "jobspy-js",
+                "-s", "indeed",
+                "-q", keyword,
+                "-l", location,
+                "-n", String.valueOf(resultsWanted)
+        ));
+        if ("remote".equalsIgnoreCase(location.trim())) {
+            // jobspy-js supports remote searches with -r, while remote is not
+            // a valid value for its country_indeed option.
+            command.add("-r");
+        } else {
+            command.add("-c");
+            command.add(location.toLowerCase());
+        }
+        command.add("-o");
+        command.add(outputFile.getAbsolutePath());
+        return command;
     }
 
     List<RawAggregatorJob> mapToRawJobs(List<JobspyResult> results) {

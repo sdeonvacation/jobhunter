@@ -308,6 +308,20 @@ class McpStrategyTest {
         }
 
         @Test
+        @DisplayName("Should strip trailing verification suffix from reference titles")
+        void shouldNormalizeReferenceTitle() {
+            String text = "Backend Engineer - Lending\nAcme Bank\nBerlin (Remote)\n";
+            JsonNode response = buildSearchResponseWithRefs(text,
+                    List.<String[]>of(new String[]{"111", "Backend Engineer - Lending with verification"}));
+
+            List<RawAggregatorJob> jobs = strategy.parseSearchResponse(response);
+
+            assertThat(jobs).singleElement().extracting(RawAggregatorJob::title)
+                    .isEqualTo("Backend Engineer - Lending");
+            assertThat(jobs.get(0).companyName()).isEqualTo("Acme Bank");
+        }
+
+        @Test
         @DisplayName("Should handle references in different order than text")
         void shouldHandleDifferentOrder() {
             String text = "Engineer A\nCompany1\nBerlin (Remote)\n\n"

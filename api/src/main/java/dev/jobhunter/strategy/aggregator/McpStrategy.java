@@ -32,6 +32,8 @@ public class McpStrategy implements FetchStrategy {
 
     private static final Pattern RELATIVE_TIME =
             Pattern.compile("(\\d+)\\s+(second|minute|hour|day|week|month|year)s?\\s+ago", Pattern.CASE_INSENSITIVE);
+    private static final Pattern VERIFICATION_SUFFIX =
+            Pattern.compile("\\s+with verification\\s*$", Pattern.CASE_INSENSITIVE);
 
     private final HttpMcpClient httpMcpClient;
     private final LinkedInRateLimiter rateLimiter;
@@ -189,13 +191,17 @@ public class McpStrategy implements FetchStrategy {
         for (JsonNode ref : references) {
             if (!"job".equals(ref.path("kind").asText(""))) continue;
             String url = ref.path("url").asText("");
-            String title = ref.path("text").asText("").trim();
+            String title = normalizeReferenceTitle(ref.path("text").asText(""));
             String jobId = extractJobIdFromUrl(url);
             if (jobId != null && !title.isBlank()) {
                 refs.add(new ReferenceJob(jobId, title));
             }
         }
         return refs;
+    }
+
+    private String normalizeReferenceTitle(String title) {
+        return VERIFICATION_SUFFIX.matcher(title.trim()).replaceFirst("").trim();
     }
 
     /**

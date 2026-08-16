@@ -9,7 +9,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.time.Duration;
 import java.util.Map;
@@ -261,8 +260,8 @@ class HttpMcpClientImplTest {
     }
 
     @Test
-    @DisplayName("Should not retry on 404 or other 4xx (not stale session)")
-    void shouldNotRetryOnOther4xx() {
+    @DisplayName("Should retry on 404 (stale session) by re-initializing and succeeding")
+    void shouldRetryOnStaleSession404() {
         ObjectNode initResponse = objectMapper.createObjectNode();
         initResponse.put("jsonrpc", "2.0");
         initResponse.put("id", 1);
@@ -278,16 +277,37 @@ class HttpMcpClientImplTest {
                         .withBody(initResponse.toString()))
                 .willSetStateTo("initialized"));
 
+        ObjectNode successResponse = objectMapper.createObjectNode();
+        successResponse.put("jsonrpc", "2.0");
+        successResponse.put("id", 2);
+        ObjectNode result = objectMapper.createObjectNode();
+        result.put("recovered", true);
+        successResponse.set("result", result);
+
         stubFor(post("/mcp")
                 .inScenario("not-found")
                 .whenScenarioStateIs("initialized")
-                .willReturn(aResponse().withStatus(404).withBody("Not Found")));
+                .willReturn(aResponse().withStatus(404).withBody("Not Found"))
+                .willSetStateTo("session-cleared"));
 
-        assertThatThrownBy(() -> client.callTool("nonexistent_tool", Map.of()))
-                .isInstanceOf(WebClientResponseException.class);
+        stubFor(post("/mcp")
+                .inScenario("not-found")
+                .whenScenarioStateIs("session-cleared")
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withHeader(MCP_SESSION_HEADER, "session-new")
+                        .withBody(initResponse.toString()))
+                .willSetStateTo("re-initialized"));
 
-        // Only 2 requests: init + one failed tool call (no retry)
-        verify(2, postRequestedFor(urlEqualTo("/mcp")));
+        stubFor(post("/mcp")
+                .inScenario("not-found")
+                .whenScenarioStateIs("re-initialized")
+                .willReturn(okJson(successResponse.toString())));
+
+        assertThat(client.callTool("nonexistent_tool", Map.of()).get("recovered").asBoolean()).isTrue();
+
+        verify(4, postRequestedFor(urlEqualTo("/mcp")));
     }
 
     /**

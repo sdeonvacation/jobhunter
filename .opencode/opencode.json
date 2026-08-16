@@ -5,7 +5,7 @@
       "type": "remote",
       "url": "http://localhost:3001/mcp",
       "headers": {
-        "x-api-key": "peGdnDQMCtxEcENhYcsakNBPzfnWYaHvxEZuBYBfViGXnwNFvKsbanvTTloDBZYO"
+        "x-api-key": "PjOuxhbVOYqYFUOCYrAQnRcbbbjwGrGlsuImFWQqyrNcGSIxnyOjtENcMLGoQvny"
       },
       "enabled": true
     },
@@ -13,10 +13,10 @@
       "type": "local",
       "command": [
         "node",
-        "/Users/i570749/projects/jobhunter/mcp-server/dist/index.js"
+        "/Users/maurya/projects/jobhunter/mcp-server/dist/index.js"
       ],
       "environment": {
-        "JOBHUB_API_URL": "http://localhost:8080"
+        "JOBHUNTER_API_URL": "http://localhost:8089"
       },
       "enabled": true
     },

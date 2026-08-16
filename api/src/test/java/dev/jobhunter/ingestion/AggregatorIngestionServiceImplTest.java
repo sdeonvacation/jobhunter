@@ -63,8 +63,12 @@ class AggregatorIngestionServiceImplTest {
     }
 
     private SourceConfig createSourceConfig(JobSource source, DiscoverySource discovery) {
+        return createSourceConfig("test-source", source, discovery);
+    }
+
+    private SourceConfig createSourceConfig(String name, JobSource source, DiscoverySource discovery) {
         return new SourceConfig() {
-            @Override public String name() { return "test-source"; }
+            @Override public String name() { return name; }
             @Override public JobSource sourceType() { return source; }
             @Override public DiscoverySource discoverySource() { return discovery; }
             @Override public FetchStrategy strategy() { return fetchStrategy; }
@@ -166,7 +170,7 @@ class AggregatorIngestionServiceImplTest {
 
     @Test
     void ingest_atsJobWithSameFingerprint_enrichesExisting() {
-        var sourceConfig = createSourceConfig(JobSource.LINKEDIN, DiscoverySource.LINKEDIN);
+        var sourceConfig = createSourceConfig("linkedin", JobSource.LINKEDIN, DiscoverySource.LINKEDIN);
         var job = createJob("li-123", "Backend Engineer", "Acme Corp");
         var fetchResult = FetchResult.success(List.of(job), Duration.ofMillis(100));
 
@@ -186,14 +190,15 @@ class AggregatorIngestionServiceImplTest {
         when(jobPostingRepository.findAtsJobsByFingerprint("fingerprint-xyz", JobSource.aggregators()))
                 .thenReturn(List.of(existingAtsJob));
         when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
-        when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
+        when(aggregatorRunRepository.findBySourceName("linkedin")).thenReturn(Optional.empty());
         when(aggregatorRunRepository.save(any(AggregatorRun.class))).thenAnswer(i -> i.getArgument(0));
 
         IngestionStats stats = service.ingest(sourceConfig);
 
         assertThat(stats.enriched()).isEqualTo(1);
         assertThat(stats.created()).isZero();
-        assertThat(existingAtsJob.getExternalLinks()).containsEntry("test-source", "https://apply.example.com/li-123");
+        assertThat(existingAtsJob.getSource()).isEqualTo(JobSource.GREENHOUSE);
+        assertThat(existingAtsJob.getExternalLinks()).containsEntry("linkedin", "https://apply.example.com/li-123");
     }
 
     @Test

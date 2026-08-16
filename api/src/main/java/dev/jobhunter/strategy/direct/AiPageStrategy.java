@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.net.URI;
@@ -26,6 +27,7 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.HashSet;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -191,7 +193,47 @@ public class AiPageStrategy implements FetchStrategy {
             return FetchResult.error("HTTP " + e.getStatusCode(), elapsed(start));
         } catch (Exception e) {
             log.error("GenericAI [{}]: extraction failed - {}", endpoint.getUrl(), e.getMessage(), e);
-            return FetchResult.error(e.getClass().getSimpleName() + ": " + e.getMessage(), elapsed(start));
+            return FetchResult.error(formatException(e), elapsed(start));
+        }
+    }
+
+    private String formatException(Exception exception) {
+        String exceptionType = exception instanceof WebClientRequestException
+                ? WebClientRequestException.class.getSimpleName()
+                : exception.getClass().getSimpleName();
+        StringBuilder details = new StringBuilder(exceptionType);
+        appendMessage(details, exception.getMessage());
+
+        if (exception instanceof WebClientRequestException requestException) {
+            details.append(" (URI: ").append(safeUri(requestException.getUri())).append(")");
+        }
+
+        Throwable cause = exception.getCause();
+        Set<Throwable> seen = new HashSet<>();
+        while (cause != null && seen.add(cause)) {
+            if (cause.getMessage() != null && !cause.getMessage().isBlank()) {
+                details.append("; cause: ").append(cause.getClass().getSimpleName())
+                        .append(": ").append(cause.getMessage());
+                break;
+            }
+            cause = cause.getCause();
+        }
+        return details.toString();
+    }
+
+    private void appendMessage(StringBuilder details, String message) {
+        if (message != null && !message.isBlank()) {
+            details.append(": ").append(message);
+        }
+    }
+
+    private String safeUri(URI uri) {
+        if (uri == null) return "unknown";
+        try {
+            return new URI(uri.getScheme(), uri.getUserInfo(), uri.getHost(), uri.getPort(),
+                    uri.getPath(), uri.getQuery() == null ? null : "[redacted]", null).toString();
+        } catch (Exception ignored) {
+            return uri.getScheme() + "://" + uri.getHost() + uri.getPath();
         }
     }
 

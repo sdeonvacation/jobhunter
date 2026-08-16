@@ -45,7 +45,7 @@ start_mcp() {
   launchctl remove dev.jobhunter.mcp 2>/dev/null || true
   launchctl submit -l dev.jobhunter.mcp \
     -o "$LOG_DIR/mcp.log" -e "$LOG_DIR/mcp.log" \
-    -- "$uvx_path" mcp-server-linkedin@latest --transport streamable-http --host 0.0.0.0 --port 8000 --log-level INFO
+    -- "$uvx_path" mcp-server-linkedin@latest --user-data-dir "$HOME/.linkedin-mcp/profile" --transport streamable-http --host 0.0.0.0 --port 8000 --log-level INFO
   for i in {1..10}; do nc -z localhost 8000 2>/dev/null && break; sleep 1; done
   nc -z localhost 8000 2>/dev/null && echo "  MCP ready" || echo "  WARN: MCP not responding"
 }
@@ -68,6 +68,11 @@ start_api() {
 
   echo "Starting API..."
   launchctl remove dev.jobhunter.api 2>/dev/null || true
+  for i in {1..20}; do
+    launchctl print "gui/$(id -u)/dev.jobhunter.api" >/dev/null 2>&1 || break
+    sleep 0.1
+  done
+  : > "$LOG_DIR/api.log"
   launchctl submit -l dev.jobhunter.api \
     -o "$LOG_DIR/api.log" -e "$LOG_DIR/api.log" \
     -- "$PROJECT_ROOT/scripts/start-api.sh"

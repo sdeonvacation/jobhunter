@@ -14,8 +14,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 
+import java.io.IOException;
+import java.net.URI;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -239,6 +246,50 @@ class AiPageStrategyTest {
     }
 
     @Test
+    void extract_requestFailureWithNullMessage_includesUriAndCause() {
+        when(aiProvider.isAvailable()).thenReturn(true);
+        extractor.setFetchException(new WebClientRequestException(
+                new IOException("Connection refused"), HttpMethod.GET,
+                URI.create("https://n26.example/careers?token=secret"), new HttpHeaders()) {
+            @Override
+            public String getMessage() {
+                return null;
+            }
+        });
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://n26.example/careers?token=secret")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
+        assertThat(result.errorMessage()).contains("WebClientRequestException")
+                .contains("URI: https://n26.example/careers?[redacted]")
+                .contains("IOException: Connection refused")
+                .doesNotContain("WebClientRequestException: null")
+                .doesNotContain("secret");
+    }
+
+    @Test
+    void extract_httpResponseFailure_keepsHttpStatusError() {
+        when(aiProvider.isAvailable()).thenReturn(true);
+        extractor.setFetchException(WebClientResponseException.create(
+                503, "Service Unavailable", HttpHeaders.EMPTY, new byte[0], null));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://example.com/careers")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
+        assertThat(result.errorMessage()).isEqualTo("HTTP 503 SERVICE_UNAVAILABLE");
+    }
+
+    @Test
     void extract_jobsWithBlankTitles_filteredOut() {
         when(aiProvider.isAvailable()).thenReturn(true);
         extractor.setHtmlResponse("<html><body><main><p>Jobs page</p></main></body></html>");
@@ -407,12 +458,7 @@ class AiPageStrategyTest {
 
     @Test
     void extract_jsonApiTrue_usesFetchJson() {
-        when(aiProvider.isAvailable()).thenReturn(true);
         extractor.setJsonResponse("{\"items\":[{\"id\":\"JOB-1\",\"title\":\"Engineer\",\"city\":[{\"label\":\"Berlin\",\"key\":\"berlin\"}]}]}");
-        when(aiProvider.extract(anyString(), anyString(), eq(AiExtractionResponse.class)))
-                .thenReturn(new AiExtractionResponse(List.of(
-                        new AiExtractionResponse.AiJobEntry("Engineer", "Berlin", "https://careers.example.com/JOB-1")
-                )));
 
         var endpoint = CareerEndpoint.builder()
                 .atsType(AtsType.CUSTOM)
@@ -428,7 +474,6 @@ class AiPageStrategyTest {
 
     @Test
     void extract_jsonApiTrue_emptyResponse_returnsEmpty() {
-        when(aiProvider.isAvailable()).thenReturn(true);
         extractor.setJsonResponse(null);
 
         var endpoint = CareerEndpoint.builder()
@@ -691,21 +736,12 @@ class AiPageStrategyTest {
 
     @Test
     void extract_replyStyleJsonApi_extractsJobsWithCityArray() {
-        when(aiProvider.isAvailable()).thenReturn(true);
-
         extractor.setJsonResponse("""
                 {"total":{"value":3},"items":[
                   {"id":"JOB-1","title":"Senior Backend Engineer","city":[{"label":"Berlin","key":"berlin"}],"company":{"label":"Cluster Reply","key":"cluster_reply"}},
                   {"id":"JOB-2","title":"Junior AI Engineer","city":[{"label":"München","key":"munchen"}],"company":{"label":"Axulus Reply","key":"axulus_reply"}},
                   {"id":"JOB-3","title":"DevOps Engineer","city":[{"label":"Hamburg","key":"hamburg"}],"company":{"label":"Reply","key":"reply"}}
                 ]}""");
-
-        when(aiProvider.extract(anyString(), anyString(), eq(AiExtractionResponse.class)))
-                .thenReturn(new AiExtractionResponse(List.of(
-                        new AiExtractionResponse.AiJobEntry("Senior Backend Engineer", "Berlin", "https://www.reply.com/de/about/careers/de/job-details/JOB-1"),
-                        new AiExtractionResponse.AiJobEntry("Junior AI Engineer", "München", "https://www.reply.com/de/about/careers/de/job-details/JOB-2"),
-                        new AiExtractionResponse.AiJobEntry("DevOps Engineer", "Hamburg", "https://www.reply.com/de/about/careers/de/job-details/JOB-3")
-                )));
 
         var endpoint = CareerEndpoint.builder()
                 .atsType(AtsType.CUSTOM)
@@ -773,6 +809,7 @@ class AiPageStrategyTest {
 
         private String htmlResponse;
         private String jsonResponse;
+        private RuntimeException fetchException;
         int htmlFetchCount = 0;
         int jsonFetchCount = 0;
 
@@ -782,17 +819,25 @@ class AiPageStrategyTest {
 
         void setHtmlResponse(String html) { this.htmlResponse = html; }
         void setJsonResponse(String json) { this.jsonResponse = json; }
+        void setFetchException(RuntimeException exception) { this.fetchException = exception; }
 
         @Override
         String fetchHtml(String url) {
             htmlFetchCount++;
+            if (fetchException != null) throw fetchException;
             return htmlResponse;
         }
 
         @Override
         String fetchJson(String url) {
             jsonFetchCount++;
+            if (fetchException != null) throw fetchException;
             return jsonResponse;
+        }
+
+        @Override
+        String fetchJson(String url, Map<String, String> extraHeaders) {
+            return fetchJson(url);
         }
 
         /** Expose package-private firstNonNull for direct unit testing. */

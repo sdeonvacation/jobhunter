@@ -18,6 +18,9 @@ spring:
   liquibase:
     change-log: classpath:db/changelog/master.xml
 
+quartz:
+  startup-jitter-max-seconds: ${JOBHUNTER_STARTUP_JITTER_MAX_SECONDS:30}
+
 ai:
   provider: ${JOBHUNTER_AI_PROVIDER:anthropic}
   api-key: ${JOBHUNTER_AI_API_KEY:}
@@ -32,7 +35,7 @@ ai:
     tailoring-model: ${JOBHUNTER_AI_FALLBACK_TAILORING_MODEL:gemini-2.0-flash}
 
 ai-crawl:
-  schedule: "0 0 */8 * * ?"
+  schedule: "0 20 */8 * * ?"
   frequency-hours: 8
   batch-size: 150
   max-content-chars: 8000
@@ -51,7 +54,7 @@ indeed:
 discovery:
   auto-endpoint:
     enabled: true
-  schedule: "0 0 */6 * * ?"
+  schedule: "0 40 */6 * * ?"
   providers:
     jobspy:
       enabled: true
@@ -193,7 +196,7 @@ aggregator:
       visa-exempt: true
 
 server:
-  port: 0
+  port: 8089
 
 logging:
   level:

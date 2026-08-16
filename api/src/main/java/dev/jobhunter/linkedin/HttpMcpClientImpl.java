@@ -179,9 +179,12 @@ public class HttpMcpClientImpl implements HttpMcpClient {
             return false;
         }
         if (throwable instanceof WebClientResponseException wcre) {
-            if (wcre.getStatusCode().value() == 400) {
-                // Stale session — MCP server likely restarted, clear session to re-initialize on retry
-                log.warn("MCP returned 400 (stale session), resetting session for re-initialization");
+            if (wcre.getStatusCode().value() == 400
+                    || (wcre.getStatusCode().value() == 404 && mcpSessionId != null)) {
+                // A restarted streamable HTTP server invalidates the old session. FastMCP
+                // reports that stale session as 400 or 404 depending on the version.
+                log.warn("MCP returned {} (stale session), resetting session for re-initialization",
+                        wcre.getStatusCode().value());
                 mcpSessionId = null;
                 initAttempted.set(false);
                 return true;

@@ -7,7 +7,9 @@
     <key>ProgramArguments</key>
     <array>
         <string>__UVX_PATH__</string>
-        <string>linkedin-scraper-mcp@latest</string>
+        <string>mcp-server-linkedin@latest</string>
+        <string>--user-data-dir</string>
+        <string>__HOME__/.linkedin-mcp/profile</string>
         <string>--transport</string>
         <string>streamable-http</string>
         <string>--host</string>

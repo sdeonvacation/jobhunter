@@ -16,8 +16,35 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Instant;
+import java.util.Date;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.IntUnaryOperator;
+
 @Configuration
 public class QuartzConfig {
+
+    static final int MAX_STARTUP_JITTER_SECONDS = 30;
+
+    static int startupJitterSeconds(int maxSeconds, IntUnaryOperator randomInt) {
+        if (maxSeconds < 0 || maxSeconds > MAX_STARTUP_JITTER_SECONDS) {
+            throw new IllegalArgumentException(
+                    "Startup jitter must be between 0 and " + MAX_STARTUP_JITTER_SECONDS + " seconds");
+        }
+
+        int jitterSeconds = randomInt.applyAsInt(maxSeconds + 1);
+        if (jitterSeconds < 0 || jitterSeconds > maxSeconds) {
+            throw new IllegalArgumentException("Random startup jitter is outside the configured bounds");
+        }
+        return jitterSeconds;
+    }
+
+    private static Date startupTime(int maxJitterSeconds) {
+        int jitterSeconds = startupJitterSeconds(
+                maxJitterSeconds,
+                bound -> ThreadLocalRandom.current().nextInt(bound));
+        return Date.from(Instant.now().plusSeconds(jitterSeconds));
+    }
 
     // --- Pipeline (Crawl → LinkedIn → Scoring) ---
 
@@ -46,11 +73,14 @@ public class QuartzConfig {
     }
 
     @Bean
-    public Trigger pipelineStartupTrigger(JobDetail pipelineJobDetail) {
+    public Trigger pipelineStartupTrigger(
+            JobDetail pipelineJobDetail,
+            @Value("${quartz.startup-jitter-max-seconds:30}") int maxJitterSeconds
+    ) {
         return TriggerBuilder.newTrigger()
                 .forJob(pipelineJobDetail)
                 .withIdentity("pipelineStartupTrigger", "pipeline")
-                .startAt(new java.util.Date(System.currentTimeMillis() + 10_000))
+                .startAt(startupTime(maxJitterSeconds))
                 .build();
     }
 
@@ -185,11 +215,14 @@ public class QuartzConfig {
     }
 
     @Bean
-    public Trigger aiCrawlStartupTrigger(JobDetail aiCrawlJobDetail) {
+    public Trigger aiCrawlStartupTrigger(
+            JobDetail aiCrawlJobDetail,
+            @Value("${quartz.startup-jitter-max-seconds:30}") int maxJitterSeconds
+    ) {
         return TriggerBuilder.newTrigger()
                 .forJob(aiCrawlJobDetail)
                 .withIdentity("aiCrawlStartupTrigger", "ai-crawl")
-                .startAt(new java.util.Date(System.currentTimeMillis() + 30_000))
+                .startAt(startupTime(maxJitterSeconds))
                 .build();
     }
 
