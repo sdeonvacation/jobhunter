@@ -13,7 +13,7 @@ public enum JobSource {
     // Fallback
     UNKNOWN;
 
-    private static final List<JobSource> AGGREGATORS = List.of(LINKEDIN, INDEED, BERLIN_STARTUP_JOBS, ARBEITNOW, CAREERS_IN_GOTHENBURG, INSTAFFO, BUILTIN_EUROPE, JOBGETHER);
+    private static final List<JobSource> AGGREGATORS = List.of(LINKEDIN, INDEED, BERLIN_STARTUP_JOBS, ARBEITNOW, CAREERS_IN_GOTHENBURG, INSTAFFO, BUILTIN_EUROPE, JOBGETHER, STEPSTONE);
 
     public boolean isAggregator() {
         return AGGREGATORS.contains(this);

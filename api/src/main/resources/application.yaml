@@ -194,6 +194,18 @@ aggregator:
       frequency-hours: 8 # informational only
       max-results: 200
       visa-exempt: true
+    - name: stepstone
+      strategy: stepstone
+      job-source: STEPSTONE
+      discovery-source: STEPSTONE
+      url: "https://www.stepstone.de"
+      frequency-hours: 12
+      max-results: 100
+      config:
+        queries: "java developer,backend engineer,software engineer,kotlin developer"
+        cities: "berlin,muenchen,hamburg,frankfurt-am-main,koeln"
+        delayBetweenMs: "1500"
+        maxScrapePerRun: "40"
 
 server:
   port: 8089
