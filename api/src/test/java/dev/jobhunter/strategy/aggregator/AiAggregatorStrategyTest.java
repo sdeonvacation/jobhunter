@@ -112,7 +112,7 @@ class AiAggregatorStrategyTest {
                     """;
 
             when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(html));
-            when(aiProvider.generate(anyString(), anyString())).thenReturn(aiResponse);
+            when(aiProvider.generateExtraction(anyString(), anyString())).thenReturn(aiResponse);
 
             FetchContext context = FetchContext.forSearch(List.of(), List.of(), 30, 3,
                     Map.of("url", "https://berlinstartupjobs.com/engineering/"));
@@ -138,7 +138,7 @@ class AiAggregatorStrategyTest {
                     """;
 
             when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(html));
-            when(aiProvider.generate(anyString(), anyString())).thenReturn(aiResponse);
+            when(aiProvider.generateExtraction(anyString(), anyString())).thenReturn(aiResponse);
 
             FetchContext context = FetchContext.forSearch(List.of(), List.of(), 30, 3,
                     Map.of("url", "https://example.com"));
@@ -146,7 +146,7 @@ class AiAggregatorStrategyTest {
             FetchResult result1 = strategy.fetch(context);
 
             when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(html));
-            when(aiProvider.generate(anyString(), anyString())).thenReturn(aiResponse);
+            when(aiProvider.generateExtraction(anyString(), anyString())).thenReturn(aiResponse);
 
             FetchResult result2 = strategy.fetch(context);
 
@@ -166,7 +166,7 @@ class AiAggregatorStrategyTest {
                     """;
 
             when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(html));
-            when(aiProvider.generate(anyString(), anyString())).thenReturn(aiResponse);
+            when(aiProvider.generateExtraction(anyString(), anyString())).thenReturn(aiResponse);
 
             FetchContext context = FetchContext.forSearch(List.of(), List.of(), 30, 3,
                     Map.of("url", "https://example.com"));
@@ -191,7 +191,7 @@ class AiAggregatorStrategyTest {
                     """;
 
             when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(html));
-            when(aiProvider.generate(anyString(), anyString())).thenReturn(aiResponse);
+            when(aiProvider.generateExtraction(anyString(), anyString())).thenReturn(aiResponse);
 
             FetchContext context = FetchContext.forSearch(List.of(), List.of(), 2, 3,
                     Map.of("url", "https://example.com"));
@@ -206,7 +206,7 @@ class AiAggregatorStrategyTest {
         void emptyOnInvalidJson() {
             String html = "<html><body>content</body></html>";
             when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(html));
-            when(aiProvider.generate(anyString(), anyString())).thenReturn("not valid json at all");
+            when(aiProvider.generateExtraction(anyString(), anyString())).thenReturn("not valid json at all");
 
             FetchContext context = FetchContext.forSearch(List.of(), List.of(), 30, 3,
                     Map.of("url", "https://example.com"));

@@ -16,6 +16,9 @@ public interface AiProvider {
      */
     String generate(String systemPrompt, String userPrompt);
 
+    /** Generate free-form extraction output using the extraction model. */
+    String generateExtraction(String systemPrompt, String userPrompt);
+
     /**
      * Check if this provider is properly configured and reachable.
      */

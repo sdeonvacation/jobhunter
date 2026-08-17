@@ -113,7 +113,21 @@ class OpenAiProviderTest {
 
         assertThat(result).isEqualTo("Generated text");
         verify(postRequestedFor(urlEqualTo("/v1/chat/completions"))
-                .withRequestBody(containing("\"max_tokens\":4096")));
+                .withRequestBody(containing("\"max_tokens\":4096"))
+                .withRequestBody(containing("\"model\":\"gpt-4o\"")));
+    }
+
+    @Test
+    void generateExtraction_usesExtractionModel() {
+        String responseBody = """
+                {"id":"chatcmpl-123","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"[]"},"finish_reason":"stop"}]}""";
+
+        stubFor(post("/v1/chat/completions").willReturn(okJson(responseBody)));
+
+        assertThat(provider.generateExtraction("Extract jobs", "HTML")).isEqualTo("[]");
+
+        verify(postRequestedFor(urlEqualTo("/v1/chat/completions"))
+                .withRequestBody(containing("\"model\":\"gpt-4o-mini\"")));
     }
 
     @Test

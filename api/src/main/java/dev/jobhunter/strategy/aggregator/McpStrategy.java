@@ -206,27 +206,44 @@ public class McpStrategy implements FetchStrategy {
 
     /**
      * Match reference jobs to text-parsed entries by title to get company/location/date.
-     * Uses consume-once matching to handle duplicate titles correctly.
+     * Only enriches a reference when its title identifies exactly one reference
+     * and one text entry. Duplicate titles are ambiguous and must not inherit
+     * metadata from an arbitrary result.
      */
     List<RawAggregatorJob> alignReferencesWithText(List<ReferenceJob> refJobs, List<ParsedLinkedInJob> textParsed) {
         List<RawAggregatorJob> jobs = new ArrayList<>();
-        boolean[] used = new boolean[textParsed.size()];
 
         for (ReferenceJob ref : refJobs) {
             String company = null;
             String location = null;
             LocalDate postedDate = null;
 
-            // Find matching text entry by title (consume-once)
+            int matchingTextIndex = -1;
+            int matchingTextCount = 0;
             for (int i = 0; i < textParsed.size(); i++) {
-                if (used[i]) continue;
                 if (titlesMatch(ref.title(), textParsed.get(i).title())) {
-                    company = textParsed.get(i).company();
-                    location = textParsed.get(i).location();
-                    postedDate = textParsed.get(i).postedDate();
-                    used[i] = true;
-                    break;
+                    matchingTextIndex = i;
+                    matchingTextCount++;
                 }
+            }
+
+            // A title-only match is safe only when no other reference can
+            // resolve to the same text entry.
+            int matchingReferenceCount = 0;
+            if (matchingTextCount == 1) {
+                ParsedLinkedInJob candidate = textParsed.get(matchingTextIndex);
+                for (ReferenceJob otherRef : refJobs) {
+                    if (titlesMatch(otherRef.title(), candidate.title())) {
+                        matchingReferenceCount++;
+                    }
+                }
+            }
+
+            if (matchingTextCount == 1 && matchingReferenceCount == 1) {
+                ParsedLinkedInJob matched = textParsed.get(matchingTextIndex);
+                company = matched.company();
+                location = matched.location();
+                postedDate = matched.postedDate();
             }
 
             String linkedinUrl = "https://www.linkedin.com/jobs/view/" + ref.jobId() + "/";

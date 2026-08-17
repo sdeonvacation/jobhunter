@@ -362,7 +362,7 @@ class McpStrategyTest {
         }
 
         @Test
-        @DisplayName("Should handle duplicate titles with consume-once matching")
+        @DisplayName("Should not assign metadata when duplicate titles are ambiguous")
         void shouldHandleDuplicateTitles() {
             String text = "Backend Engineer\nN26\nBerlin (Hybrid)\n\n"
                     + "Backend Engineer\nFreenow\nHamburg (Hybrid)\n";
@@ -376,9 +376,36 @@ class McpStrategyTest {
 
             assertThat(jobs).hasSize(2);
             assertThat(jobs.get(0).externalId()).isEqualTo("111");
-            assertThat(jobs.get(0).companyName()).isEqualTo("N26");
+            assertThat(jobs.get(0).companyName()).isNull();
+            assertThat(jobs.get(0).location()).isNull();
+            assertThat(jobs.get(0).applyUrl()).isEqualTo("https://www.linkedin.com/jobs/view/111/");
             assertThat(jobs.get(1).externalId()).isEqualTo("222");
-            assertThat(jobs.get(1).companyName()).isEqualTo("Freenow");
+            assertThat(jobs.get(1).companyName()).isNull();
+            assertThat(jobs.get(1).location()).isNull();
+            assertThat(jobs.get(1).applyUrl()).isEqualTo("https://www.linkedin.com/jobs/view/222/");
+        }
+
+        @Test
+        @DisplayName("Should not pair duplicate-title metadata when references are reversed")
+        void shouldNotPairDuplicateTitlesWhenReferencesAreReversed() {
+            String text = "Backend Engineer\nBettermile\nBerlin (Hybrid)\n\n"
+                    + "Backend Engineer\nAlmedia\nHamburg (Remote)\n";
+            List<String[]> refs = List.of(
+                    new String[]{"9988776655", "Backend Engineer"},
+                    new String[]{"4431127040", "Backend Engineer"}
+            );
+
+            List<RawAggregatorJob> jobs = strategy.parseSearchResponse(buildSearchResponseWithRefs(text, refs));
+
+            assertThat(jobs).hasSize(2);
+            assertThat(jobs).extracting(RawAggregatorJob::externalId)
+                    .containsExactly("9988776655", "4431127040");
+            assertThat(jobs).allSatisfy(job -> {
+                assertThat(job.companyName()).isNull();
+                assertThat(job.location()).isNull();
+            });
+            assertThat(jobs.get(0).applyUrl()).isEqualTo("https://www.linkedin.com/jobs/view/9988776655/");
+            assertThat(jobs.get(1).applyUrl()).isEqualTo("https://www.linkedin.com/jobs/view/4431127040/");
         }
 
         @Test

@@ -82,7 +82,7 @@ public class AiAggregatorStrategy implements FetchStrategy {
             String truncatedHtml = html.length() > 50_000 ? html.substring(0, 50_000) : html;
 
             log.debug("Sending {} chars of HTML to AI for extraction", truncatedHtml.length());
-            String aiResponse = aiProvider.generate(EXTRACTION_PROMPT, truncatedHtml);
+            String aiResponse = aiProvider.generateExtraction(EXTRACTION_PROMPT, truncatedHtml);
 
             List<AiExtractedJob> extracted = parseAiResponse(aiResponse);
             if (extracted.isEmpty()) {

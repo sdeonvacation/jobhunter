@@ -69,8 +69,17 @@ public class OpenAiProvider implements AiProvider {
 
     @Override
     public String generate(String systemPrompt, String userPrompt) {
+        return generate(systemPrompt, userPrompt, tailoringModel);
+    }
+
+    @Override
+    public String generateExtraction(String systemPrompt, String userPrompt) {
+        return generate(systemPrompt, userPrompt, extractionModel);
+    }
+
+    private String generate(String systemPrompt, String userPrompt, String model) {
         ObjectNode requestBody = objectMapper.createObjectNode();
-        requestBody.put("model", tailoringModel);
+        requestBody.put("model", model);
         requestBody.put("max_tokens", 4096);
 
         ArrayNode messages = requestBody.putArray("messages");

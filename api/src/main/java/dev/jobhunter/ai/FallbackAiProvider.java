@@ -44,6 +44,19 @@ public class FallbackAiProvider implements AiProvider {
     }
 
     @Override
+    public String generateExtraction(String systemPrompt, String userPrompt) {
+        if (primary.isAvailable()) {
+            try {
+                return primary.generateExtraction(systemPrompt, userPrompt);
+            } catch (Exception e) {
+                log.warn("Primary AI provider [{}] failed for extraction generation, trying fallback [{}]: {}",
+                        primary.name(), fallback.name(), e.getMessage());
+            }
+        }
+        return fallback.generateExtraction(systemPrompt, userPrompt);
+    }
+
+    @Override
     public boolean isAvailable() {
         return primary.isAvailable() || fallback.isAvailable();
     }
