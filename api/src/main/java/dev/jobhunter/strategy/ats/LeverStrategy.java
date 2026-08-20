@@ -94,7 +94,7 @@ public class LeverStrategy extends AbstractAtsStrategy {
     }
 
 
-    private RawAggregatorJob mapJob(JsonNode node) {
+    protected RawAggregatorJob mapJob(JsonNode node) {
         try {
             String externalId = node.path("id").asText(null);
             String title = truncate(node.path("text").asText(null), 500);
@@ -102,6 +102,16 @@ public class LeverStrategy extends AbstractAtsStrategy {
             String descriptionPlain = node.path("descriptionPlain").asText("");
             String descriptionHtml = node.path("description").asText("");
             String description = !descriptionPlain.isBlank() ? descriptionPlain : descriptionHtml;
+            for (JsonNode list : node.path("lists")) {
+                String listText = list.path("text").asText("");
+                String listContent = list.path("content").asText("");
+                if (!listText.isBlank()) {
+                    description += "\n" + listText;
+                }
+                if (!listContent.isBlank()) {
+                    description += "\n" + listContent;
+                }
+            }
             String applyUrl = node.path("hostedUrl").asText(null);
             String rawJson = node.toString();
 

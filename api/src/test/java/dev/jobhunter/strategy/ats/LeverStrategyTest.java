@@ -67,6 +67,10 @@ class LeverStrategyTest {
                     "text": "Backend Engineer",
                     "categories": {"location": "Berlin, Germany", "team": "Engineering"},
                     "descriptionPlain": "Build awesome backend services.",
+                    "lists": [
+                      {"text": "Requirements", "content": "Java 21 experience"},
+                      {"text": "", "content": "Spring Boot experience"}
+                    ],
                     "hostedUrl": "https://jobs.lever.co/testco/abc-123",
                     "createdAt": 1705312200000
                   },
@@ -98,7 +102,7 @@ class LeverStrategyTest {
         assertThat(job1.externalId()).isEqualTo("abc-123");
         assertThat(job1.title()).isEqualTo("Backend Engineer");
         assertThat(job1.location()).isEqualTo("Berlin, Germany");
-        assertThat(job1.description()).isEqualTo("Build awesome backend services.");
+        assertThat(job1.description()).isEqualTo("Build awesome backend services.\nRequirements\nJava 21 experience\nSpring Boot experience");
         assertThat(job1.applyUrl()).isEqualTo("https://jobs.lever.co/testco/abc-123");
         assertThat(job1.postedDate()).isEqualTo(LocalDate.of(2024, 1, 15));
 
@@ -106,6 +110,31 @@ class LeverStrategyTest {
         assertThat(job2.externalId()).isEqualTo("def-456");
         assertThat(job2.title()).isEqualTo("Frontend Developer");
         assertThat(job2.location()).isEqualTo("Remote");
+    }
+
+    @Test
+    void extract_blankDescriptionPlain_fallsBackToDescriptionAndAppendsLists() {
+        String json = """
+                [{
+                  "id": "fallback-001",
+                  "text": "Backend Engineer",
+                  "descriptionPlain": "   ",
+                  "description": "HTML description fallback.",
+                  "lists": [{"text": "Requirements", "content": "Kotlin experience"}]
+                }]
+                """;
+        stubFor(get(urlPathMatching("/v0/postings/.*"))
+                .willReturn(okJson(json)));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.LEVER)
+                .atsSlug("testco")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.jobs()).singleElement().extracting(RawAggregatorJob::description)
+                .isEqualTo("HTML description fallback.\nRequirements\nKotlin experience");
     }
 
     @Test
@@ -253,20 +282,10 @@ class LeverStrategyTest {
 
                 List<RawAggregatorJob> jobs = new ArrayList<>();
                 for (JsonNode jobNode : root) {
-                    String externalId = jobNode.path("id").asText(null);
-                    String title = jobNode.path("text").asText(null);
-                    String location = jobNode.path("categories").path("location").asText(null);
-                    String description = jobNode.path("descriptionPlain").asText("");
-                    String applyUrl = jobNode.path("hostedUrl").asText(null);
-
-                    LocalDate postedDate = null;
-                    long millis = jobNode.path("createdAt").asLong(0);
-                    if (millis > 0) {
-                        postedDate = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate();
+                    RawAggregatorJob job = mapJob(jobNode);
+                    if (job != null) {
+                        jobs.add(job);
                     }
-
-                    jobs.add(new RawAggregatorJob(externalId, title, null, location, description,
-                            applyUrl, postedDate, null, null, null, jobNode.toString()));
                 }
 
                 return jobs.isEmpty()
