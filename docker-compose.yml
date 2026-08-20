@@ -25,6 +25,7 @@ services:
       HOST: "0.0.0.0"
       PORT: "8000"
       HTTP_PATH: /mcp
+    command: ["--user-data-dir", "/home/pwuser/.linkedin-mcp/profile"]
     volumes:
       - ${HOME}/.linkedin-mcp:/home/pwuser/.linkedin-mcp
     mem_limit: 2g

@@ -27,7 +27,6 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.HashSet;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -211,12 +210,9 @@ public class AiPageStrategy implements FetchStrategy {
         Throwable cause = exception.getCause();
         Set<Throwable> seen = new HashSet<>();
         while (cause != null && seen.add(cause)) {
-            if (cause.getMessage() != null && !cause.getMessage().isBlank()) {
-                details.append("; cause: ").append(cause.getClass().getSimpleName())
-                        .append(": ").append(cause.getMessage());
-                break;
-            }
-            cause = cause.getCause();
+            details.append("; cause: ").append(cause.getClass().getSimpleName());
+            appendMessage(details, cause.getMessage());
+            break;
         }
         return details.toString();
     }

@@ -359,6 +359,53 @@ class CrawlServiceTest {
     }
 
     @Test
+    void reactivateEndpoint_successfulCrawl_reactivatesAndResetsErrorState() {
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID()).isActive(false).consecutiveErrors(10)
+                .atsType(AtsType.GREENHOUSE).atsSlug("testco").build();
+        var rawJob = new RawAggregatorJob("ext-1", "Engineer", null, "Berlin", "desc",
+                "url", null, null, null, null, "{}");
+        var existingPosting = JobPosting.builder().id(UUID.randomUUID()).externalId("ext-1")
+                .source(JobSource.GREENHOUSE).build();
+
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(FetchResult.success(List.of(rawJob), Duration.ZERO));
+        when(jobPostingRepository.findBySourceAndExternalId(JobSource.GREENHOUSE, "ext-1"))
+                .thenReturn(Optional.of(existingPosting));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+        when(jobPostingRepository.bulkDeactivateByEndpointExcluding(any(), any(), any())).thenReturn(0);
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp");
+
+        CrawlService.ReactivationResult result = crawlService.reactivateEndpoint(endpoint);
+
+        assertThat(result.reactivated()).isTrue();
+        assertThat(result.status()).isEqualTo(CrawlStatus.SUCCESS);
+        assertThat(endpoint.isActive()).isTrue();
+        assertThat(endpoint.getConsecutiveErrors()).isZero();
+        assertThat(endpoint.getLastErrorMessage()).isNull();
+        verify(endpointRepository, atLeastOnce()).save(endpoint);
+    }
+
+    @Test
+    void reactivateEndpoint_failedCrawl_leavesEndpointInactive() {
+        var endpoint = CareerEndpoint.builder()
+                .id(UUID.randomUUID()).isActive(false).consecutiveErrors(9)
+                .atsType(AtsType.GREENHOUSE).atsSlug("testco").build();
+        when(strategyRegistry.getStrategy(AtsType.GREENHOUSE)).thenReturn(Optional.of(fetchStrategy));
+        when(fetchStrategy.fetch(any(FetchContext.class))).thenReturn(FetchResult.error("timeout", Duration.ZERO));
+        when(endpointRepository.save(any(CareerEndpoint.class))).thenAnswer(i -> i.getArgument(0));
+
+        CrawlService.ReactivationResult result = crawlService.reactivateEndpoint(endpoint);
+
+        assertThat(result.reactivated()).isFalse();
+        assertThat(result.status()).isEqualTo(CrawlStatus.ERROR);
+        assertThat(result.error()).isEqualTo("timeout");
+        assertThat(endpoint.isActive()).isFalse();
+        assertThat(endpoint.getConsecutiveErrors()).isEqualTo(10);
+    }
+
+    @Test
     void crawlEndpoint_noStrategy_returnsZero() {
         var endpoint = CareerEndpoint.builder()
                 .id(UUID.randomUUID())
@@ -875,4 +922,3 @@ class CrawlServiceTest {
         assertThat(endpointJob.getExternalLinks()).containsEntry("INDEED", "https://indeed.com/jobs/456");
     }
 }
-

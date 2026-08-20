@@ -133,6 +133,64 @@ class StepStoneStrategyTest {
     }
 
     @Test
+    void fetch_allDetailServerFailuresReturnError() {
+        stubSearch("backend-engineer", null, "<a href=\"" + DETAIL_PATH + "\">one</a>"
+                + "<a href=\"" + SECOND_DETAIL_PATH + "\">two</a>");
+        stubFor(get(urlPathEqualTo(DETAIL_PATH)).willReturn(aResponse().withStatus(500)));
+        stubFor(get(urlPathEqualTo(SECOND_DETAIL_PATH)).willReturn(aResponse().withStatus(502)));
+
+        FetchResult result = strategy.fetch(context(List.of("backend engineer"), List.of(), Map.of()));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
+        assertThat(result.jobs()).isEmpty();
+    }
+
+    @Test
+    void fetch_allMissingDetailsRemainEmpty() {
+        stubSearch("backend-engineer", null, "<a href=\"" + DETAIL_PATH + "\">one</a>"
+                + "<a href=\"" + SECOND_DETAIL_PATH + "\">two</a>");
+        stubFor(get(urlPathEqualTo(DETAIL_PATH)).willReturn(aResponse().withStatus(404)));
+        stubFor(get(urlPathEqualTo(SECOND_DETAIL_PATH)).willReturn(aResponse().withStatus(410)));
+
+        FetchResult result = strategy.fetch(context(List.of("backend engineer"), List.of(), Map.of()));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.EMPTY);
+        assertThat(result.jobs()).isEmpty();
+    }
+
+    @Test
+    void fetch_serverFailureWithSuccessPreservesSuccessfulJobs() {
+        stubSearch("backend-engineer", null, "<a href=\"" + DETAIL_PATH + "\">one</a>"
+                + "<a href=\"" + SECOND_DETAIL_PATH + "\">two</a>");
+        stubFor(get(urlPathEqualTo(DETAIL_PATH)).willReturn(okHtml(detailJson("Backend Engineer", "12345"))));
+        stubFor(get(urlPathEqualTo(SECOND_DETAIL_PATH)).willReturn(aResponse().withStatus(503)));
+
+        FetchResult result = strategy.fetch(context(List.of("backend engineer"), List.of(), Map.of()));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs()).singleElement().extracting(RawAggregatorJob::externalId).isEqualTo("12345");
+    }
+
+    @Test
+    void fetch_abortsAfterConsecutiveDetailFailures() {
+        String thirdDetailPath = "/stellenangebote--kotlin-developer--11111-inline.html";
+        String fourthDetailPath = "/stellenangebote--java-engineer--22222-inline.html";
+        stubSearch("backend-engineer", null, "<a href=\"" + DETAIL_PATH + "\">one</a>"
+                + "<a href=\"" + SECOND_DETAIL_PATH + "\">two</a>"
+                + "<a href=\"" + thirdDetailPath + "\">three</a>"
+                + "<a href=\"" + fourthDetailPath + "\">four</a>");
+        stubFor(get(urlPathEqualTo(DETAIL_PATH)).willReturn(aResponse().withStatus(503)));
+        stubFor(get(urlPathEqualTo(SECOND_DETAIL_PATH)).willReturn(aResponse().withStatus(503)));
+        stubFor(get(urlPathEqualTo(thirdDetailPath)).willReturn(aResponse().withStatus(503)));
+
+        FetchResult result = strategy.fetch(context(List.of("backend engineer"), List.of(),
+                Map.of("maxConsecutiveDetailFailures", "3")));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
+        verify(0, getRequestedFor(urlPathEqualTo(fourthDetailPath)));
+    }
+
+    @Test
     void fetch_skipsMissingDetailAndFallsBackToH1() {
         String fallbackPath = "/stellenangebote--fallback--no-id-inline.html";
         String untitledPath = "/stellenangebote--untitled--no-id-inline.html";

@@ -7,6 +7,7 @@ import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.repository.CareerEndpointRepository;
 import dev.jobhunter.scheduler.ScoringScheduler;
 import dev.jobhunter.service.CrawlService;
+import dev.jobhunter.model.enums.CrawlStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -80,6 +81,46 @@ class AdminControllerCrawlEndpointTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().jobsFound()).isEqualTo(0);
+    }
+
+    @Test
+    void reactivateEndpoint_success_returnsReactivatedResult() {
+        UUID endpointId = UUID.randomUUID();
+        CareerEndpoint endpoint = CareerEndpoint.builder().id(endpointId).isActive(false).build();
+        var result = new CrawlService.ReactivationResult(endpointId, true, 7, CrawlStatus.SUCCESS, null);
+        when(careerEndpointRepository.findById(endpointId)).thenReturn(Optional.of(endpoint));
+        when(crawlService.reactivateEndpoint(endpoint)).thenReturn(result);
+
+        ResponseEntity<CrawlService.ReactivationResult> response = controller.reactivateEndpoint(endpointId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isEqualTo(result);
+        verify(crawlService).reactivateEndpoint(endpoint);
+    }
+
+    @Test
+    void reactivateEndpoint_failedCrawl_returnsConflict() {
+        UUID endpointId = UUID.randomUUID();
+        CareerEndpoint endpoint = CareerEndpoint.builder().id(endpointId).isActive(false).build();
+        var result = new CrawlService.ReactivationResult(endpointId, false, 0, CrawlStatus.ERROR, "timeout");
+        when(careerEndpointRepository.findById(endpointId)).thenReturn(Optional.of(endpoint));
+        when(crawlService.reactivateEndpoint(endpoint)).thenReturn(result);
+
+        ResponseEntity<CrawlService.ReactivationResult> response = controller.reactivateEndpoint(endpointId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).isEqualTo(result);
+    }
+
+    @Test
+    void reactivateEndpoint_missingEndpoint_returns404() {
+        UUID endpointId = UUID.randomUUID();
+        when(careerEndpointRepository.findById(endpointId)).thenReturn(Optional.empty());
+
+        ResponseEntity<CrawlService.ReactivationResult> response = controller.reactivateEndpoint(endpointId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        verifyNoInteractions(crawlService);
     }
 
     @Test

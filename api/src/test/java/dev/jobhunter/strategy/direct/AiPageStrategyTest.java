@@ -21,6 +21,7 @@ import org.springframework.http.HttpMethod;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.channels.UnresolvedAddressException;
 import java.util.List;
 import java.util.Map;
 
@@ -270,6 +271,29 @@ class AiPageStrategyTest {
                 .contains("IOException: Connection refused")
                 .doesNotContain("WebClientRequestException: null")
                 .doesNotContain("secret");
+    }
+
+    @Test
+    void extract_requestFailureWithNullCauseMessage_includesCauseType() {
+        when(aiProvider.isAvailable()).thenReturn(true);
+        extractor.setFetchException(new WebClientRequestException(
+                new UnresolvedAddressException(), HttpMethod.GET,
+                URI.create("https://example.com/careers"), new HttpHeaders()) {
+            @Override
+            public String getMessage() {
+                return null;
+            }
+        });
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://example.com/careers")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
+        assertThat(result.errorMessage()).contains("cause: UnresolvedAddressException");
     }
 
     @Test

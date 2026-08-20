@@ -67,8 +67,7 @@ public class HttpMcpClientImpl implements HttpMcpClient {
                         String message = error.has("message") ? error.get("message").asText() : "Unknown MCP error";
 
                         if (code == SESSION_EXPIRED_ERROR_CODE) {
-                            sessionValid.set(false);
-                            mcpSessionId = null;
+                            resetSession();
                             log.warn("LinkedIn MCP session expired (error code {})", code);
                         }
                         return Mono.error(new McpClientException(message, code));
@@ -120,17 +119,22 @@ public class HttpMcpClientImpl implements HttpMcpClient {
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM)
                 .bodyValue(request)
-                .exchangeToMono(response -> {
-                    String sessionId = response.headers().asHttpHeaders().getFirst(MCP_SESSION_HEADER);
-                    if (sessionId != null) {
-                        mcpSessionId = sessionId;
-                        log.info("MCP session initialized: {}", sessionId);
-                    }
-                    return response.bodyToMono(String.class);
-                })
-                .doOnError(ex -> log.error("MCP initialization failed: {}", ex.getMessage()))
-                .doFinally(signal -> initAttempted.set(true))
-                .then();
+                 .exchangeToMono(response -> {
+                     if (!response.statusCode().is2xxSuccessful()) {
+                         return response.createException().flatMap(Mono::error);
+                     }
+                     String sessionId = response.headers().asHttpHeaders().getFirst(MCP_SESSION_HEADER);
+                     if (sessionId != null) {
+                         mcpSessionId = sessionId;
+                         sessionValid.set(true);
+                         log.info("MCP session initialized: {}", sessionId);
+                     }
+                     return response.bodyToMono(String.class);
+                 })
+                 .doOnError(ex -> log.error("MCP initialization failed: {}", ex.getMessage()))
+                 .doOnSuccess(ignored -> initAttempted.set(true))
+                 .doOnError(ex -> resetSession())
+                 .then();
     }
 
     private Mono<JsonNode> doPost(ObjectNode request) {
@@ -175,6 +179,9 @@ public class HttpMcpClientImpl implements HttpMcpClient {
             return false;
         }
         if (throwable instanceof McpClientException) {
+            if (((McpClientException) throwable).getErrorCode() == SESSION_EXPIRED_ERROR_CODE) {
+                return true;
+            }
             // JSON-RPC application errors are not retryable (server understood the request)
             return false;
         }
@@ -185,13 +192,18 @@ public class HttpMcpClientImpl implements HttpMcpClient {
                 // reports that stale session as 400 or 404 depending on the version.
                 log.warn("MCP returned {} (stale session), resetting session for re-initialization",
                         wcre.getStatusCode().value());
-                mcpSessionId = null;
-                initAttempted.set(false);
-                return true;
+                 resetSession();
+                 return true;
             }
             return wcre.getStatusCode().is5xxServerError();
         }
         return true;
+    }
+
+    private void resetSession() {
+        mcpSessionId = null;
+        initAttempted.set(false);
+        sessionValid.set(false);
     }
 
     private JsonNode parseSseResponse(String raw) throws Exception {

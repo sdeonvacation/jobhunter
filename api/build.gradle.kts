@@ -61,7 +61,8 @@ tasks.named<JavaCompile>("compileTestJava") {
     // (pre-existing failures unrelated to strategy refactoring)
     source = source.filter { file ->
         val path = file.absolutePath
-        !path.contains("controller/AdminController") &&
+        !(path.contains("controller/AdminController") &&
+                !path.contains("AdminControllerScoringTriggerTest")) &&
         !path.contains("people/dto/PeopleDtoMapperTest") &&
         !path.contains("people/service/ContactDiscoveryServiceTest") &&
         !path.contains("people/service/ContactPriorityScorerTest") &&

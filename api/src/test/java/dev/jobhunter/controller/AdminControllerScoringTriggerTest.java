@@ -2,7 +2,6 @@ package dev.jobhunter.controller;
 
 import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.ingestion.AggregatorIngestionService;
-import dev.jobhunter.ingestion.IngestionStats;
 import dev.jobhunter.repository.AggregatorRunRepository;
 import dev.jobhunter.scheduler.ScoringScheduler;
 import dev.jobhunter.service.CrawlService;
@@ -29,15 +28,16 @@ class AdminControllerScoringTriggerTest {
     @Mock private ScoringScheduler scoringScheduler;
     @Mock private AggregatorIngestionService aggregatorIngestionService;
     @Mock private AggregatorRunRepository aggregatorRunRepository;
-    @Mock private SourceConfig sourceConfig;
+    @Mock private SourceConfig enabledSource;
+    @Mock private SourceConfig disabledSource;
 
     private AdminController controller;
 
     @BeforeEach
     void setUp() {
         controller = new AdminController(crawlService, null, scoringScheduler, null,
-                null, aggregatorIngestionService, aggregatorRunRepository, null, null,
-                null, Optional.empty(), List.of(sourceConfig), mock(LanguageFilter.class));
+                null, null, aggregatorIngestionService, aggregatorRunRepository, null, null,
+                null, Optional.empty(), List.of(), mock(LanguageFilter.class), List.of(), List.of());
     }
 
     @Test
@@ -47,26 +47,34 @@ class AdminControllerScoringTriggerTest {
 
         var response = controller.triggerCrawl();
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
 
         InOrder inOrder = inOrder(crawlService, scoringScheduler);
-        inOrder.verify(crawlService).crawlAllDueEndpoints();
-        inOrder.verify(scoringScheduler).scoreAllUnscored();
+        inOrder.verify(crawlService, timeout(1000)).crawlAllDueEndpoints();
+        inOrder.verify(scoringScheduler, timeout(1000)).scoreAllUnscored();
     }
 
     @Test
-    @DisplayName("triggerAggregatorCrawl should call scoreAllUnscored after ingestion")
-    void triggerAggregatorCrawl_callsScoringAfterIngestion() {
-        IngestionStats stats = new IngestionStats("test", 5, 0, 3, 1, 0, 0, 1000);
-        when(aggregatorIngestionService.ingest(sourceConfig)).thenReturn(stats);
+    @DisplayName("triggerAggregatorCrawl should asynchronously ingest enabled sources before scoring")
+    void triggerAggregatorCrawl_callsScoringAfterEnabledIngestion() {
+        when(enabledSource.isEnabled()).thenReturn(true);
+        when(disabledSource.isEnabled()).thenReturn(false);
+        controller = new AdminController(crawlService, null, scoringScheduler, null,
+                null, null, aggregatorIngestionService, aggregatorRunRepository, null, null,
+                null, Optional.empty(), List.of(enabledSource, disabledSource),
+                mock(LanguageFilter.class), List.of(), List.of());
 
         var response = controller.triggerAggregatorCrawl();
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).hasSize(1);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(response.getBody()).isEqualTo("Aggregator crawl triggered");
 
-        InOrder inOrder = inOrder(aggregatorIngestionService, scoringScheduler);
-        inOrder.verify(aggregatorIngestionService).ingest(sourceConfig);
+        verify(aggregatorIngestionService, timeout(1000)).ingest(enabledSource);
+        verify(aggregatorIngestionService, never()).ingest(disabledSource);
+        verify(scoringScheduler, timeout(1000)).scoreAllUnscored();
+
+        var inOrder = inOrder(aggregatorIngestionService, scoringScheduler);
+        inOrder.verify(aggregatorIngestionService).ingest(enabledSource);
         inOrder.verify(scoringScheduler).scoreAllUnscored();
     }
 }

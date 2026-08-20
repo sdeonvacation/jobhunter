@@ -114,12 +114,14 @@ public class AdminController {
     }
 
     @PostMapping("/crawl/aggregators")
-    public ResponseEntity<List<IngestionStats>> triggerAggregatorCrawl() {
-        List<IngestionStats> results = sources.stream()
-                .map(aggregatorIngestionService::ingest)
-                .toList();
-        scoringScheduler.scoreAllUnscored();
-        return ResponseEntity.ok(results);
+    public ResponseEntity<String> triggerAggregatorCrawl() {
+        CompletableFuture.runAsync(() -> {
+            sources.stream()
+                    .filter(SourceConfig::isEnabled)
+                    .forEach(aggregatorIngestionService::ingest);
+            scoringScheduler.scoreAllUnscored();
+        });
+        return ResponseEntity.accepted().body("Aggregator crawl triggered");
     }
 
     @PostMapping("/crawl/{endpointId}")
@@ -131,6 +133,20 @@ public class AdminController {
         }
         int jobsFound = crawlService.crawlEndpoint(endpoint);
         return ResponseEntity.ok(new SingleCrawlResult(endpointId, jobsFound));
+    }
+
+    @PostMapping("/endpoints/{endpointId}/reactivate")
+    public ResponseEntity<CrawlService.ReactivationResult> reactivateEndpoint(@PathVariable UUID endpointId) {
+        CareerEndpoint endpoint = careerEndpointRepository.findById(endpointId).orElse(null);
+        if (endpoint == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        CrawlService.ReactivationResult result = crawlService.reactivateEndpoint(endpoint);
+        if (result.reactivated()) {
+            return ResponseEntity.ok(result);
+        }
+        return ResponseEntity.status(409).body(result);
     }
 
     @PostMapping("/backfill-descriptions")
@@ -268,7 +284,9 @@ public class AdminController {
                         e.getLastCrawledAt()
                 )).toList();
 
-        long totalActive = careerEndpointRepository.countByIsActiveTrue();
+        long totalEndpoints = careerEndpointRepository.count();
+        long activeEndpoints = careerEndpointRepository.countByIsActiveTrue();
+        long inactiveEndpoints = careerEndpointRepository.countByIsActiveFalse();
         long totalErrored = errors.size();
         long totalEmpty = empties.size();
         long neverCrawled = careerEndpointRepository.countByIsActiveTrueAndLastCrawlStatusIsNull();
@@ -288,7 +306,8 @@ public class AdminController {
                 ))
                 .toList();
 
-        return ResponseEntity.ok(new HealthReport(totalActive, totalErrored, totalEmpty, neverCrawled, errors, empties, aggregatorIssues));
+        return ResponseEntity.ok(new HealthReport(totalEndpoints, activeEndpoints, inactiveEndpoints,
+                totalErrored, totalEmpty, neverCrawled, errors, empties, aggregatorIssues));
     }
 
     private static final Pattern RELATIVE_TIME_PATTERN =
@@ -370,7 +389,8 @@ public class AdminController {
             String errorMessage, LocalDateTime lastRunAt, long elapsedMs) {}
 
     public record HealthReport(
-            long totalEndpoints, long errored, long empty, long neverCrawled,
+            long totalEndpoints, long activeEndpoints, long inactiveEndpoints,
+            long errored, long empty, long neverCrawled,
             List<EndpointHealth> errors, List<EndpointHealth> empties,
             List<AggregatorHealth> aggregatorIssues) {}
 }

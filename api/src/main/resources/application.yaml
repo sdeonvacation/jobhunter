@@ -206,6 +206,7 @@ aggregator:
         cities: "berlin,muenchen,hamburg,frankfurt-am-main,koeln"
         delayBetweenMs: "1500"
         maxScrapePerRun: "40"
+        maxConsecutiveDetailFailures: "3"
 
 server:
   port: 8089

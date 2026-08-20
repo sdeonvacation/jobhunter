@@ -294,6 +294,33 @@ public class CrawlService {
         return newJobsCount;
     }
 
+    @Transactional
+    public ReactivationResult reactivateEndpoint(CareerEndpoint endpoint) {
+        int jobsFound;
+        try {
+            jobsFound = crawlEndpoint(endpoint);
+        } catch (Exception e) {
+            markEndpointError(endpoint);
+            return new ReactivationResult(endpoint.getId(), false, 0,
+                    CrawlStatus.ERROR, e.getMessage());
+        }
+
+        CrawlStatus status = endpoint.getLastCrawlStatus();
+        if (status != CrawlStatus.SUCCESS) {
+            String error = endpoint.getLastErrorMessage();
+            if (error == null || error.isBlank()) {
+                error = "Endpoint crawl did not succeed";
+            }
+            return new ReactivationResult(endpoint.getId(), false, jobsFound, status, error);
+        }
+
+        endpoint.setActive(true);
+        endpoint.setConsecutiveErrors(0);
+        endpoint.setLastErrorMessage(null);
+        endpointRepository.save(endpoint);
+        return new ReactivationResult(endpoint.getId(), true, jobsFound, status, null);
+    }
+
     private JobPosting buildJobPosting(CareerEndpoint endpoint, RawAggregatorJob rawJob,
                                        FilterChainResult chainResult, String fingerprint) {
         return JobPosting.builder()
@@ -399,6 +426,9 @@ public class CrawlService {
     }
 
     public record ReindexResult(int fingerprintsUpdated, int aggregatorJobsSuperseded) {}
+
+    public record ReactivationResult(UUID endpointId, boolean reactivated, int jobsFound,
+                                     CrawlStatus status, String error) {}
 
     private void markEndpointError(CareerEndpoint endpoint) {
         try {

@@ -110,10 +110,11 @@ public class AiAggregatorStrategy implements FetchStrategy {
             if (json.startsWith("```")) {
                 json = json.replaceFirst("```(?:json)?\\s*", "").replaceFirst("\\s*```$", "");
             }
-            return objectMapper.readValue(json, new TypeReference<>() {});
+            List<AiExtractedJob> parsed = objectMapper.readValue(json, new TypeReference<>() {});
+            return parsed != null ? parsed : List.of();
         } catch (Exception e) {
             log.warn("Failed to parse AI response as JSON: {}", e.getMessage());
-            return List.of();
+            throw new IllegalArgumentException("Malformed AI extraction JSON: " + e.getMessage(), e);
         }
     }
 

@@ -48,6 +48,7 @@ public class StepStoneStrategy implements FetchStrategy {
     private static final Pattern EXTERNAL_ID = Pattern.compile("--(\\d+)-inline\\.html", Pattern.CASE_INSENSITIVE);
     private static final int DEFAULT_DELAY_MS = 1500;
     private static final int DEFAULT_MAX_SCRAPE = 40;
+    private static final int DEFAULT_MAX_CONSECUTIVE_DETAIL_FAILURES = 3;
     private static final int DEFAULT_SEARCH_TIMEOUT_SECONDS = 30;
     private static final int DEFAULT_DETAIL_TIMEOUT_SECONDS = 15;
 
@@ -83,6 +84,8 @@ public class StepStoneStrategy implements FetchStrategy {
 
         int delayMs = parseInt(context.config(), "delayBetweenMs", DEFAULT_DELAY_MS);
         int maxScrape = parseInt(context.config(), "maxScrapePerRun", DEFAULT_MAX_SCRAPE);
+        int maxConsecutiveDetailFailures = parseInt(context.config(), "maxConsecutiveDetailFailures",
+                DEFAULT_MAX_CONSECUTIVE_DETAIL_FAILURES);
         int searchTimeout = parseInt(context.config(), "searchTimeoutSeconds", DEFAULT_SEARCH_TIMEOUT_SECONDS);
         int detailTimeout = parseInt(context.config(), "detailTimeoutSeconds", DEFAULT_DETAIL_TIMEOUT_SECONDS);
         List<String> cities = configList(context.config(), "cities");
@@ -130,13 +133,13 @@ public class StepStoneStrategy implements FetchStrategy {
 
         List<RawAggregatorJob> jobs = new ArrayList<>();
         boolean rateLimited = false;
+        boolean transportFailure = false;
+        int consecutiveDetailFailures = 0;
         for (int i = 0; i < candidates.size(); i++) {
             String url = candidates.get(i);
+            String html = null;
             try {
-                String html = get(url, detailTimeout);
-                if (html != null && !html.isBlank()) {
-                    parsePage(html, url).ifPresent(jobs::add);
-                }
+                html = get(url, detailTimeout);
             } catch (WebClientResponseException e) {
                 int status = e.getStatusCode().value();
                 if (status == 429) {
@@ -147,15 +150,35 @@ public class StepStoneStrategy implements FetchStrategy {
                 if (status == 404 || status == 410) {
                     log.debug("[stepstone] Detail page removed (HTTP {}) at {}", status, url);
                 } else {
+                    transportFailure = true;
+                    consecutiveDetailFailures++;
                     log.warn("[stepstone] HTTP {} fetching detail {}", status, url);
                 }
             } catch (Exception e) {
+                transportFailure = true;
+                consecutiveDetailFailures++;
                 log.warn("[stepstone] Error fetching detail {}: {}", url, e.getMessage());
+            }
+            if (html != null && !html.isBlank()) {
+                consecutiveDetailFailures = 0;
+                try {
+                    parsePage(html, url).ifPresent(jobs::add);
+                } catch (Exception e) {
+                    log.warn("[stepstone] Error parsing detail {}: {}", url, e.getMessage());
+                }
+            }
+            if (consecutiveDetailFailures >= maxConsecutiveDetailFailures) {
+                log.warn("[stepstone] Aborting detail fetch after {} consecutive failures",
+                        consecutiveDetailFailures);
+                break;
             }
             if (i < candidates.size() - 1 && !pause(delayMs)) break;
         }
 
         if (rateLimited && jobs.isEmpty()) return FetchResult.rateLimited(elapsed(start));
+        if (jobs.isEmpty() && transportFailure) {
+            return FetchResult.error("StepStone detail fetching failed", elapsed(start));
+        }
         if (jobs.isEmpty()) return FetchResult.empty(elapsed(start));
         return FetchResult.success(jobs, elapsed(start));
     }

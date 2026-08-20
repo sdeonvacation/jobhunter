@@ -190,4 +190,22 @@ class AdminControllerHealthTest {
         assertThat(report.aggregatorIssues()).isEmpty();
         assertThat(report.totalEndpoints()).isEqualTo(0);
     }
+
+    @Test
+    void getHealth_reportsTotalActiveAndInactiveEndpointCounts() {
+        when(careerEndpointRepository.findByIsActiveTrueAndLastCrawlStatus(CrawlStatus.ERROR)).thenReturn(List.of());
+        when(careerEndpointRepository.findByIsActiveTrueAndLastCrawlStatus(CrawlStatus.EMPTY)).thenReturn(List.of());
+        when(careerEndpointRepository.count()).thenReturn(1349L);
+        when(careerEndpointRepository.countByIsActiveTrue()).thenReturn(753L);
+        when(careerEndpointRepository.countByIsActiveFalse()).thenReturn(596L);
+        when(careerEndpointRepository.countByIsActiveTrueAndLastCrawlStatusIsNull()).thenReturn(0L);
+        when(aggregatorRunRepository.findAll()).thenReturn(List.of());
+
+        HealthReport report = controller.getHealth().getBody();
+
+        assertThat(report).isNotNull();
+        assertThat(report.totalEndpoints()).isEqualTo(1349L);
+        assertThat(report.activeEndpoints()).isEqualTo(753L);
+        assertThat(report.inactiveEndpoints()).isEqualTo(596L);
+    }
 }

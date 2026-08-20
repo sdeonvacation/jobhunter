@@ -202,11 +202,42 @@ class AiAggregatorStrategyTest {
         }
 
         @Test
-        @DisplayName("returns empty when AI response is invalid JSON")
-        void emptyOnInvalidJson() {
+        @DisplayName("returns error when AI response is malformed JSON")
+        void errorOnMalformedJson() {
             String html = "<html><body>content</body></html>";
             when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(html));
             when(aiProvider.generateExtraction(anyString(), anyString())).thenReturn("not valid json at all");
+
+            FetchContext context = FetchContext.forSearch(List.of(), List.of(), 30, 3,
+                    Map.of("url", "https://example.com"));
+
+            FetchResult result = strategy.fetch(context);
+
+            assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
+            assertThat(result.errorMessage()).contains("Malformed AI extraction JSON");
+        }
+
+        @Test
+        @DisplayName("returns empty when AI response is an empty JSON array")
+        void emptyOnEmptyJsonArray() {
+            String html = "<html><body>content</body></html>";
+            when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(html));
+            when(aiProvider.generateExtraction(anyString(), anyString())).thenReturn("[]");
+
+            FetchContext context = FetchContext.forSearch(List.of(), List.of(), 30, 3,
+                    Map.of("url", "https://example.com"));
+
+            FetchResult result = strategy.fetch(context);
+
+            assertThat(result.status()).isEqualTo(ExtractionStatus.EMPTY);
+        }
+
+        @Test
+        @DisplayName("returns empty when AI response is JSON null")
+        void emptyOnJsonNull() {
+            String html = "<html><body>content</body></html>";
+            when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(html));
+            when(aiProvider.generateExtraction(anyString(), anyString())).thenReturn("null");
 
             FetchContext context = FetchContext.forSearch(List.of(), List.of(), 30, 3,
                     Map.of("url", "https://example.com"));

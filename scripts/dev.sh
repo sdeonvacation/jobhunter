@@ -33,7 +33,11 @@ start_db() {
 
 start_mcp() {
   if nc -z localhost 8000 2>/dev/null; then
-    echo "MCP already running"
+    if curl -sS --max-time 2 http://localhost:8000/mcp >/dev/null 2>&1; then
+      echo "MCP already running"
+    else
+      echo "ERROR: port 8000 is occupied by a non-responsive process; not stopping it"
+    fi
     return
   fi
   local uvx_path=$(which uvx 2>/dev/null || echo "$HOME/.local/bin/uvx")

@@ -116,8 +116,8 @@ class HttpMcpClientImplTest {
     }
 
     @Test
-    @DisplayName("Should mark session invalid on -32001 error code")
-    void shouldMarkSessionInvalidOnExpiredError() throws Exception {
+    @DisplayName("Should reinitialize after -32001 session expiration")
+    void shouldReinitializeAfterExpiredError() throws Exception {
         ObjectNode error = objectMapper.createObjectNode();
         error.put("code", -32001);
         error.put("message", "Session expired");
@@ -127,14 +127,68 @@ class HttpMcpClientImplTest {
         response.put("id", 1);
         response.set("error", error);
 
-        stubFor(post("/mcp")
-                .willReturn(okJson(objectMapper.writeValueAsString(response))));
+        ObjectNode initResponse = objectMapper.createObjectNode();
+        initResponse.put("jsonrpc", "2.0");
+        initResponse.put("id", 1);
+        initResponse.set("result", objectMapper.createObjectNode());
+        ObjectNode successResponse = objectMapper.createObjectNode();
+        successResponse.put("jsonrpc", "2.0");
+        successResponse.put("id", 2);
+        ObjectNode success = objectMapper.createObjectNode();
+        success.put("recovered", true);
+        successResponse.set("result", success);
 
-        assertThatThrownBy(() -> client.callTool("get_my_profile", Map.of()))
-                .isInstanceOf(McpClientException.class);
+        stubFor(post("/mcp").inScenario("expired")
+                .whenScenarioStateIs("Started")
+                .willReturn(aResponse().withStatus(200).withHeader(MCP_SESSION_HEADER, "old")
+                        .withBody(initResponse.toString()))
+                .willSetStateTo("initialized"));
+        stubFor(post("/mcp").inScenario("expired")
+                .whenScenarioStateIs("initialized")
+                .willReturn(okJson(objectMapper.writeValueAsString(response)))
+                .willSetStateTo("expired"));
+        stubFor(post("/mcp").inScenario("expired")
+                .whenScenarioStateIs("expired")
+                .willReturn(aResponse().withStatus(200).withHeader(MCP_SESSION_HEADER, "new")
+                        .withBody(initResponse.toString()))
+                .willSetStateTo("reinitialized"));
+        stubFor(post("/mcp").inScenario("expired")
+                .whenScenarioStateIs("reinitialized")
+                .willReturn(okJson(successResponse.toString())));
 
-        // isSessionValid will also call get_my_profile and get the same error
-        assertThat(client.isSessionValid()).isFalse();
+        assertThat(client.callTool("get_my_profile", Map.of()).get("recovered").asBoolean()).isTrue();
+        verify(4, postRequestedFor(urlEqualTo("/mcp")));
+    }
+
+    @Test
+    @DisplayName("Should retry initialization after an initialization failure")
+    void shouldRetryFailedInitialization() {
+        ObjectNode initResponse = objectMapper.createObjectNode();
+        initResponse.put("jsonrpc", "2.0");
+        initResponse.put("id", 1);
+        initResponse.set("result", objectMapper.createObjectNode());
+        ObjectNode successResponse = objectMapper.createObjectNode();
+        successResponse.put("jsonrpc", "2.0");
+        successResponse.put("id", 2);
+        ObjectNode result = objectMapper.createObjectNode();
+        result.put("ok", true);
+        successResponse.set("result", result);
+
+        stubFor(post("/mcp").inScenario("init-failure")
+                .whenScenarioStateIs("Started")
+                .willReturn(serverError())
+                .willSetStateTo("initialized"));
+        stubFor(post("/mcp").inScenario("init-failure")
+                .whenScenarioStateIs("initialized")
+                .willReturn(aResponse().withStatus(200).withHeader(MCP_SESSION_HEADER, "session")
+                        .withBody(initResponse.toString()))
+                .willSetStateTo("ready"));
+        stubFor(post("/mcp").inScenario("init-failure")
+                .whenScenarioStateIs("ready")
+                .willReturn(okJson(successResponse.toString())));
+
+        assertThat(client.callTool("get_my_profile", Map.of()).get("ok").asBoolean()).isTrue();
+        verify(3, postRequestedFor(urlEqualTo("/mcp")));
     }
 
     @Test

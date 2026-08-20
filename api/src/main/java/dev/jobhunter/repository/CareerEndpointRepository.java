@@ -50,6 +50,8 @@ public interface CareerEndpointRepository extends JpaRepository<CareerEndpoint, 
 
     long countByIsActiveTrue();
 
+    long countByIsActiveFalse();
+
     long countByIsActiveTrueAndLastCrawlStatus(dev.jobhunter.model.enums.CrawlStatus status);
 
     long countByIsActiveTrueAndLastCrawlStatusIsNull();
