@@ -14,9 +14,14 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.springframework.stereotype.Component;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Mono;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -34,6 +39,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.InflaterInputStream;
 
 @Slf4j
 @Component
@@ -41,7 +48,7 @@ public class StepStoneStrategy implements FetchStrategy {
 
     private static final String USER_AGENT =
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-                    + "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+                    + "(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
     private static final Pattern DETAIL_URL = Pattern.compile(
             "^https?://(?:www\\.)?stepstone\\.(?:de|at|nl|be)/stellenangebote--[^/?#]+-\\d+-inline\\.html(?:[?#].*)?$",
             Pattern.CASE_INSENSITIVE);
@@ -219,7 +226,38 @@ public class StepStoneStrategy implements FetchStrategy {
                 .header("User-Agent", USER_AGENT)
                 .header("Accept-Language", "en-US,en;q=0.9")
                 .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                .retrieve().bodyToMono(String.class).block(Duration.ofSeconds(timeoutSeconds));
+                .header("Accept-Encoding", "gzip, deflate")
+                .header("Sec-CH-UA", "\"Not=A?Brand\";v=\"99\", \"Google Chrome\";v=\"151\", \"Chromium\";v=\"151\"")
+                .header("Sec-CH-UA-Mobile", "?0")
+                .header("Sec-CH-UA-Platform", "\"macOS\"")
+                .header("Sec-Fetch-Dest", "document")
+                .header("Sec-Fetch-Mode", "navigate")
+                .header("Sec-Fetch-Site", "none")
+                .header("Sec-Fetch-User", "?1")
+                .header("Upgrade-Insecure-Requests", "1")
+                .exchangeToMono(response -> {
+                    if (response.statusCode().isError()) {
+                        return response.createException().flatMap(Mono::error);
+                    }
+                    return response.bodyToMono(byte[].class)
+                            .map(body -> decodeBody(body, response.headers().asHttpHeaders()));
+                })
+                .block(Duration.ofSeconds(timeoutSeconds));
+    }
+
+    private String decodeBody(byte[] body, HttpHeaders headers) {
+        String encoding = headers.getFirst(HttpHeaders.CONTENT_ENCODING);
+        if (encoding == null || encoding.isBlank()) return new String(body, StandardCharsets.UTF_8);
+        try (InputStream compressed = new ByteArrayInputStream(body);
+             InputStream decoded = switch (encoding.toLowerCase(Locale.ROOT)) {
+                 case "gzip" -> new GZIPInputStream(compressed);
+                 case "deflate" -> new InflaterInputStream(compressed);
+                 default -> throw new IllegalArgumentException("Unsupported Content-Encoding: " + encoding);
+             }) {
+            return new String(decoded.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not decode StepStone response", e);
+        }
     }
 
     private void harvestLinks(String html, String searchUrl, String baseUrl, Set<String> links) {

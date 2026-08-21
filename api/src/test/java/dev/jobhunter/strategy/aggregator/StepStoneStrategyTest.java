@@ -15,8 +15,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.HashMap;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.GZIPOutputStream;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -87,6 +90,23 @@ class StepStoneStrategyTest {
         });
         verify(getRequestedFor(urlPathEqualTo("/jobs/backend-engineer/in-berlin"))
                 .withQueryParam("q", equalTo("backend engineer")));
+        verify(getRequestedFor(urlPathEqualTo(DETAIL_PATH))
+                .withHeader("Accept-Encoding", equalTo("gzip, deflate"))
+                .withHeader("Sec-Fetch-Dest", equalTo("document")));
+    }
+
+    @Test
+    void fetch_decodesGzipDetailResponse() throws IOException {
+        stubSearch("backend-engineer", null, "<a href=\"" + DETAIL_PATH + "\">one</a>");
+        stubFor(get(urlPathEqualTo(DETAIL_PATH)).willReturn(aResponse()
+                .withHeader("Content-Type", "text/html")
+                .withHeader("Content-Encoding", "gzip")
+                .withBody(gzip(detailJson("Backend Engineer", "12345")))));
+
+        FetchResult result = strategy.fetch(context(List.of("backend engineer"), List.of(), Map.of()));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs()).singleElement().extracting(RawAggregatorJob::externalId).isEqualTo("12345");
     }
 
     @Test
@@ -251,6 +271,14 @@ class StepStoneStrategyTest {
 
     private static ResponseDefinitionBuilder okHtml(String body) {
         return ok(body).withHeader("Content-Type", "text/html");
+    }
+
+    private static byte[] gzip(String body) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (GZIPOutputStream gzip = new GZIPOutputStream(output)) {
+            gzip.write(body.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        return output.toByteArray();
     }
 
     private static String detailJson(String title, String id) {
