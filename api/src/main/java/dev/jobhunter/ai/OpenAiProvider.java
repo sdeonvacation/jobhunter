@@ -204,16 +204,28 @@ public class OpenAiProvider implements AiProvider {
     }
 
     private String attemptJsonRepair(String truncatedJson) {
-        // Find last complete JSON object in array
-        int lastCloseBrace = truncatedJson.lastIndexOf('}');
-        if (lastCloseBrace <= 0) return null;
+        // Find the last *structural* closing brace (a '}' outside any string value),
+        // so a '}' inside a string (e.g. a URL like /jobs/{slug}) is not mistaken
+        // for the end of a JSON object.
+        int cutIndex = -1;
+        boolean inString = false;
+        for (int i = 0; i < truncatedJson.length(); i++) {
+            char c = truncatedJson.charAt(i);
+            if (c == '"' && (i == 0 || truncatedJson.charAt(i - 1) != '\\')) {
+                inString = !inString;
+            }
+            if (!inString && c == '}') {
+                cutIndex = i;
+            }
+        }
+        if (cutIndex <= 0) return null;
 
-        String trimmed = truncatedJson.substring(0, lastCloseBrace + 1);
+        String trimmed = truncatedJson.substring(0, cutIndex + 1);
 
         // Count unclosed brackets to determine what needs closing
         int openBrackets = 0;
         int openBraces = 0;
-        boolean inString = false;
+        inString = false;
         for (int i = 0; i < trimmed.length(); i++) {
             char c = trimmed.charAt(i);
             if (c == '"' && (i == 0 || trimmed.charAt(i - 1) != '\\')) {

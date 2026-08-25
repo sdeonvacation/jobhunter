@@ -163,6 +163,24 @@ class OpenAiProviderTest {
     }
 
     @Test
+    void extract_truncatedResponse_withBraceInsideUrl_repairsCorrectly() {
+        // A '}' inside a string value (e.g. a URL like /jobs/{slug}) must not be
+        // mistaken for a structural closing brace when repairing truncation.
+        String truncatedContent = """
+                {"skills":[{"name":"Java","category":"Language","required":true,"rawMention":"{braces}"},{"name":"Spr""";
+        String responseBody = openAiResponse(truncatedContent, "length");
+
+        stubFor(post("/v1/chat/completions").willReturn(okJson(responseBody)));
+
+        SkillExtractionResponse result = provider.extract(
+                "Extract skills", "Job description", SkillExtractionResponse.class);
+
+        assertThat(result.skills()).hasSize(1);
+        assertThat(result.skills().get(0).name()).isEqualTo("Java");
+        assertThat(result.skills().get(0).rawMention()).isEqualTo("{braces}");
+    }
+
+    @Test
     void extract_aiExtractionResponse_sendsCorrectSchema() {
         String content = """
                 {"jobs":[{"title":"Backend Engineer","location":"Berlin","applyUrl":"https://example.com/apply"}]}""";

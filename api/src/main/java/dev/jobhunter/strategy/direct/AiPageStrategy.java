@@ -40,6 +40,9 @@ public class AiPageStrategy implements FetchStrategy {
             Only include actual job postings, not navigation or categories. \
             If no jobs are found, return {"jobs": []}.""";
 
+    private static final int MAX_JOBS_PER_CHUNK = 40;
+    private static final int MAX_CHUNK_CHARS = 3000;
+
     private static final Pattern JOB_HREF_PATTERN = Pattern.compile(
             "(?i)(job|position|career|apply|rolle|stelle|opening|vacancy|vakanc)"
     );
@@ -149,33 +152,62 @@ public class AiPageStrategy implements FetchStrategy {
                 candidates = extractCandidateJobs(htmlDoc, endpoint.getUrl());
             }
 
-            String contentForAi;
+            List<AiExtractionResponse.AiJobEntry> allEntries = new ArrayList<>();
+            Exception firstFailure = null;
+
             if (!candidates.isEmpty()) {
-                contentForAi = formatCandidatesForAi(candidates);
+                for (List<CandidateJob> chunk : partition(candidates, MAX_JOBS_PER_CHUNK)) {
+                    try {
+                        collectEntries(formatCandidatesForAi(chunk), allEntries);
+                    } catch (Exception e) {
+                        if (firstFailure == null) firstFailure = e;
+                        log.warn("GenericAI [{}]: chunk extraction failed: {}", endpoint.getUrl(), e.getMessage());
+                    }
+                }
             } else if (!isJson) {
                 // HTML fallback: reuse already-parsed doc
                 if (htmlDoc == null) {
                     htmlDoc = Jsoup.parse(content, endpoint.getUrl());
                     removeNonContentElements(htmlDoc);
                 }
-                contentForAi = extractBodyText(htmlDoc);
+                for (String chunk : chunkText(extractBodyText(htmlDoc), MAX_CHUNK_CHARS)) {
+                    try {
+                        collectEntries(chunk, allEntries);
+                    } catch (Exception e) {
+                        if (firstFailure == null) firstFailure = e;
+                        log.warn("GenericAI [{}]: chunk extraction failed: {}", endpoint.getUrl(), e.getMessage());
+                    }
+                }
             } else {
                 // JSON content but no candidates from known wrappers — let AI try directly
-                contentForAi = truncate(content, maxContentChars);
+                for (String chunk : chunkText(truncate(content, maxContentChars), MAX_CHUNK_CHARS)) {
+                    try {
+                        collectEntries(chunk, allEntries);
+                    } catch (Exception e) {
+                        if (firstFailure == null) firstFailure = e;
+                        log.warn("GenericAI [{}]: chunk extraction failed: {}", endpoint.getUrl(), e.getMessage());
+                    }
+                }
             }
 
-            if (contentForAi.isBlank()) {
+            if (allEntries.isEmpty()) {
+                if (firstFailure != null) {
+                    throw firstFailure;
+                }
                 return FetchResult.empty(elapsed(start));
             }
 
-            contentForAi = truncate(contentForAi, maxContentChars);
+            List<AiExtractionResponse.AiJobEntry> uniqueEntries = allEntries.stream()
+                    .collect(Collectors.toMap(
+                            j -> (j.title() == null ? "" : j.title()) + "|" + (j.applyUrl() == null ? "" : j.applyUrl()),
+                            j -> j,
+                            (a, b) -> a,
+                            LinkedHashMap::new))
+                    .values()
+                    .stream()
+                    .toList();
 
-            AiExtractionResponse response = aiProvider.extract(SYSTEM_PROMPT, contentForAi, AiExtractionResponse.class);
-            if (response == null || response.jobs() == null || response.jobs().isEmpty()) {
-                return FetchResult.empty(elapsed(start));
-            }
-
-            List<RawAggregatorJob> jobs = response.jobs().stream()
+            List<RawAggregatorJob> jobs = uniqueEntries.stream()
                     .filter(j -> j.title() != null && !j.title().isBlank())
                     .map(j -> mapToRawAggregatorJob(j, endpoint.getUrl()))
                     .toList();
@@ -641,6 +673,60 @@ public class AiPageStrategy implements FetchStrategy {
     private String truncate(String content, int maxLength) {
         if (content.length() <= maxLength) return content;
         return content.substring(0, maxLength);
+    }
+
+    private static <T> List<List<T>> partition(List<T> list, int size) {
+        List<List<T>> parts = new ArrayList<>();
+        for (int i = 0; i < list.size(); i += size) {
+            parts.add(list.subList(i, Math.min(i + size, list.size())));
+        }
+        return parts;
+    }
+
+    private void collectEntries(String contentForAi, List<AiExtractionResponse.AiJobEntry> sink) {
+        AiExtractionResponse response = aiProvider.extract(SYSTEM_PROMPT, contentForAi, AiExtractionResponse.class);
+        if (response != null && response.jobs() != null) {
+            sink.addAll(response.jobs());
+        }
+    }
+
+    /**
+     * Splits text into chunks of at most {@code maxChars}, breaking on newline
+     * boundaries (newlines are kept). A single line longer than {@code maxChars}
+     * is hard-split. Non-empty input always yields at least one non-empty chunk.
+     */
+    private List<String> chunkText(String text, int maxChars) {
+        List<String> chunks = new ArrayList<>();
+        if (text == null || text.isEmpty()) {
+            return chunks;
+        }
+
+        StringBuilder current = new StringBuilder();
+        for (String line : text.split("\n", -1)) {
+            if (line.length() > maxChars) {
+                if (current.length() > 0) {
+                    chunks.add(current.toString());
+                    current = new StringBuilder();
+                }
+                int offset = 0;
+                while (offset < line.length()) {
+                    int end = Math.min(offset + maxChars, line.length());
+                    chunks.add(line.substring(offset, end) + "\n");
+                    offset = end;
+                }
+            } else if (current.length() + line.length() + 1 > maxChars && current.length() > 0) {
+                chunks.add(current.toString());
+                current = new StringBuilder(line).append('\n');
+            } else {
+                current.append(line).append('\n');
+            }
+        }
+
+        if (current.length() > 0) {
+            chunks.add(current.toString());
+        }
+
+        return chunks;
     }
 
     private Duration elapsed(Instant start) {

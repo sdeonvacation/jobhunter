@@ -358,7 +358,7 @@ class AiPageStrategyTest {
 
         extractor.fetch(FetchContext.forEndpoint(endpoint));
 
-        verify(aiProvider).extract(anyString(), argThat(content -> content.length() <= 8000), eq(AiExtractionResponse.class));
+        verify(aiProvider, atLeastOnce()).extract(anyString(), argThat(content -> content.length() <= 8000), eq(AiExtractionResponse.class));
     }
 
     @Test
@@ -456,6 +456,90 @@ class AiPageStrategyTest {
         assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
         assertThat(result.jobs()).hasSize(1);
         assertThat(result.jobs().get(0).title()).isEqualTo("Backend Engineer - Java");
+    }
+
+    // -------------------------------------------------------------------------
+    // Chunked extraction
+    // -------------------------------------------------------------------------
+
+    @Test
+    void extract_moreThanMaxJobsPerChunk_callsAiMultipleTimesAndMerges() {
+        when(aiProvider.isAvailable()).thenReturn(true);
+
+        StringBuilder html = new StringBuilder("<html><body><main>");
+        for (int i = 0; i < 41; i++) {
+            html.append("<a href=\"/jobs/role-").append(i).append("\">Role ").append(i).append("</a>");
+        }
+        html.append("</main></body></html>");
+        extractor.setHtmlResponse(html.toString());
+
+        when(aiProvider.extract(anyString(), anyString(), eq(AiExtractionResponse.class)))
+                .thenReturn(
+                        new AiExtractionResponse(List.of(
+                                new AiExtractionResponse.AiJobEntry("Role 0", null, "/jobs/role-0")
+                        )),
+                        new AiExtractionResponse(List.of(
+                                new AiExtractionResponse.AiJobEntry("Role 40", null, "/jobs/role-40")
+                        ))
+                );
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://example.com/careers")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        verify(aiProvider, times(2)).extract(anyString(), anyString(), eq(AiExtractionResponse.class));
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs()).extracting(RawAggregatorJob::title)
+                .containsExactly("Role 0", "Role 40");
+    }
+
+    @Test
+    void extract_shortBody_makesExactlyOneExtractCall() {
+        when(aiProvider.isAvailable()).thenReturn(true);
+        extractor.setHtmlResponse("<html><body><main><p>Short content</p></main></body></html>");
+        when(aiProvider.extract(anyString(), anyString(), eq(AiExtractionResponse.class)))
+                .thenReturn(new AiExtractionResponse(List.of()));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://example.com/careers")
+                .build();
+
+        extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        verify(aiProvider, times(1)).extract(anyString(), anyString(), eq(AiExtractionResponse.class));
+    }
+
+    @Test
+    void extract_oneChunkFails_otherSucceeds_returnsSuccessWithPartialJobs() {
+        when(aiProvider.isAvailable()).thenReturn(true);
+
+        StringBuilder html = new StringBuilder("<html><body><main>");
+        for (int i = 0; i < 41; i++) {
+            html.append("<a href=\"/jobs/role-").append(i).append("\">Role ").append(i).append("</a>");
+        }
+        html.append("</main></body></html>");
+        extractor.setHtmlResponse(html.toString());
+
+        when(aiProvider.extract(anyString(), anyString(), eq(AiExtractionResponse.class)))
+                .thenThrow(new RuntimeException("chunk 1 failed"))
+                .thenReturn(new AiExtractionResponse(List.of(
+                        new AiExtractionResponse.AiJobEntry("Role 40", null, "/jobs/role-40")
+                )));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://example.com/careers")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs()).hasSize(1);
+        assertThat(result.jobs().get(0).title()).isEqualTo("Role 40");
     }
 
     // -------------------------------------------------------------------------
