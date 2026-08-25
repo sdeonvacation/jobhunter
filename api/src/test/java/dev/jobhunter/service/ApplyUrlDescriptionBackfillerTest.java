@@ -5,6 +5,7 @@ import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.JobPostingRepository;
+import dev.jobhunter.strategy.ats.SmartRecruitersStrategy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,7 @@ class ApplyUrlDescriptionBackfillerTest {
     @Mock private JobPostingRepository jobPostingRepository;
     @Mock private DescriptionFilterChain descriptionFilterChain;
     @Mock private MatchScoringService matchScoringService;
+    @Mock private SmartRecruitersStrategy smartRecruitersStrategy;
 
     private ApplyUrlDescriptionBackfiller backfiller;
 
@@ -33,7 +35,7 @@ class ApplyUrlDescriptionBackfillerTest {
     void setUp() {
         backfiller = new ApplyUrlDescriptionBackfiller(
                 jobPostingRepository, descriptionFilterChain,
-                matchScoringService, new ObjectMapper());
+                matchScoringService, new ObjectMapper(), smartRecruitersStrategy);
     }
 
     @Test
@@ -174,5 +176,27 @@ class ApplyUrlDescriptionBackfillerTest {
         // SR job skipped, GH job attempted (fetch fails), neither saved
         verify(jobPostingRepository, never()).save(any());
         verifyNoInteractions(matchScoringService);
+    }
+
+    @Test
+    void backfill_smartRecruitersHostedAggregatorJob_usesApiAndRescores() {
+        var job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.JOBGETHER)
+                .applyUrl("https://jobs.smartrecruiters.com/BlackbirdCollective/743999746512657-java-developer-germany")
+                .build();
+
+        when(jobPostingRepository.findActiveKeepJobsWithApplyUrlButNoDescription(
+                eq(FilterDecision.KEEP), any(PageRequest.class)))
+                .thenReturn(List.of(job));
+        when(smartRecruitersStrategy.isSmartRecruitersPostingUrl(job.getApplyUrl())).thenReturn(true);
+        when(smartRecruitersStrategy.fetchDescriptionFromUrl(job.getApplyUrl()))
+                .thenReturn("Java developer role requiring Spring Boot, SQL and Kubernetes experience in a collaborative team.");
+        when(jobPostingRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        backfiller.backfill();
+
+        verify(jobPostingRepository).save(job);
+        verify(matchScoringService).rescoreJob(job);
     }
 }

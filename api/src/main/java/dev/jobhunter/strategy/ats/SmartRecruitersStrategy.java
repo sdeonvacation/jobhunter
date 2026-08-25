@@ -15,6 +15,8 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Component
@@ -25,6 +27,9 @@ public class SmartRecruitersStrategy extends AbstractAtsStrategy {
     private static final int PAGE_SIZE = 100;
     private static final int MAX_PAGES = 20;
     private static final Duration DETAIL_TIMEOUT = Duration.ofSeconds(15);
+    /** Matches public posting URLs: jobs.smartrecruiters.com/{companySlug}/{postingId}... */
+    private static final Pattern POSTING_URL_PATTERN = Pattern.compile(
+            "https?://jobs\\.smartrecruiters\\.com/([^/?#]+)/(\\d+)", Pattern.CASE_INSENSITIVE);
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
@@ -181,6 +186,34 @@ public class SmartRecruitersStrategy extends AbstractAtsStrategy {
             return null;
         }
     }
+
+    /**
+     * Parse a public posting URL into (companySlug, postingId). Returns null if the URL
+     * is not a SmartRecruiters public posting URL (e.g. the oneclick-ui SPA route).
+     */
+    public static PostingRef parsePostingUrl(String url) {
+        if (url == null) return null;
+        Matcher m = POSTING_URL_PATTERN.matcher(url);
+        if (!m.find()) return null;
+        return new PostingRef(m.group(1), m.group(2));
+    }
+
+    public boolean isSmartRecruitersPostingUrl(String url) {
+        return parsePostingUrl(url) != null;
+    }
+
+    /**
+     * Fetch a description for a SmartRecruiters-hosted posting by its public URL.
+     * Used when a job arrived from an aggregator (e.g. Jobgether) whose source is not
+     * SMARTRECRUITERS but whose apply URL points at jobs.smartrecruiters.com.
+     */
+    public String fetchDescriptionFromUrl(String postingUrl) {
+        PostingRef ref = parsePostingUrl(postingUrl);
+        if (ref == null) return null;
+        return fetchDescription(ref.companySlug(), ref.postingId());
+    }
+
+    public record PostingRef(String companySlug, String postingId) {}
 
     private String buildLocation(String city, String region, String country) {
         StringBuilder sb = new StringBuilder();

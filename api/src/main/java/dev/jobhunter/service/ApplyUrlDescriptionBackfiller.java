@@ -6,6 +6,7 @@ import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.JobPostingRepository;
+import dev.jobhunter.strategy.ats.SmartRecruitersStrategy;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -39,15 +40,18 @@ public class ApplyUrlDescriptionBackfiller extends DescriptionBackfiller {
     private final JobPostingRepository jobPostingRepository;
     private final DescriptionFilterChain descriptionFilterChain;
     private final ObjectMapper objectMapper;
+    private final SmartRecruitersStrategy smartRecruitersStrategy;
 
     public ApplyUrlDescriptionBackfiller(JobPostingRepository jobPostingRepository,
                                          DescriptionFilterChain descriptionFilterChain,
                                          MatchScoringService matchScoringService,
-                                         ObjectMapper objectMapper) {
+                                         ObjectMapper objectMapper,
+                                         SmartRecruitersStrategy smartRecruitersStrategy) {
         super(matchScoringService);
         this.jobPostingRepository = jobPostingRepository;
         this.descriptionFilterChain = descriptionFilterChain;
         this.objectMapper = objectMapper;
+        this.smartRecruitersStrategy = smartRecruitersStrategy;
     }
 
     @Override
@@ -100,6 +104,12 @@ public class ApplyUrlDescriptionBackfiller extends DescriptionBackfiller {
      * Fetches a page and extracts the job description from JSON-LD or meta tags.
      */
     private String fetchDescriptionFromUrl(String url) throws Exception {
+        // SmartRecruiters posting pages are JS-rendered (no static JSON-LD/meta), so
+        // Jsoup cannot scrape them. Use the SmartRecruiters API detail endpoint instead.
+        if (smartRecruitersStrategy.isSmartRecruitersPostingUrl(url)) {
+            return smartRecruitersStrategy.fetchDescriptionFromUrl(url);
+        }
+
         Document doc = Jsoup.connect(url)
                 .userAgent(USER_AGENT)
                 .timeout(FETCH_TIMEOUT_MS)
