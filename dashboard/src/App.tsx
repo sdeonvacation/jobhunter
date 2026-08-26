@@ -14,6 +14,7 @@ import FollowUps from './pages/FollowUps';
 import InterviewPrep from './pages/InterviewPrep';
 import StoryBank from './pages/StoryBank';
 import CoverLetter from './pages/CoverLetter';
+import JobDetail from './pages/JobDetail';
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/people/:id" element={<ContactDetail />} />
             <Route path="/evaluate/:jobId" element={<Evaluate />} />
             <Route path="/cover-letter/:jobId" element={<CoverLetter />} />
+            <Route path="/job/:jobId" element={<JobDetail />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/follow-ups" element={<FollowUps />} />
             <Route path="/interview-prep/:jobId" element={<InterviewPrep />} />

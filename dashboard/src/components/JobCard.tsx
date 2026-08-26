@@ -184,6 +184,14 @@ export default function JobCard({ job, index = 0, onMarkApplied, onUndoApplied, 
               <path d="M2 4v10a1 1 0 0 0 1 1h8" />
             </svg>
           </Link>
+          <Link
+            to={`/job/${job.id}`}
+            onClick={(e) => e.stopPropagation()}
+            title="View JD"
+            className="w-8 h-8 flex items-center justify-center rounded-md border border-surface-600 text-text-muted hover:border-accent/40 hover:text-accent hover:bg-accent/10 transition-all duration-150"
+          >
+            JD
+          </Link>
           {hasContacts && (
             <Link
               to={`/people?company=${encodeURIComponent(job.companyName || '')}`}
