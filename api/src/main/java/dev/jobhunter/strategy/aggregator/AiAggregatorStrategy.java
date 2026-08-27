@@ -133,10 +133,12 @@ public class AiAggregatorStrategy implements FetchStrategy {
     }
 
     private String generateExternalId(AiExtractedJob job) {
+        // L5 dedup_hash (computed from applyUrl) handles URL-based cross-source dedup;
+        // keeping applyUrl out of the synthetic ID avoids fragmentation when the AI
+        // returns a slightly different URL on re-extraction of the same listing.
         String content = String.join("|",
                 job.title() != null ? job.title() : "",
-                job.companyName() != null ? job.companyName() : "",
-                job.applyUrl() != null ? job.applyUrl() : "");
+                job.companyName() != null ? job.companyName() : "");
         return Integer.toHexString(content.hashCode());
     }
 

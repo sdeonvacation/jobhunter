@@ -108,6 +108,9 @@ public class JobPosting {
 
     private String fingerprint;
 
+    @Column(name = "dedup_hash", length = 64)
+    private String dedupHash;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "language_filter")
     @Builder.Default

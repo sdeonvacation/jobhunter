@@ -22,5 +22,6 @@
     <include file="db/changelog/015-outreach-contact-email.sql"/>
     <include file="db/changelog/016-drop-extraction-method.sql"/>
     <include file="db/changelog/017-outreach-contact-nullable-company.sql"/>
+    <include file="db/changelog/018-add-job-dedup-hash.sql"/>
 
 </databaseChangeLog>

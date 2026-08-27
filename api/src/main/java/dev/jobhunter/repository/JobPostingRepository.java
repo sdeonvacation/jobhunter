@@ -191,9 +191,16 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     @Query("SELECT j FROM JobPosting j WHERE j.source IN :sources AND j.source != 'LINKEDIN' " +
            "AND j.applyUrl IS NOT NULL AND j.isActive = true AND j.languageFilter = 'KEEP' " +
-           "AND (j.description IS NULL OR LENGTH(j.description) < :minLength)")
+           "AND (j.description IS NULL OR LENGTH(j.description) < :minLength) " +
+           "ORDER BY j.discoveredDate DESC, j.id")
     List<JobPosting> findAggregatorJobsNeedingDescription(@Param("sources") List<JobSource> sources,
                                                           @Param("minLength") int minLength);
+
+    @Query("SELECT j.id FROM JobPosting j WHERE j.dedupHash = :hash")
+    List<UUID> findIdsByDedupHash(@Param("hash") String hash);
+
+    @Query("SELECT j.dedupHash FROM JobPosting j WHERE j.source = :source AND j.dedupHash IS NOT NULL")
+    List<String> findDedupHashesBySource(@Param("source") JobSource source);
 
     List<JobPosting> findByPosterContactId(UUID posterContactId);
 
@@ -219,6 +226,11 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
 
     @Query("SELECT j FROM JobPosting j WHERE j.source = :source AND j.applyUrl LIKE '%berlinstartupjobs.com%' AND j.isActive = true")
     List<JobPosting> findJobsWithUnresolvedBsjUrl(@Param("source") JobSource source);
+
+    @Modifying
+    @Query("UPDATE JobPosting j SET j.hidden = true " +
+           "WHERE j.filterReason LIKE :prefix AND j.updatedAt < :cutoff AND j.hidden = false")
+    int softHideStuckJobsOlderThan(@Param("prefix") String prefix, @Param("cutoff") java.time.LocalDateTime cutoff);
 
     // --- Projections for AggregatorEndpointDiscoverer ---
 
