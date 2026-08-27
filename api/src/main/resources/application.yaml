@@ -112,6 +112,9 @@ gdpr:
   recruiter-ttl-days: 90
   purge-schedule: "0 0 2 * * ?"
 
+stuck-job-janitor:
+  schedule: "0 0 4 * * ?"
+
 # visa-reaper:
 #   schedule: "0 0 */6 * * ?"  # default: every 6h
 
@@ -207,6 +210,18 @@ aggregator:
         delayBetweenMs: "1500"
         maxScrapePerRun: "40"
         maxConsecutiveDetailFailures: "3"
+    - name: workinfinland
+      strategy: workinfinland
+      job-source: WORK_IN_FINLAND
+      discovery-source: WORK_IN_FINLAND
+      url: "https://www.workinfinland.com/api/jobs/"
+      frequency-hours: 12 # informational only
+      max-results: 800
+      visa-exempt: true
+      config:
+        categories: "software-development,ict,deep-tech,engineering"
+        limit: "50"
+        delayBetweenPagesMs: "500"
 
 server:
   port: 8089

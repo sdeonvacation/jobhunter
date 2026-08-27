@@ -12,5 +12,6 @@ public enum DiscoverySource {
     CAREERS_IN_GOTHENBURG,
     INSTAFFO,
     BUILTIN_EUROPE,
-    JOBGETHER
+    JOBGETHER,
+    WORK_IN_FINLAND
 }
