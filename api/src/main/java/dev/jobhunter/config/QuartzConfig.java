@@ -6,6 +6,7 @@ import dev.jobhunter.scheduler.DiscoveryScheduler;
 import dev.jobhunter.scheduler.GdprPurgeScheduler;
 import dev.jobhunter.scheduler.PipelineScheduler;
 import dev.jobhunter.scheduler.ScoringScheduler;
+import dev.jobhunter.scheduler.StuckJobJanitorScheduler;
 import dev.jobhunter.scheduler.VisaReaperScheduler;
 import org.quartz.CronScheduleBuilder;
 import org.quartz.JobBuilder;
@@ -245,6 +246,32 @@ public class QuartzConfig {
         return TriggerBuilder.newTrigger()
                 .forJob(visaReaperJobDetail)
                 .withIdentity("visaReaperTrigger", "visa-reaper")
+                .withSchedule(
+                        CronScheduleBuilder.cronSchedule(cronExpression)
+                                .withMisfireHandlingInstructionFireAndProceed()
+                )
+                .build();
+    }
+
+    // --- Stuck Job Janitor ---
+
+    @Bean
+    public JobDetail stuckJobJanitorJobDetail() {
+        return JobBuilder.newJob(StuckJobJanitorScheduler.class)
+                .withIdentity("stuckJobJanitorJob", "stuck-job-janitor")
+                .storeDurably()
+                .requestRecovery(true)
+                .build();
+    }
+
+    @Bean
+    public Trigger stuckJobJanitorTrigger(
+            JobDetail stuckJobJanitorJobDetail,
+            @Value("${stuck-job-janitor.schedule:0 0 4 * * ?}") String cronExpression
+    ) {
+        return TriggerBuilder.newTrigger()
+                .forJob(stuckJobJanitorJobDetail)
+                .withIdentity("stuckJobJanitorTrigger", "stuck-job-janitor")
                 .withSchedule(
                         CronScheduleBuilder.cronSchedule(cronExpression)
                                 .withMisfireHandlingInstructionFireAndProceed()
