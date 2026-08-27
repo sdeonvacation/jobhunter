@@ -539,4 +539,88 @@ class AggregatorIngestionServiceImplTest {
         verify(jobPostingRepository, never()).save(any(JobPosting.class));
         verify(deduplicationFilter, never()).generateFingerprint(anyString(), anyString(), anyString());
     }
+
+    @Test
+    void ingest_mailtoUrl_rejectedAsError() {
+        var sourceConfig = createSourceConfig(JobSource.BERLIN_STARTUP_JOBS, DiscoverySource.BERLIN_STARTUP_JOBS);
+        var job = new RawAggregatorJob("ext-mailto", "Backend Engineer", "Acme Corp", "Berlin",
+                "Java dev", "mailto:jobs@x.com", LocalDate.now(),
+                null, null, null, "{}");
+        var fetchResult = FetchResult.success(List.of(job), Duration.ofMillis(100));
+
+        when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
+        when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.BERLIN_STARTUP_JOBS)).thenReturn(new HashSet<>());
+        when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
+        when(aggregatorRunRepository.save(any(AggregatorRun.class))).thenAnswer(i -> i.getArgument(0));
+
+        IngestionStats stats = service.ingest(sourceConfig);
+
+        assertThat(stats.errors()).isEqualTo(1);
+        assertThat(stats.created()).isZero();
+        verify(jobPostingRepository, never()).save(any(JobPosting.class));
+        // L1 fires before fingerprint generation
+        verify(deduplicationFilter, never()).generateFingerprint(anyString(), anyString(), anyString());
+        verify(jobFilterChain, never()).apply(any(), anyBoolean(), anyBoolean());
+    }
+
+    @Test
+    void ingest_knownUnenrichableHost_rejectedAsError() {
+        var sourceConfig = createSourceConfig(JobSource.BERLIN_STARTUP_JOBS, DiscoverySource.BERLIN_STARTUP_JOBS);
+        var job = new RawAggregatorJob("ext-ibm", "Backend Engineer", "IBM", "Berlin",
+                "Java dev", "https://careers.ibm.com/careers/JobDetail?jobId=123", LocalDate.now(),
+                null, null, null, "{}");
+        var fetchResult = FetchResult.success(List.of(job), Duration.ofMillis(100));
+
+        when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
+        when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.BERLIN_STARTUP_JOBS)).thenReturn(new HashSet<>());
+        when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
+        when(aggregatorRunRepository.save(any(AggregatorRun.class))).thenAnswer(i -> i.getArgument(0));
+
+        IngestionStats stats = service.ingest(sourceConfig);
+
+        assertThat(stats.errors()).isEqualTo(1);
+        assertThat(stats.created()).isZero();
+        verify(jobPostingRepository, never()).save(any(JobPosting.class));
+        verify(deduplicationFilter, never()).generateFingerprint(anyString(), anyString(), anyString());
+        verify(jobFilterChain, never()).apply(any(), anyBoolean(), anyBoolean());
+    }
+
+    @Test
+    void ingest_duplicateApplyUrlHashAcrossJobs_secondIsDuplicate() {
+        // L5 dedup_hash: two jobs with different externalIds but applyUrls that normalize to the
+        // same SHA-256 hash (trailing slash difference) should be deduped within a single batch.
+        var sourceConfig = createSourceConfig(JobSource.BERLIN_STARTUP_JOBS, DiscoverySource.BERLIN_STARTUP_JOBS);
+        var job1 = createJob("ext-1", "Backend Engineer", "Acme Corp");
+        // applyUrl differs from job1 only by trailing slash — same normalized dedup_hash
+        var job2 = new RawAggregatorJob("ext-2", "Backend Engineer", "Acme Corp", "Berlin",
+                "Java dev", "https://apply.example.com/ext-1/", LocalDate.now(),
+                null, null, null, "{}");
+        var fetchResult = FetchResult.success(List.of(job1, job2), Duration.ofMillis(100));
+
+        when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
+        when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.BERLIN_STARTUP_JOBS)).thenReturn(new HashSet<>());
+        when(jobPostingRepository.findDedupHashesBySource(JobSource.BERLIN_STARTUP_JOBS)).thenReturn(List.of());
+        when(jobPostingRepository.findAtsFingerprintsExcludingSources(JobSource.aggregators())).thenReturn(new HashSet<>());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp");
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean()))
+                .thenReturn(FilterChainResult.keep(null, null));
+        Company company = Company.builder().id(UUID.randomUUID()).name("Acme Corp")
+                .normalizedName("acme corp").isActive(true).status(CompanyStatus.ACTIVE).build();
+        when(companyRepository.findByNormalizedName("acme corp")).thenReturn(Optional.of(company));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
+        when(aggregatorRunRepository.save(any(AggregatorRun.class))).thenAnswer(i -> i.getArgument(0));
+
+        IngestionStats stats = service.ingest(sourceConfig);
+
+        // Job 1 saved and its hash added to the in-memory set; job 2 caught by L5 dedup_hash check
+        assertThat(stats.created()).isEqualTo(1);
+        assertThat(stats.duplicates()).isEqualTo(1);
+        verify(jobPostingRepository, times(1)).save(any(JobPosting.class));
+        // First saved job carries the dedup_hash; the second job never reaches the builder
+        ArgumentCaptor<JobPosting> captor = ArgumentCaptor.forClass(JobPosting.class);
+        verify(jobPostingRepository).save(captor.capture());
+        assertThat(captor.getValue().getDedupHash())
+                .isEqualTo(dev.jobhunter.util.DedupHashUtil.compute("https://apply.example.com/ext-1"));
+    }
 }

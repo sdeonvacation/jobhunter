@@ -4,7 +4,9 @@ import dev.jobhunter.filter.DeduplicationFilter;
 import dev.jobhunter.filter.FilterChainResult;
 import dev.jobhunter.filter.JobFilterChain;
 import dev.jobhunter.filter.RawJobInput;
+import dev.jobhunter.util.DedupHashUtil;
 import dev.jobhunter.util.LocationCountryParser;
+import dev.jobhunter.util.UrlValidator;
 import dev.jobhunter.model.enums.VisaSponsorship;
 import dev.jobhunter.model.AggregatorRun;
 import dev.jobhunter.model.Company;
@@ -26,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -92,6 +95,8 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
         Set<String> knownExternalIds = jobPostingRepository.findExternalIdsBySourceAsSet(jobSource);
         // Load fingerprints from ATS (non-aggregator) sources for cross-source enrichment matching
         Set<String> knownFingerprints = jobPostingRepository.findAtsFingerprintsExcludingSources(JobSource.aggregators());
+        // L5: pre-load dedup_hash set for this source (cross-source duplicate detection by normalized applyUrl)
+        Set<String> knownDedupHashes = new HashSet<>(jobPostingRepository.findDedupHashesBySource(jobSource));
 
         for (RawAggregatorJob job : result.jobs()) {
             try {
@@ -105,6 +110,30 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                 if (job.externalId() == null || job.externalId().isBlank()) {
                     log.warn("Skipping job with null/blank externalId from source [{}]: title='{}'",
                             source.name(), job.title());
+                    errors++;
+                    continue;
+                }
+
+                // L5: composite dedup_hash check (cross-source duplicate detection).
+                // Two jobs with different externalIds but applyUrls that normalize to the same hash
+                // (e.g. trailing slash, query string, case) are treated as duplicates.
+                String dedupHash = DedupHashUtil.compute(job.applyUrl());
+                if (dedupHash != null && knownDedupHashes.contains(dedupHash)) {
+                    log.debug("Duplicate apply URL hash for source [{}] applyUrl={}", source.name(), job.applyUrl());
+                    duplicates++;
+                    continue;
+                }
+
+                // L1: reject non-fetchable URLs (mailto:, javascript:, etc.) and known-unenrichable ATSes.
+                String reason = null;
+                if (!UrlValidator.isFetchable(job.applyUrl())) {
+                    reason = "url-unfetchable-scheme";
+                } else if (UrlValidator.isKnownUnenrichable(job.applyUrl())) {
+                    reason = "url-known-unenrichable";
+                }
+                if (reason != null) {
+                    log.debug("Rejecting aggregator job [{}] from source [{}]: {} (applyUrl={})",
+                            job.externalId(), source.name(), reason, job.applyUrl());
                     errors++;
                     continue;
                 }
@@ -156,6 +185,7 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                         .description(job.description())
                         .applyUrl(job.applyUrl())
                         .fingerprint(fingerprint)
+                        .dedupHash(dedupHash)
                         .postedDate(job.postedDate())
                         .discoveredDate(LocalDate.now())
                         .salaryMin(job.salaryMin())
@@ -169,6 +199,9 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                 jobPostingRepository.save(posting);
                 knownExternalIds.add(job.externalId());  // prevent duplicates within same batch
                 knownFingerprints.add(fingerprint);       // prevent duplicate enrichment
+                if (dedupHash != null) {
+                    knownDedupHashes.add(dedupHash);     // L5: prevent URL-based dupes within same batch
+                }
                 created++;
             } catch (Exception e) {
                 log.warn("Error processing job [{}] from source [{}]: {}",
