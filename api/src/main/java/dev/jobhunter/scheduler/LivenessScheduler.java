@@ -88,7 +88,8 @@ public class LivenessScheduler implements Job {
                 .setParameter("batchSize", AGGREGATOR_BATCH_SIZE)
                 .getResultList();
 
-        applied.addAll(aggregator);
-        return applied;
+        List<UUID> result = new java.util.ArrayList<>(applied);
+        result.addAll(aggregator);
+        return result;
     }
 }

@@ -350,7 +350,7 @@ scoring:
     react: 0.3
   seniority-discount:
     enabled: true
-    keywords: ["senior"]
+    keywords: ["staff", "lead", "principal"]
     multiplier: 0.85
   skill-variants:
     java: ["\\bjava\\b", "jvm"]

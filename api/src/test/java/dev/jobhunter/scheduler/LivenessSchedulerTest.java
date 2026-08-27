@@ -37,6 +37,7 @@ class LivenessSchedulerTest {
     void setUp() {
         lenient().when(entityManager.createNativeQuery(anyString())).thenReturn(query);
         lenient().when(query.setParameter(eq("cutoff"), any(LocalDateTime.class))).thenReturn(query);
+        lenient().when(query.setParameter(eq("batchSize"), any(Integer.class))).thenReturn(query);
     }
 
     @Test
@@ -52,7 +53,8 @@ class LivenessSchedulerTest {
     void execute_multipleJobs_checksEach() throws JobExecutionException {
         UUID id1 = UUID.randomUUID();
         UUID id2 = UUID.randomUUID();
-        when(query.getResultList()).thenReturn(List.of(id1, id2));
+        // First call (applied jobs) returns the test fixtures; second call (aggregator backlog) is empty.
+        when(query.getResultList()).thenReturn(new java.util.ArrayList<>(List.of(id1, id2)), List.of());
 
         LivenessResultDto activeResult = new LivenessResultDto(id1, "ACTIVE", LocalDateTime.now(), "http://x", null);
         LivenessResultDto expiredResult = new LivenessResultDto(id2, "EXPIRED", LocalDateTime.now(), "http://y", "page gone");
@@ -69,7 +71,7 @@ class LivenessSchedulerTest {
     void execute_oneJobThrows_continuesWithRest() throws JobExecutionException {
         UUID id1 = UUID.randomUUID();
         UUID id2 = UUID.randomUUID();
-        when(query.getResultList()).thenReturn(List.of(id1, id2));
+        when(query.getResultList()).thenReturn(new java.util.ArrayList<>(List.of(id1, id2)), List.of());
 
         when(livenessCheckService.checkLiveness(id1)).thenThrow(new RuntimeException("timeout"));
         LivenessResultDto result = new LivenessResultDto(id2, "ACTIVE", LocalDateTime.now(), "http://y", null);
@@ -84,7 +86,7 @@ class LivenessSchedulerTest {
     @Test
     void execute_allJobsThrow_doesNotPropagate() {
         UUID id1 = UUID.randomUUID();
-        when(query.getResultList()).thenReturn(List.of(id1));
+        when(query.getResultList()).thenReturn(new java.util.ArrayList<>(List.of(id1)), List.of());
         when(livenessCheckService.checkLiveness(id1)).thenThrow(new RuntimeException("fail"));
 
         assertDoesNotThrow(() -> scheduler.execute(jobExecutionContext));
@@ -97,8 +99,9 @@ class LivenessSchedulerTest {
         scheduler.execute(jobExecutionContext);
 
         verify(entityManager).createNativeQuery(
-                "SELECT id FROM job_posting WHERE applied = true " +
+                "SELECT id FROM job_posting WHERE applied = true AND is_active = true " +
                         "AND (last_liveness_check IS NULL OR last_liveness_check < :cutoff)");
-        verify(query).setParameter(eq("cutoff"), any(LocalDateTime.class));
+        // cutoff is now used in both the applied and aggregator queries
+        verify(query, times(2)).setParameter(eq("cutoff"), any(LocalDateTime.class));
     }
 }

@@ -224,11 +224,21 @@ class BsjApplyUrlResolverTest {
 
         resolver.resolveApplyUrls();
 
-        // Only the second job should be saved
+        // Both jobs are saved: 4xx deactivates bsj-7 (intentional — see commit 95f0b5e),
+        // and the resolved URL is saved on bsj-8.
         ArgumentCaptor<JobPosting> captor = ArgumentCaptor.forClass(JobPosting.class);
-        verify(jobPostingRepository, times(1)).save(captor.capture());
-        assertThat(captor.getValue().getExternalId()).isEqualTo("bsj-8");
-        assertThat(captor.getValue().getApplyUrl()).isEqualTo(applyHref);
+        verify(jobPostingRepository, times(2)).save(captor.capture());
+        List<String> savedExternalIds = captor.getAllValues().stream()
+                .map(JobPosting::getExternalId).toList();
+        assertThat(savedExternalIds).containsExactlyInAnyOrder("bsj-7", "bsj-8");
+        JobPosting savedOk = captor.getAllValues().stream()
+                .filter(j -> "bsj-8".equals(j.getExternalId())).findFirst().orElseThrow();
+        assertThat(savedOk.getApplyUrl()).isEqualTo(applyHref);
+        // bsj-7 is deactivated as url-dead-404
+        JobPosting savedGone = captor.getAllValues().stream()
+                .filter(j -> "bsj-7".equals(j.getExternalId())).findFirst().orElseThrow();
+        assertThat(savedGone.isActive()).isFalse();
+        assertThat(savedGone.getFilterReason()).isEqualTo("url-dead-404");
     }
 
     @Test

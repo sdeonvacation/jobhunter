@@ -71,8 +71,7 @@ tasks.named<JavaCompile>("compileTestJava") {
         !path.contains("PeopleControllerTest") &&
         !path.contains("service/CrawlService") &&
         !path.contains("aggregator/CliStrategy") &&
-        !path.contains("linkedin/LinkedInDescriptionEnricherTest") &&
-        !path.contains("ingestion/AggregatorDescriptionEnricherTest")
+        !path.contains("linkedin/LinkedInDescriptionEnricherTest")
     }.asFileTree
 }
 
