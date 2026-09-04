@@ -12,6 +12,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.UUID;
+
 @Slf4j
 @Getter
 @Setter
@@ -39,7 +41,13 @@ public class AiConfig {
 
     @Bean
     public WebClient aiWebClient() {
+        // One stable ID per conversation (app run) so OpenCode Go can correlate
+        // requests. Required by opencode.ai/zen/go since 2026-09-06; harmless for
+        // other providers (unknown headers are ignored).
+        String opencodeSessionId = UUID.randomUUID().toString();
+        log.info("AI WebClient x-opencode-session: {}", opencodeSessionId);
         return WebClient.builder()
+                .defaultHeader("x-opencode-session", opencodeSessionId)
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
                 .build();
     }
