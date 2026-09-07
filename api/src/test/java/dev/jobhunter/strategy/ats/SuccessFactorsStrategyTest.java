@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 class SuccessFactorsStrategyTest {
@@ -43,6 +44,24 @@ class SuccessFactorsStrategyTest {
 
         extractor = new SuccessFactorsStrategy(webClient);
     }
+
+    private static final String CLASSIC_XML = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Job-Listing>
+            <Job>
+            <JobTitle><![CDATA[Assistant Store Manager - CDI 35h -Velizy (78)]]></JobTitle>
+            <Job-Description><![CDATA[<div><p>The future looks like you</p></div>]]></Job-Description>
+            <ReqId>66755</ReqId>
+            <label>City</label>
+            <value></value>
+            </Job>
+            <Job>
+            <JobTitle><![CDATA[(Senior) Backend Engineer (m/w/d)]]></JobTitle>
+            <Job-Description><![CDATA[<div><p>We are based in Germany</p></div>]]></Job-Description>
+            <ReqId>66756</ReqId>
+            </Job>
+            </Job-Listing>
+            """;
 
     @Test
     void supportedTypes_containsSuccessFactors() {
@@ -340,5 +359,162 @@ class SuccessFactorsStrategyTest {
         assertEquals(1, result.totalFound());
         // URL should not have double slashes
         assertTrue(result.jobs().get(0).applyUrl().startsWith("https://jobs.example.com/job/"));
+    }
+
+    // --- Classic SuccessFactors board support ---
+
+    @Test
+    void isClassicBoard_returnsTrueForCareer5SuccessfactorsEu() {
+        assertTrue(extractor.isClassicBoard("https://career5.successfactors.eu/careers?company=CAProduction"));
+    }
+
+    @Test
+    void isClassicBoard_returnsTrueForCompanyQueryParam() {
+        assertTrue(extractor.isClassicBoard("https://jobs.example.com/careers?company=ACME"));
+    }
+
+    @Test
+    void isClassicBoard_returnsFalseForJobs2webStyle() {
+        assertFalse(extractor.isClassicBoard("https://jobs.voith.com/search/?locale=en_US"));
+        assertFalse(extractor.isClassicBoard("https://jobs.adidas-group.com/search/"));
+        assertFalse(extractor.isClassicBoard(null));
+        assertFalse(extractor.isClassicBoard("   "));
+    }
+
+    @Test
+    void extractCompany_parsesQueryParam() {
+        assertEquals("CAProduction", extractor.extractCompany("https://career5.successfactors.eu/careers?company=CAProduction"));
+        assertEquals("ACME", extractor.extractCompany("https://career5.successfactors.eu/careers?locale=en&company=ACME"));
+        assertNull(extractor.extractCompany("https://career5.successfactors.eu/careers"));
+        assertNull(extractor.extractCompany("https://jobs.example.com/search/?locale=en_US"));
+    }
+
+    @Test
+    void extractOrigin_returnsSchemeAndHost() {
+        assertEquals("https://career5.successfactors.eu",
+                extractor.extractOrigin("https://career5.successfactors.eu/careers?company=CAProduction"));
+        assertEquals("https://jobs.voith.com", extractor.extractOrigin("https://jobs.voith.com/search/?locale=en_US"));
+        assertNull(extractor.extractOrigin(null));
+    }
+
+    @Test
+    void parseClassicXml_extractsJobs() {
+        List<RawAggregatorJob> jobs = extractor.parseClassicXml(CLASSIC_XML, "https://career5.successfactors.eu", "CAProduction");
+
+        assertEquals(2, jobs.size());
+
+        RawAggregatorJob first = jobs.get(0);
+        assertEquals("66755", first.externalId());
+        assertEquals("Assistant Store Manager - CDI 35h -Velizy (78)", first.title());
+        assertEquals("The future looks like you", first.description());
+        assertFalse(first.description().contains("<p>"));
+        assertEquals("Velizy", first.location());
+        assertEquals("https://career5.successfactors.eu/careers?company=CAProduction&career_job_req_id=66755&career_ns=job_application&lang=en_GB",
+                first.applyUrl());
+
+        RawAggregatorJob second = jobs.get(1);
+        assertEquals("66756", second.externalId());
+        assertEquals("(Senior) Backend Engineer (m/w/d)", second.title());
+        assertEquals("Germany", second.location());
+    }
+
+    @Test
+    void parseClassicXml_skipsJobsWithoutReqId() {
+        String xml = """
+                <Job-Listing>
+                <Job>
+                <JobTitle><![CDATA[No ReqId Job]]></JobTitle>
+                <Job-Description><![CDATA[<p>desc</p>]]></Job-Description>
+                </Job>
+                <Job>
+                <JobTitle><![CDATA[Valid Job]]></JobTitle>
+                <Job-Description><![CDATA[<p>desc</p>]]></Job-Description>
+                <ReqId>12345</ReqId>
+                </Job>
+                </Job-Listing>
+                """;
+
+        List<RawAggregatorJob> jobs = extractor.parseClassicXml(xml, "https://career5.successfactors.eu", "CAProduction");
+        assertEquals(1, jobs.size());
+        assertEquals("12345", jobs.get(0).externalId());
+    }
+
+    @Test
+    void extractLocation_fromTitleAfterHyphen() {
+        String location = extractor.extractLocation("Assistant Store Manager - CDI 35h -Velizy (78)", null);
+        assertTrue(location.contains("Velizy"));
+    }
+
+    @Test
+    void extractLocation_fromTitleEnd() {
+        assertEquals("Albacete", extractor.extractLocation("Store Lead Albacete", null));
+    }
+
+    @Test
+    void extractLocation_fromDescriptionCountry() {
+        assertEquals("Germany", extractor.extractLocation("Backend Engineer", "based in Germany"));
+    }
+
+    @Test
+    void extractLocation_returnsNullWhenNoHints() {
+        assertNull(extractor.extractLocation("(Senior) Backend Engineer (m/w/d)", "The future looks like you and requires excellent communication skills."));
+    }
+
+    @Test
+    void fetch_usesClassicPath_whenClassicBoard() {
+        when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(CLASSIC_XML));
+
+        CareerEndpoint endpoint = CareerEndpoint.builder()
+                .url("https://career5.successfactors.eu/careers?company=CAProduction")
+                .atsType(AtsType.SUCCESSFACTORS)
+                .build();
+
+        FetchResult result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertEquals(ExtractionStatus.SUCCESS, result.status());
+        assertEquals(2, result.totalFound());
+        assertTrue(result.jobs().get(0).applyUrl().contains("career_job_req_id=66755"));
+        verify(requestHeadersUriSpec).uri(argThat((String url) -> url != null
+                && url.contains("/career?company=CAProduction&&career_ns=job_listing_summary&&resultType=XML")));
+    }
+
+    @Test
+    void fetch_classicPath_returnsEmpty_whenBlankResponse() {
+        when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(""));
+
+        CareerEndpoint endpoint = CareerEndpoint.builder()
+                .url("https://career5.successfactors.eu/careers?company=CAProduction")
+                .atsType(AtsType.SUCCESSFACTORS)
+                .build();
+
+        FetchResult result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+        assertEquals(ExtractionStatus.EMPTY, result.status());
+    }
+
+    @Test
+    void fetch_classicPath_returnsProtected_on403() {
+        when(responseSpec.bodyToMono(String.class))
+                .thenReturn(Mono.error(WebClientResponseException.create(403, "Forbidden", null, null, null)));
+
+        CareerEndpoint endpoint = CareerEndpoint.builder()
+                .url("https://career5.successfactors.eu/careers?company=CAProduction")
+                .atsType(AtsType.SUCCESSFACTORS)
+                .build();
+
+        FetchResult result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+        assertEquals(ExtractionStatus.PROTECTED, result.status());
+        assertEquals("Protected endpoint - requires authentication", result.errorMessage());
+    }
+
+    @Test
+    void fetch_classicPath_returnsError_whenMissingCompany() {
+        CareerEndpoint endpoint = CareerEndpoint.builder()
+                .url("https://career5.successfactors.eu/careers")
+                .atsType(AtsType.SUCCESSFACTORS)
+                .build();
+
+        FetchResult result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+        assertEquals(ExtractionStatus.ERROR, result.status());
+        assertEquals("classic SF: missing company param", result.errorMessage());
     }
 }
