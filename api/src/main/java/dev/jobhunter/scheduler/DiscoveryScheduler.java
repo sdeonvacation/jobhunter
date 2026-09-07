@@ -6,6 +6,7 @@ import org.quartz.DisallowConcurrentExecution;
 import org.quartz.Job;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -17,9 +18,12 @@ import java.time.Instant;
 public class DiscoveryScheduler implements Job {
 
     private final DiscoveryService discoveryService;
+    private final int resolveLimit;
 
-    public DiscoveryScheduler(DiscoveryService discoveryService) {
+    public DiscoveryScheduler(DiscoveryService discoveryService,
+                              @Value("${discovery.resolve-limit:50}") int resolveLimit) {
         this.discoveryService = discoveryService;
+        this.resolveLimit = resolveLimit;
     }
 
     @Override
@@ -35,6 +39,16 @@ public class DiscoveryScheduler implements Job {
                     elapsed.toSeconds(), stats[0], stats[1], stats[2], stats[3]);
         } catch (Exception e) {
             log.error("Scheduled discovery failed unexpectedly", e);
+        }
+
+        // Drain the DISCOVERED backlog: resolve endpoints for companies without any
+        // (the only step that promotes DISCOVERED -> ACTIVE). Previously manual-only.
+        try {
+            int[] resolveStats = discoveryService.resolveDiscoveredCompanies(resolveLimit);
+            log.info("Scheduled endpoint resolution complete: total={}, resolved={}, failed={}, skipped={}",
+                    resolveStats[0], resolveStats[1], resolveStats[2], resolveStats[3]);
+        } catch (Exception e) {
+            log.error("Scheduled endpoint resolution failed unexpectedly", e);
         }
     }
 }

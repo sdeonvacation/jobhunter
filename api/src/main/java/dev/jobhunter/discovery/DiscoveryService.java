@@ -160,6 +160,10 @@ public class DiscoveryService {
                     skipped++;
                     log.debug("Skipped '{}': no confident resolution (confidence={})",
                             company.getName(), resolution.confidence());
+                    // Demote so the drain progresses past unresolvable companies:
+                    // they leave the DISCOVERED-no-endpoints set and go to manual review.
+                    company.setStatus(CompanyStatus.PENDING_DETECTION);
+                    companyRepository.save(company);
                 }
             } catch (Exception e) {
                 failed++;
@@ -173,7 +177,7 @@ public class DiscoveryService {
         return new int[]{companies.size(), resolved, failed, skipped};
     }
 
-    private DiscoveryOutcome processDiscoveredCompany(String normalizedName, DiscoveredCompany discovered) {
+    DiscoveryOutcome processDiscoveredCompany(String normalizedName, DiscoveredCompany discovered) {
         // Check if company already exists in registry
         Optional<Company> existing = companyRepository.findByNormalizedName(normalizedName);
 
@@ -248,6 +252,17 @@ public class DiscoveryService {
                 .source("discovery:" + discovered.sourceUrl())
                 .build();
         careerEndpointRepository.save(endpoint);
+
+        // Promote company status based on ATS support (same logic as createCareerEndpoint)
+        if (det.atsType() == AtsType.UNKNOWN) {
+            company.setStatus(CompanyStatus.PENDING_DETECTION);
+        } else if (det.atsType() == AtsType.WORKDAY_PROTECTED) {
+            company.setStatus(CompanyStatus.PROTECTED);
+        } else {
+            company.setStatus(CompanyStatus.ACTIVE);
+            company.setActive(true);
+        }
+        companyRepository.save(company);
 
         return DiscoveryOutcome.NEW_ENDPOINT_ADDED;
     }

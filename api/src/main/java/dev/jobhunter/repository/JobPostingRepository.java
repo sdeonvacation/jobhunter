@@ -211,7 +211,8 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
            "WHERE j.isActive = true AND j.applied = false AND j.hidden = false " +
            "AND j.languageFilter = :filter " +
            "AND (" +
-           "  (j.postedDate IS NOT NULL AND j.postedDate >= :since AND j.discoveredDate >= :since) " +
+           "  (j.postedDate IS NOT NULL AND j.source NOT IN :aggregatorSources AND j.discoveredDate >= :since) " +
+           "  OR (j.postedDate IS NOT NULL AND j.source IN :aggregatorSources AND j.postedDate >= :since) " +
            "  OR (j.postedDate IS NULL AND j.source NOT IN :aggregatorSources AND j.discoveredDate >= :since)" +
            "  OR (j.postedDate IS NULL AND j.source IN :aggregatorSources AND j.discoveredDate = :today)" +
            ")")

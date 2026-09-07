@@ -55,6 +55,7 @@ discovery:
   auto-endpoint:
     enabled: true
   schedule: "0 40 */6 * * ?"
+  resolve-limit: 50
   providers:
     jobspy:
       enabled: true
@@ -145,7 +146,7 @@ aggregator:
       strategy: meilisearch
       job-source: CAREERS_IN_GOTHENBURG
       discovery-source: CAREERS_IN_GOTHENBURG
-      url: "https://search.movetogbg.tenfifty.io"
+      url: "https://search-movetogbg.tenfifty.io"
       frequency-hours: 12 # informational only
       max-results: 200
       visa-exempt: true

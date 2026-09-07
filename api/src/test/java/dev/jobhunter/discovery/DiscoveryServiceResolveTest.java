@@ -11,6 +11,7 @@ import dev.jobhunter.resolution.AtsDetector;
 import dev.jobhunter.resolution.CompositeEndpointResolver;
 import dev.jobhunter.resolution.ResolutionResultDto;
 import dev.jobhunter.model.enums.AtsType;
+import dev.jobhunter.model.enums.DiscoveryOutcome;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -144,6 +145,9 @@ class DiscoveryServiceResolveTest {
         assertThat(stats[2]).isEqualTo(0); // failed
         assertThat(stats[3]).isEqualTo(1); // skipped
         verify(careerEndpointRepository, never()).save(any());
+        // Skipped companies are demoted so the drain progresses past them
+        assertThat(company.getStatus()).isEqualTo(CompanyStatus.PENDING_DETECTION);
+        verify(companyRepository).save(company);
     }
 
     @Test
@@ -250,5 +254,33 @@ class DiscoveryServiceResolveTest {
         discoveryService.resolveDiscoveredCompanies(null);
 
         verify(endpointResolver).resolve("Domain Co", "domain.co");
+    }
+
+    @Test
+    void processDiscoveredCompany_existingCompanyWithHint_promotesStatusToActive() {
+        Company company = Company.builder()
+                .id(UUID.randomUUID())
+                .name("kugu")
+                .normalizedName("kugu")
+                .status(CompanyStatus.DISCOVERED)
+                .isActive(true)
+                .build();
+
+        DiscoveredCompany discovered = new DiscoveredCompany(
+                "kugu", "Backend Engineer", "https://example.com/job/1", "https://kugu.jobs.personio.com/?language=en"
+        );
+
+        when(companyRepository.findByNormalizedName("kugu")).thenReturn(Optional.of(company));
+        when(atsDetector.detectFromUrl("https://kugu.jobs.personio.com/?language=en"))
+                .thenReturn(Optional.of(new AtsDetector.DetectionResult(AtsType.PERSONIO, Confidence.HIGH, "kugu")));
+        when(careerEndpointRepository.findByCompanyId(company.getId())).thenReturn(List.of());
+
+        DiscoveryOutcome outcome = discoveryService.processDiscoveredCompany("kugu", discovered);
+
+        assertThat(outcome).isEqualTo(DiscoveryOutcome.NEW_ENDPOINT_ADDED);
+        assertThat(company.getStatus()).isEqualTo(CompanyStatus.ACTIVE);
+        assertThat(company.isActive()).isTrue();
+        verify(careerEndpointRepository).save(any());
+        verify(companyRepository).save(company);
     }
 }

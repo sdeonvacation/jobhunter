@@ -26,6 +26,7 @@ public class AtsDetector {
         URL_PATTERNS.put(Pattern.compile("https?://[\\w-]+\\.wd\\d+\\.myworkdayjobs\\.com.*"), AtsType.WORKDAY);
         URL_PATTERNS.put(Pattern.compile("https?://www\\.stepstone\\.(de|at|nl|be)/.*"), AtsType.STEPSTONE);
         URL_PATTERNS.put(Pattern.compile("https?://[\\w-]+\\.pinpointhq\\.com.*"), AtsType.PINPOINT);
+        URL_PATTERNS.put(Pattern.compile("https?://([\\w-]+)\\.jobs\\.personio\\.(de|com).*"), AtsType.PERSONIO);
         // Generic greenhouse subdomain pattern last (extract slug from subdomain)
         URL_PATTERNS.put(Pattern.compile("https?://(?!boards)([\\w-]+)\\.greenhouse\\.io.*"), AtsType.GREENHOUSE);
     }

@@ -30,6 +30,8 @@ class AtsDetectorTest {
             "https://jobs.ashbyhq.com/notion, ASHBY",
             "https://siemens.wd3.myworkdayjobs.com/careers, WORKDAY",
             "https://www.stepstone.de/jobs/backend, STEPSTONE",
+            "https://kugu.jobs.personio.com/?language=en, PERSONIO",
+            "https://adsquare.jobs.personio.de/, PERSONIO",
     })
     @DisplayName("Should detect ATS from URL with HIGH confidence")
     void shouldDetectFromUrl(String url, AtsType expected) {

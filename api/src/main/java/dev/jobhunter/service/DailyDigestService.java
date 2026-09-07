@@ -1,6 +1,7 @@
 package dev.jobhunter.service;
 
 import dev.jobhunter.model.JobPosting;
+import dev.jobhunter.model.enums.FilterDecision;
 import dev.jobhunter.repository.JobPostingRepository;
 import dev.jobhunter.repository.OpportunityScoreRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -35,12 +36,13 @@ public class DailyDigestService {
     public DigestSnapshot computeDigest() {
         LocalDate today = LocalDate.now();
 
-        // Get active jobs and filter by today's discovery date
-        Page<JobPosting> activeJobs = jobPostingRepository.findByIsActiveTrue(PageRequest.of(0, 500));
-        List<JobPosting> recentJobs = activeJobs.getContent().stream()
-                .filter(j -> today.equals(j.getDiscoveredDate()))
-                .toList();
-        int newJobsCount = recentJobs.size();
+        // Count visible (KEEP) jobs discovered today via a direct query.
+        // The old code fetched the first 500 active jobs (unsorted) and filtered in
+        // memory, which missed today's jobs entirely once the DB grew past 500 active rows.
+        Page<JobPosting> recentJobs = jobPostingRepository
+                .findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndDiscoveredDate(
+                        FilterDecision.KEEP, today, PageRequest.of(0, 500));
+        int newJobsCount = (int) recentJobs.getTotalElements();
 
         // Find top opportunity (highest opportunity score among today's jobs)
         JobPosting topOpportunity = null;
