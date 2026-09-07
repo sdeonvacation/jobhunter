@@ -81,7 +81,7 @@ skills:
     category: architecture
 
 preferences:
-  locations: ["Germany", "remote"]
+  locations: ["Germany", "remote", "Switzerland"]
   employment-type: FULL_TIME
   min-salary-eur: 65000
   seniority: ["senior", "junior", "mid"]
@@ -266,6 +266,21 @@ filters:
       - "\\bes\\b"
       - "barcelona"
       - "madrid"
+      - "france"
+      - "\\bfr\\b"
+      - "paris"
+      - "lyon"
+      - "toulouse"
+      - "italy"
+      - "\\bit\\b"
+      - "milan"
+      - "rome"
+      - "turin"
+      - "poland"
+      - "\\bpl\\b"
+      - "warsaw"
+      - "krakow"
+      - "wroclaw"
     de-patterns:
       - "\\bgermany\\b"
       - "\\bdeutschland\\b"
@@ -415,12 +430,12 @@ people:
 # LinkedIn job search configuration
 linkedin-search:
   query: '(software OR java OR backend OR fullstack OR AI OR platform OR forward deployed) AND (developer OR engineer) NOT graduate NOT lead NOT staff NOT principal'
-  locations: ["Germany", "Remote"]
+  locations: ["Germany", "Remote", "Italy", "Sweden", "Finland", "Poland", "Switzerland"]
   date-posted: week
 
 # Indeed job search configuration
 indeed-search:
   keywords: ["backend engineer", "Java developer", "software engineer"]
-  locations: ["Germany", "Netherlands", "Spain", "Sweden"]
+  locations: ["Germany", "Netherlands", "Spain", "Sweden", "Italy", "Finland", "Poland", "Switzerland"]
   results-wanted: 25
   hours-old: 24

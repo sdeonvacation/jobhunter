@@ -60,16 +60,16 @@ discovery:
     jobspy:
       enabled: true
       keywords: ["backend engineer", "Java developer", "Spring Boot", "Kotlin"]
-      locations: ["Germany", "Netherlands", "remote"]
+      locations: ["Germany", "Netherlands", "Italy", "Sweden", "Finland", "Poland", "Switzerland", "remote"]
     stepstone:
       enabled: true
-      postal-codes: ["10115", "80331", "20095", "60311", "50667"]
+      postal-codes: ["10115", "80331", "20095", "60311", "50667", "8001", "1201", "4001", "3001", "1000"]
     linkedin-alerts:
       enabled: false
     linkedin:
       enabled: ${LINKEDIN_MCP_ENABLED:true}
       keywords: ["backend engineer", "Java developer", "Spring Boot", "Kotlin"]
-      locations: ["Germany", "Netherlands", "remote"]
+      locations: ["Germany", "Netherlands", "Italy", "Sweden", "Finland", "Poland", "Switzerland", "remote"]
 
 linkedin-mcp:
   enabled: ${LINKEDIN_MCP_ENABLED:true}
