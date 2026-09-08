@@ -93,8 +93,15 @@ public class WorkableStrategy extends AbstractAtsStrategy {
                 return FetchResult.empty(elapsed(start));
             }
 
-            log.info("Workable [{}]: extracted {} jobs", slug, allJobs.size());
-            return FetchResult.success(allJobs, elapsed(start));
+            // Workable returns one entry per country for the same posting (same shortcode).
+            // Merge them into a single job with the combined country list so the location
+            // filter sees the full set (e.g. a remote role listed for BE+PL+UK+NL+DE+FR
+            // resolves to DE → visa-exempt → kept).
+            List<RawAggregatorJob> merged = mergeMultiCountryVariants(allJobs);
+
+            log.info("Workable [{}]: extracted {} jobs ({} after merging multi-country variants)",
+                    slug, allJobs.size(), merged.size());
+            return FetchResult.success(merged, elapsed(start));
 
         } catch (WebClientResponseException.NotFound e) {
             log.warn("Workable [{}]: account not found (404)", slug);
@@ -135,6 +142,46 @@ public class WorkableStrategy extends AbstractAtsStrategy {
             log.warn("Workable: failed to map job: {}", e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Workable returns one entry per country for the same posting (same shortcode).
+     * Merge variants into a single job whose location lists all countries, e.g.
+     * "Belgium, Poland, United Kingdom, Netherlands, Germany, France". This lets the
+     * location filter resolve the full set (Germany present → visa-exempt → kept).
+     */
+    private List<RawAggregatorJob> mergeMultiCountryVariants(List<RawAggregatorJob> jobs) {
+        Map<String, RawAggregatorJob> byShortcode = new LinkedHashMap<>();
+        for (RawAggregatorJob job : jobs) {
+            RawAggregatorJob existing = byShortcode.get(job.externalId());
+            if (existing == null) {
+                byShortcode.put(job.externalId(), job);
+            } else {
+                byShortcode.put(job.externalId(), mergeLocations(existing, job));
+            }
+        }
+        return new ArrayList<>(byShortcode.values());
+    }
+
+    private RawAggregatorJob mergeLocations(RawAggregatorJob first, RawAggregatorJob second) {
+        String mergedLocation = mergeLocationStrings(first.location(), second.location());
+        return new RawAggregatorJob(
+                first.externalId(), first.title(), first.companyName(), mergedLocation,
+                first.description() != null ? first.description() : second.description(),
+                first.applyUrl(), first.postedDate(),
+                first.salaryMin(), first.salaryMax(), first.salaryCurrency(), first.rawJson());
+    }
+
+    private String mergeLocationStrings(String a, String b) {
+        if (a == null || a.isBlank()) return b;
+        if (b == null || b.isBlank()) return a;
+        // Avoid duplicates (same city/country appearing in multiple variants)
+        Set<String> parts = new LinkedHashSet<>();
+        for (String part : (a + ", " + b).split(",")) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty()) parts.add(trimmed);
+        }
+        return String.join(", ", parts);
     }
 
     private String buildLocation(JsonNode node) {

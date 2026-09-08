@@ -284,6 +284,68 @@ class WorkableStrategyTest {
     }
 
     @Test
+    void extract_multiCountryVariants_mergedIntoSingleJob() {
+        String json = """
+                {
+                  "jobs": [
+                    {
+                      "id": "1",
+                      "title": "Senior Backend Engineer",
+                      "shortcode": "MULTI1",
+                      "city": "",
+                      "state": "",
+                      "country": "Belgium",
+                      "created_at": "2024-01-01"
+                    },
+                    {
+                      "id": "2",
+                      "title": "Senior Backend Engineer",
+                      "shortcode": "MULTI1",
+                      "city": "",
+                      "state": "",
+                      "country": "Poland",
+                      "created_at": "2024-01-01"
+                    },
+                    {
+                      "id": "3",
+                      "title": "Senior Backend Engineer",
+                      "shortcode": "MULTI1",
+                      "city": "",
+                      "state": "",
+                      "country": "Germany",
+                      "created_at": "2024-01-01"
+                    },
+                    {
+                      "id": "4",
+                      "title": "Other Role",
+                      "shortcode": "OTHER1",
+                      "city": "Berlin",
+                      "state": "",
+                      "country": "Germany",
+                      "created_at": "2024-01-01"
+                    }
+                  ]
+                }
+                """;
+        stubFor(get(urlPathMatching("/api/v1/widget/accounts/.*"))
+                .willReturn(okJson(json)));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.WORKABLE)
+                .atsSlug("multico")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs()).hasSize(2);
+
+        var merged = result.jobs().get(0);
+        assertThat(merged.externalId()).isEqualTo("MULTI1");
+        assertThat(merged.location()).contains("Belgium", "Poland", "Germany");
+        assertThat(merged.location()).doesNotContain("Belgium, Belgium");
+    }
+
+    @Test
     void extract_locationCityOnly_noDanglingComma() {
         String json = """
                 {
