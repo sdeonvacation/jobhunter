@@ -26,6 +26,7 @@ import type {
   VisaSignals,
   OutreachMessageItem,
   SuggestedContact,
+  RecruiterPostCheckResult,
 } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -250,6 +251,18 @@ export const api = {
     },
     suggestContacts(jobId: string): Promise<SuggestedContact[]> {
       return fetchApi<SuggestedContact[]>(`/api/jobs/${jobId}/suggest-contacts`, { method: 'POST' });
+    },
+  },
+
+  recruiterPosts: {
+    getChecks(jobUrls: string[]): Promise<RecruiterPostCheckResult[]> {
+      return post<RecruiterPostCheckResult[]>('/linkedin/recruiter-post-check/batch-read', { jobUrls });
+    },
+  },
+
+  linkedin: {
+    connectContact(contactId: string, note: string): Promise<{ status: string; message: string }> {
+      return post(`/linkedin/contacts/${contactId}/connect`, { note });
     },
   },
 

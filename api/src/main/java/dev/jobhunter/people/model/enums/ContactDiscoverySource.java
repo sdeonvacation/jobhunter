@@ -1,5 +1,5 @@
 package dev.jobhunter.people.model.enums;
 
 public enum ContactDiscoverySource {
-    JOB_POSTER, LINKEDIN_SEARCH, ALUMNI_SEARCH, MANUAL
+    JOB_POSTER, LINKEDIN_SEARCH, ALUMNI_SEARCH, MANUAL, RECRUITER_POST
 }

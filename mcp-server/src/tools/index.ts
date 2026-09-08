@@ -16,3 +16,4 @@ export { prepareInterviewTool } from './prepareInterview.js';
 export { getApplicationPatternsTool } from './getApplicationPatterns.js';
 export { getFollowUpScheduleTool } from './getFollowUpSchedule.js';
 export { searchAlumniTool } from './searchAlumni.js';
+export { checkRecruiterPostTool } from './checkRecruiterPost.js';

@@ -36,7 +36,9 @@ class HttpMcpClientImplTest {
                 30,
                 new LinkedInMcpProperties.RateLimitConfig(20, 15, 10, 50),
                 new LinkedInMcpProperties.CircuitBreakerConfig(5, 15),
-                new LinkedInMcpProperties.EnrichmentConfig(false, 10, 3000)
+                new LinkedInMcpProperties.EnrichmentConfig(false, 10, 3000),
+                new LinkedInMcpProperties.RecruiterPostCheckConfig(true, 6, 7, true, "past-month",
+                        new LinkedInMcpProperties.AutomatedConfig(true, 10, 40, true))
         );
 
         LinkedInRateLimiter rateLimiter = new NoOpRateLimiter();

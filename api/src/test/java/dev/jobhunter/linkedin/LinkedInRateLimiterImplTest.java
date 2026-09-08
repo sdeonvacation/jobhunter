@@ -21,7 +21,9 @@ class LinkedInRateLimiterImplTest {
                 30,
                 new LinkedInMcpProperties.RateLimitConfig(20, 15, 10, 50),
                 new LinkedInMcpProperties.CircuitBreakerConfig(5, 15),
-                new LinkedInMcpProperties.EnrichmentConfig(false, 10, 3000)
+                new LinkedInMcpProperties.EnrichmentConfig(false, 10, 3000),
+                new LinkedInMcpProperties.RecruiterPostCheckConfig(true, 6, 7, true, "past-month",
+                        new LinkedInMcpProperties.AutomatedConfig(true, 10, 40, true))
         );
         rateLimiter = new LinkedInRateLimiterImpl(properties);
     }
@@ -51,7 +53,9 @@ class LinkedInRateLimiterImplTest {
                 true, "http://localhost:8000", "/mcp", 30,
                 new LinkedInMcpProperties.RateLimitConfig(100, 100, 100, 5),
                 new LinkedInMcpProperties.CircuitBreakerConfig(5, 15),
-                new LinkedInMcpProperties.EnrichmentConfig(false, 10, 3000)
+                new LinkedInMcpProperties.EnrichmentConfig(false, 10, 3000),
+                new LinkedInMcpProperties.RecruiterPostCheckConfig(true, 6, 7, true, "past-month",
+                        new LinkedInMcpProperties.AutomatedConfig(true, 10, 40, true))
         );
         LinkedInRateLimiterImpl limiter = new LinkedInRateLimiterImpl(props);
 
@@ -119,7 +123,9 @@ class LinkedInRateLimiterImplTest {
                 true, "http://localhost:8000", "/mcp", 30,
                 new LinkedInMcpProperties.RateLimitConfig(100, 100, 100, 100),
                 new LinkedInMcpProperties.CircuitBreakerConfig(5, 15),
-                new LinkedInMcpProperties.EnrichmentConfig(false, 10, 3000)
+                new LinkedInMcpProperties.EnrichmentConfig(false, 10, 3000),
+                new LinkedInMcpProperties.RecruiterPostCheckConfig(true, 6, 7, true, "past-month",
+                        new LinkedInMcpProperties.AutomatedConfig(true, 10, 40, true))
         );
         LinkedInRateLimiterImpl limiter = new LinkedInRateLimiterImpl(props);
 

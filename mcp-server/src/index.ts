@@ -21,6 +21,7 @@ import {
   getApplicationPatternsTool,
   getFollowUpScheduleTool,
   searchAlumniTool,
+  checkRecruiterPostTool,
 } from './tools/index.js';
 import { profileResources, jobResources } from './resources/index.js';
 
@@ -51,6 +52,7 @@ const tools = [
   getApplicationPatternsTool,
   getFollowUpScheduleTool,
   searchAlumniTool,
+  checkRecruiterPostTool,
 ] as const;
 
 for (const tool of tools) {

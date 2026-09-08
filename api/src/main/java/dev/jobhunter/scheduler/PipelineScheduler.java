@@ -2,10 +2,12 @@ package dev.jobhunter.scheduler;
 
 import dev.jobhunter.ingestion.AggregatorIngestionService;
 import dev.jobhunter.ingestion.IngestionStats;
+import dev.jobhunter.linkedin.RecruiterPostDetectionScheduler;
 import dev.jobhunter.service.CrawlService;
 import dev.jobhunter.service.ScoringService;
 import dev.jobhunter.source.SourceConfig;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.quartz.DisallowConcurrentExecution;
@@ -36,18 +38,21 @@ public class PipelineScheduler implements Job {
     private final AggregatorIngestionService aggregatorIngestionService;
     private final List<SourceConfig> sources;
     private final ExecutorService sourceExecutor;
+    private final ObjectProvider<RecruiterPostDetectionScheduler> recruiterPostDetectionScheduler;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     public PipelineScheduler(CrawlService crawlService,
                              ScoringService scoringService,
                              AggregatorIngestionService aggregatorIngestionService,
                              @Qualifier("allSources") List<SourceConfig> sources,
-                             @Value("${aggregator.pipeline.max-concurrent-sources:3}") int maxConcurrentSources) {
+                             @Value("${aggregator.pipeline.max-concurrent-sources:3}") int maxConcurrentSources,
+                             ObjectProvider<RecruiterPostDetectionScheduler> recruiterPostDetectionScheduler) {
         this.crawlService = crawlService;
         this.scoringService = scoringService;
         this.aggregatorIngestionService = aggregatorIngestionService;
         this.sources = sources;
         this.sourceExecutor = Executors.newFixedThreadPool(maxConcurrentSources);
+        this.recruiterPostDetectionScheduler = recruiterPostDetectionScheduler;
     }
 
     @Override
@@ -128,6 +133,9 @@ public class PipelineScheduler implements Job {
         } catch (Exception e) {
             log.error("[Pipeline] Scoring failed", e);
         }
+
+        // Step 4: Async recruiter-post detection (fire-and-forget; never extends pipeline duration)
+        recruiterPostDetectionScheduler.ifAvailable(RecruiterPostDetectionScheduler::runBatchAsync);
 
         Duration elapsed = Duration.between(start, Instant.now());
         log.info("Pipeline complete in {}s", elapsed.toSeconds());

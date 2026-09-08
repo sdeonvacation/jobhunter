@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import type { Job } from '../types';
+import type { Job, RecruiterPostCheckResult } from '../types';
 import { Link } from 'react-router-dom';
 import ScoreBadge from './ScoreBadge';
 import VisaBadge from './VisaBadge';
+import DigestRecruiterBlock from './DigestRecruiterBlock';
 
 // Module-level cache for job IDs with contacts
 let _jobIdsWithContacts: Set<string> | null = null;
@@ -41,9 +42,10 @@ interface JobCardProps {
   onMarkApplied?: (id: string) => void;
   onUndoApplied?: (id: string) => void;
   onHide?: (id: string) => void;
+  recruiterPost?: RecruiterPostCheckResult | null;
 }
 
-export default function JobCard({ job, index = 0, onMarkApplied, onUndoApplied, onHide }: JobCardProps) {
+export default function JobCard({ job, index = 0, onMarkApplied, onUndoApplied, onHide, recruiterPost }: JobCardProps) {
   const salary = formatSalary(job);
   const hasContacts = useHasContacts(job.id);
   const recommendation = job.recommendation;
@@ -147,6 +149,9 @@ export default function JobCard({ job, index = 0, onMarkApplied, onUndoApplied, 
                 );
               })}
             </div>
+          )}
+          {recruiterPost && (recruiterPost.verdict === 'HIGH' || recruiterPost.verdict === 'MEDIUM') && (
+            <DigestRecruiterBlock result={recruiterPost} />
           )}
         </div>
 

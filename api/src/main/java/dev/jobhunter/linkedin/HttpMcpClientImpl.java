@@ -15,6 +15,7 @@ import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -24,7 +25,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 @ConditionalOnProperty(prefix = "linkedin-mcp", name = "enabled", havingValue = "true")
 public class HttpMcpClientImpl implements HttpMcpClient {
 
-    private static final int SESSION_EXPIRED_ERROR_CODE = -32001;
+    // -32001 is REQUEST_TIMEOUT per the MCP spec (the TypeScript SDK uses it); the
+    // sidecar propagates it when its Patchright browser driver times out. It is NOT
+    // a session-expiry signal — resetting the session on it makes contention worse.
+    private static final int REQUEST_TIMEOUT_ERROR_CODE = -32001;
     private static final int MAX_RETRY_ATTEMPTS = 3;
     private static final String MCP_SESSION_HEADER = "Mcp-Session-Id";
 
@@ -66,9 +70,9 @@ public class HttpMcpClientImpl implements HttpMcpClient {
                         int code = error.has("code") ? error.get("code").asInt() : 0;
                         String message = error.has("message") ? error.get("message").asText() : "Unknown MCP error";
 
-                        if (code == SESSION_EXPIRED_ERROR_CODE) {
+                        if (isSessionExpiredMessage(message)) {
                             resetSession();
-                            log.warn("LinkedIn MCP session expired (error code {})", code);
+                            log.warn("LinkedIn MCP session expired: {}", message);
                         }
                         return Mono.error(new McpClientException(message, code));
                     }
@@ -178,9 +182,16 @@ public class HttpMcpClientImpl implements HttpMcpClient {
         if (throwable instanceof WebClientRequestException) {
             return false;
         }
-        if (throwable instanceof McpClientException) {
-            if (((McpClientException) throwable).getErrorCode() == SESSION_EXPIRED_ERROR_CODE) {
+        if (throwable instanceof McpClientException mcpEx) {
+            // Session-expiry is signaled by message (the sidecar reuses -32001 for
+            // Patchright request timeouts, which must NOT reset the session).
+            if (isSessionExpiredMessage(mcpEx.getMessage())) {
                 return true;
+            }
+            // -32001 is REQUEST_TIMEOUT (Patchright browser timeout), not a session
+            // problem — retrying just re-queues behind the same busy sidecar.
+            if (mcpEx.getErrorCode() == REQUEST_TIMEOUT_ERROR_CODE) {
+                return false;
             }
             // JSON-RPC application errors are not retryable (server understood the request)
             return false;
@@ -198,6 +209,16 @@ public class HttpMcpClientImpl implements HttpMcpClient {
             return wcre.getStatusCode().is5xxServerError();
         }
         return true;
+    }
+
+    private boolean isSessionExpiredMessage(String message) {
+        if (message == null) {
+            return false;
+        }
+        String lower = message.toLowerCase(Locale.ROOT);
+        return lower.contains("session expired") || lower.contains("session_expired")
+                || lower.contains("authentication") || lower.contains("not authenticated")
+                || lower.contains("login required") || lower.contains("sign in");
     }
 
     private void resetSession() {

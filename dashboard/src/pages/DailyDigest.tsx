@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Job } from '../types';
+import type { Job, RecruiterPostCheckResult } from '../types';
 import { api } from '../api/client';
 import JobCard from '../components/JobCard';
 
@@ -33,6 +33,7 @@ function SkeletonCard() {
 
 export default function DailyDigest() {
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [recruiterChecks, setRecruiterChecks] = useState<Map<string, RecruiterPostCheckResult>>(new Map());
   const [loading, setLoading] = useState(false);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
@@ -45,6 +46,15 @@ export default function DailyDigest() {
       setJobs(result.content);
       setTotalPages(result.totalPages);
       setTotalElements(result.totalElements);
+      const urls = result.content.map((j) => j.applyUrl).filter((u): u is string => Boolean(u));
+      if (urls.length > 0) {
+        try {
+          const checks = await api.recruiterPosts.getChecks(urls);
+          setRecruiterChecks(new Map(checks.map((c) => [c.jobUrl, c])));
+        } catch (err) {
+          console.error('Failed to fetch recruiter post checks', err);
+        }
+      }
     } catch (err) {
       console.error('Failed to fetch today jobs', err);
     } finally {
@@ -122,7 +132,14 @@ export default function DailyDigest() {
 
           <div className="space-y-3">
             {jobs.map((job, i) => (
-              <JobCard key={job.id} job={job} index={i} onMarkApplied={handleMarkApplied} onHide={handleHide} />
+              <JobCard
+                key={job.id}
+                job={job}
+                index={i}
+                onMarkApplied={handleMarkApplied}
+                onHide={handleHide}
+                recruiterPost={job.applyUrl ? recruiterChecks.get(job.applyUrl) : undefined}
+              />
             ))}
           </div>
         </>

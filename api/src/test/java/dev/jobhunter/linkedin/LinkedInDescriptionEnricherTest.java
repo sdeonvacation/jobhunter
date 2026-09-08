@@ -43,7 +43,9 @@ class LinkedInDescriptionEnricherTest {
         LinkedInMcpProperties properties = new LinkedInMcpProperties(
                 true, "http://localhost:8000", "/mcp", 30,
                 null, null,
-                new LinkedInMcpProperties.EnrichmentConfig(true, 10, 0)
+                new LinkedInMcpProperties.EnrichmentConfig(true, 10, 0),
+                new LinkedInMcpProperties.RecruiterPostCheckConfig(true, 6, 7, true, "past-month",
+                        new LinkedInMcpProperties.AutomatedConfig(true, 10, 40, true))
         );
 
         // Default: language filter keeps everything
@@ -190,7 +192,9 @@ class LinkedInDescriptionEnricherTest {
         LinkedInMcpProperties disabledProps = new LinkedInMcpProperties(
                 true, "http://localhost:8000", "/mcp", 30,
                 null, null,
-                new LinkedInMcpProperties.EnrichmentConfig(false, 10, 3000)
+                new LinkedInMcpProperties.EnrichmentConfig(false, 10, 3000),
+                new LinkedInMcpProperties.RecruiterPostCheckConfig(true, 6, 7, true, "past-month",
+                        new LinkedInMcpProperties.AutomatedConfig(true, 10, 40, true))
         );
         enricher = new LinkedInDescriptionEnricher(
                 httpMcpClient, Optional.of(rateLimiter), disabledProps, jobPostingRepository, languageFilter);
@@ -205,7 +209,9 @@ class LinkedInDescriptionEnricherTest {
         LinkedInMcpProperties smallBatch = new LinkedInMcpProperties(
                 true, "http://localhost:8000", "/mcp", 30,
                 null, null,
-                new LinkedInMcpProperties.EnrichmentConfig(true, 2, 0)
+                new LinkedInMcpProperties.EnrichmentConfig(true, 2, 0),
+                new LinkedInMcpProperties.RecruiterPostCheckConfig(true, 6, 7, true, "past-month",
+                        new LinkedInMcpProperties.AutomatedConfig(true, 10, 40, true))
         );
         enricher = new LinkedInDescriptionEnricher(
                 httpMcpClient, Optional.of(rateLimiter), smallBatch, jobPostingRepository, languageFilter);
@@ -248,7 +254,9 @@ class LinkedInDescriptionEnricherTest {
         LinkedInMcpProperties properties = new LinkedInMcpProperties(
                 true, "http://localhost:8000", "/mcp", 30,
                 null, null,
-                new LinkedInMcpProperties.EnrichmentConfig(true, 10, 0)
+                new LinkedInMcpProperties.EnrichmentConfig(true, 10, 0),
+                new LinkedInMcpProperties.RecruiterPostCheckConfig(true, 6, 7, true, "past-month",
+                        new LinkedInMcpProperties.AutomatedConfig(true, 10, 40, true))
         );
         enricher = new LinkedInDescriptionEnricher(
                 httpMcpClient, Optional.empty(), properties, jobPostingRepository, languageFilter);

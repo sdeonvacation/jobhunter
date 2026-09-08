@@ -170,6 +170,13 @@ export class JobHunterClient {
     return this.request('/api/linkedin/contacts/remaining');
   }
 
+  async checkRecruiterPost(url: string, force?: boolean): Promise<any> {
+    return this.request('/api/linkedin/recruiter-post-check', {
+      method: 'POST',
+      body: JSON.stringify({ url, force: force ?? false }),
+    });
+  }
+
   // Career-ops integration methods
   async evaluateJob(id: string, blocks?: string[]): Promise<unknown> {
     return this.request(`/api/jobs/${id}/evaluate`, {

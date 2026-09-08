@@ -2,6 +2,7 @@ package dev.jobhunter.scheduler;
 
 import dev.jobhunter.ingestion.AggregatorIngestionService;
 import dev.jobhunter.ingestion.IngestionStats;
+import dev.jobhunter.linkedin.RecruiterPostDetectionScheduler;
 import dev.jobhunter.service.CrawlService;
 import dev.jobhunter.service.ScoringService;
 import dev.jobhunter.source.SourceConfig;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.List;
 
@@ -24,6 +26,7 @@ class PipelineSchedulerTest {
     @Mock private AggregatorIngestionService aggregatorIngestionService;
     @Mock private SourceConfig enabledSource;
     @Mock private SourceConfig disabledSource;
+    @Mock private ObjectProvider<RecruiterPostDetectionScheduler> recruiterPostDetectionScheduler;
 
     private PipelineScheduler scheduler;
 
@@ -36,7 +39,8 @@ class PipelineSchedulerTest {
         lenient().when(disabledSource.name()).thenReturn("disabled-source");
 
         scheduler = new PipelineScheduler(crawlService, scoringService,
-                aggregatorIngestionService, List.of(enabledSource, disabledSource), 3);
+                aggregatorIngestionService, List.of(enabledSource, disabledSource), 3,
+                recruiterPostDetectionScheduler);
     }
 
     @Test
@@ -56,7 +60,7 @@ class PipelineSchedulerTest {
     @Test
     void runPipeline_noSources_stillCrawlsAndScores() {
         PipelineScheduler emptyScheduler = new PipelineScheduler(crawlService, scoringService,
-                aggregatorIngestionService, List.of(), 3);
+                aggregatorIngestionService, List.of(), 3, recruiterPostDetectionScheduler);
         when(crawlService.crawlAllDueEndpoints()).thenReturn(new int[]{3, 10, 0});
 
         emptyScheduler.runPipeline();

@@ -88,6 +88,17 @@ linkedin-mcp:
     enabled: true
     batch-size: 10
     delay-between-ms: 3000
+  recruiter-post-check:
+    enabled: true
+    max-calls: 6
+    ttl-days: 7
+    ai-verification-enabled: true
+    recency-window: all          # "all" = no date filter (sidecar supports past-24h/past-week/past-month)
+    automated:
+      enabled: true
+      top-n: 10
+      daily-call-budget: 40
+      slim-mode: true
 
 resolution:
   google-search:

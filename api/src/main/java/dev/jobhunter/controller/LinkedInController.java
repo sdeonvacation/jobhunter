@@ -25,19 +25,22 @@ public class LinkedInController {
     private final HttpMcpClient httpMcpClient;
     private final LinkedInRateLimiter rateLimiter;
     private final CompanyRepository companyRepository;
+    private final RecruiterPostDetectionService recruiterPostDetectionService;
 
     public LinkedInController(LinkedInNetworkingService networkingService,
                               LinkedInProfileService profileService,
                               LinkedInCompanyEnricher companyEnricher,
                               HttpMcpClient httpMcpClient,
                               LinkedInRateLimiter rateLimiter,
-                              CompanyRepository companyRepository) {
+                              CompanyRepository companyRepository,
+                              RecruiterPostDetectionService recruiterPostDetectionService) {
         this.networkingService = networkingService;
         this.profileService = profileService;
         this.companyEnricher = companyEnricher;
         this.httpMcpClient = httpMcpClient;
         this.rateLimiter = rateLimiter;
         this.companyRepository = companyRepository;
+        this.recruiterPostDetectionService = recruiterPostDetectionService;
     }
 
     @PostMapping("/contacts/search")
@@ -146,6 +149,29 @@ public class LinkedInController {
                 Map.of("remaining", networkingService.getDailyConnectionsRemaining()));
     }
 
+    @PostMapping("/recruiter-post-check")
+    public ResponseEntity<RecruiterPostDetectionService.RecruiterPostCheckResult> checkRecruiterPost(
+            @RequestBody RecruiterPostCheckRequest request) {
+        if (request.url() == null || request.url().isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        if (!httpMcpClient.isSessionValid()) {
+            return ResponseEntity.status(429).build();
+        }
+        RecruiterPostDetectionService.RecruiterPostCheckResult result =
+                recruiterPostDetectionService.checkRecruiterPost(request.url(), request.force() != null && request.force());
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/recruiter-post-check/batch-read")
+    public ResponseEntity<List<RecruiterPostDetectionService.RecruiterPostCheckResult>> batchReadRecruiterPostChecks(
+            @RequestBody BatchReadRequest request) {
+        if (request.jobUrls() == null || request.jobUrls().isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(recruiterPostDetectionService.readCached(request.jobUrls()));
+    }
+
     // Request records
 
     public record ContactSearchRequest(UUID companyId, List<String> titleKeywords) {}
@@ -155,4 +181,8 @@ public class LinkedInController {
     public record ConnectRequest(String note) {}
 
     public record MessageRequest(String message) {}
+
+    public record RecruiterPostCheckRequest(String url, Boolean force) {}
+
+    public record BatchReadRequest(List<String> jobUrls) {}
 }

@@ -68,6 +68,26 @@ export interface Job {
   createdAt?: string;
 }
 
+export type RecruiterPostVerdict = 'HIGH' | 'MEDIUM' | 'UNCERTAIN' | 'NOT_FOUND' | 'UNRESOLVED';
+
+export interface MatchedPost {
+  postUrl: string;
+  authorName: string;
+  authorTitle?: string;
+  authorLinkedinUrl?: string;
+  snippet?: string;
+  postedAt?: string;
+}
+
+export interface RecruiterPostCheckResult {
+  jobUrl: string;
+  verdict: RecruiterPostVerdict;
+  confidence: number;
+  matchedPosts: MatchedPost[];
+  contactId: string | null;
+  callsUsed: number;
+}
+
 export interface CompanySummary {
   id: string;
   name: string;
