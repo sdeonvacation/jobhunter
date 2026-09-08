@@ -281,6 +281,9 @@ filters:
       - "warsaw"
       - "krakow"
       - "wroclaw"
+      - "estonia"
+      - "\\bee\\b"
+      - "tallinn"
     de-patterns:
       - "\\bgermany\\b"
       - "\\bdeutschland\\b"
