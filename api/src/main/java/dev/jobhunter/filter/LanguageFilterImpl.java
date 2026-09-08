@@ -111,6 +111,12 @@ public class LanguageFilterImpl implements LanguageFilter {
         try {
             Map<Language, Double> confidenceValues = languageDetector.computeLanguageConfidenceValues(text);
 
+            // Lingua returns per-language confidence scores, not normalized probabilities:
+            // a long English text can score high for German too (e.g. EN=1.0, DE=0.84).
+            // Only flag non-English when it actually beats English — otherwise long English
+            // JDs get false "non-English" skips.
+            double englishConfidence = confidenceValues.getOrDefault(Language.ENGLISH, 0.0);
+
             Language topNonEnglish = null;
             double topConfidence = 0.0;
 
@@ -124,7 +130,9 @@ public class LanguageFilterImpl implements LanguageFilter {
                 }
             }
 
-            if (topNonEnglish != null && topConfidence >= confidenceThreshold) {
+            if (topNonEnglish != null
+                    && topConfidence > englishConfidence
+                    && topConfidence >= confidenceThreshold) {
                 // Return capitalized language name: "German", "Dutch", etc.
                 String name = topNonEnglish.name();
                 return name.charAt(0) + name.substring(1).toLowerCase();
