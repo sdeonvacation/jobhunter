@@ -284,6 +284,11 @@ filters:
       - "estonia"
       - "\\bee\\b"
       - "tallinn"
+      - "belgium"
+      - "\\bbe\\b"
+      - "brussels"
+      - "antwerp"
+      - "ghent"
     de-patterns:
       - "\\bgermany\\b"
       - "\\bdeutschland\\b"
