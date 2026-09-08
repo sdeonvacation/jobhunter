@@ -71,10 +71,14 @@ public class JobFilterChain {
                 return FilterChainResult.skip(locationResult.reason());
             }
 
-            // 4. Visa filter — skipped when source is visa-exempt OR location resolves to a visa-exempt country (DE)
+            // 4. Visa filter — skipped when source is visa-exempt OR location resolves to a
+            //    visa-exempt country (DE) OR the location string mentions a visa-exempt
+            //    country (multi-country postings like "BE, PL, UK, NL, DE, FR" — ATS-agnostic).
+            //    Visa-exempt jobs get UNKNOWN (no badge) — see f6a0511 "suppress badge for DE jobs".
             VisaSponsorship visaStatus;
-            if (visaExempt || cityCountryResolver.isVisaExempt(locationResult.countryIso())) {
-                visaStatus = VisaSponsorship.LIKELY;
+            if (visaExempt || cityCountryResolver.isVisaExempt(locationResult.countryIso())
+                    || cityCountryResolver.containsVisaExemptCountry(input.location())) {
+                visaStatus = VisaSponsorship.UNKNOWN;
             } else {
                 VisaFilterResult visaResult = visaSponsorshipFilter.filter(input.description(), isAggregator);
                 if (visaResult.decision() == FilterDecision.SKIP) {

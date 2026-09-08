@@ -299,6 +299,38 @@ class CityCountryResolverTest {
         void de_alwaysTarget() {
             assertThat(resolverWithDePatterns.isTargetCountry("DE")).isTrue();
         }
+
+        @Test
+        void containsVisaExemptCountry_multiCountryListWithGermany_true() {
+            assertThat(resolverWithDePatterns.containsVisaExemptCountry(
+                    "Belgium, Poland, United Kingdom, Netherlands, Germany, France")).isTrue();
+        }
+
+        @Test
+        void containsVisaExemptCountry_germanyAlone_true() {
+            assertThat(resolverWithDePatterns.containsVisaExemptCountry("Germany")).isTrue();
+        }
+
+        @Test
+        void containsVisaExemptCountry_deCodeToken_true() {
+            assertThat(resolverWithDePatterns.containsVisaExemptCountry("BE, PL, DE, FR")).isTrue();
+        }
+
+        @Test
+        void containsVisaExemptCountry_cityListWithBerlin_true() {
+            assertThat(resolverWithDePatterns.containsVisaExemptCountry("Paris, Berlin")).isTrue();
+        }
+
+        @Test
+        void containsVisaExemptCountry_noGermany_false() {
+            assertThat(resolverWithDePatterns.containsVisaExemptCountry(
+                    "Dublin, Ireland")).isFalse();
+        }
+
+        @Test
+        void containsVisaExemptCountry_null_false() {
+            assertThat(resolverWithDePatterns.containsVisaExemptCountry(null)).isFalse();
+        }
     }
 
     // -------------------------------------------------------------------------

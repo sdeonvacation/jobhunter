@@ -155,7 +155,7 @@ class JobFilterChainTest {
     // --- visaExempt flag (source-level) ---
 
     @Test
-    void visaExempt_true_skipVisaFilter_returnsLikely() {
+    void visaExempt_true_skipVisaFilter_returnsUnknown() {
         when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
         when(locationFilter.filter(anyString())).thenReturn(LocationFilterResult.keep("NL"));
@@ -171,14 +171,14 @@ class JobFilterChainTest {
                 input("Engineer", "Great role", "Amsterdam", "Co"), false, true);
 
         assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
-        assertThat(result.visaSponsorship()).isEqualTo(VisaSponsorship.LIKELY);
+        assertThat(result.visaSponsorship()).isEqualTo(VisaSponsorship.UNKNOWN);
         verify(visaSponsorshipFilter, never()).filter(anyString(), anyBoolean());
     }
 
     // --- Geo visa-exempt (DE locations auto-skip visa check) ---
 
     @Test
-    void geoVisaExempt_de_skipVisaFilter_returnsLikely() {
+    void geoVisaExempt_de_skipVisaFilter_returnsUnknown() {
         when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
         when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
         when(locationFilter.filter(anyString())).thenReturn(LocationFilterResult.keep("DE"));
@@ -195,8 +195,34 @@ class JobFilterChainTest {
                 input("Engineer", "Java role", "Berlin", "TestCo"), false, false);
 
         assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
-        assertThat(result.visaSponsorship()).isEqualTo(VisaSponsorship.LIKELY);
+        assertThat(result.visaSponsorship()).isEqualTo(VisaSponsorship.UNKNOWN);
         assertThat(result.countryIso()).isEqualTo("DE");
+        verify(visaSponsorshipFilter, never()).filter(anyString(), anyBoolean());
+    }
+
+    @Test
+    void geoVisaExempt_multiCountryListContainingGermany_skipVisaFilter_returnsUnknown() {
+        when(languageFilter.filter(anyString(), anyString())).thenReturn(FilterResult.keep());
+        when(roleRelevanceFilter.filter(anyString())).thenReturn(FilterResult.keep());
+        when(locationFilter.filter(anyString())).thenReturn(LocationFilterResult.keep("BE"));
+        when(cityCountryResolver.isVisaExempt("BE")).thenReturn(false);
+        when(cityCountryResolver.containsVisaExemptCountry(
+                "Belgium, Poland, United Kingdom, Netherlands, Germany, France")).thenReturn(true);
+        when(yoeFilter.extractYoe(anyString())).thenReturn(null);
+        when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
+                .thenReturn("fp");
+        when(jobPostingRepository.findFirstByFingerprintAndLanguageFilterExcludingSources(
+                anyString(), any(), any()))
+                .thenReturn(Optional.empty());
+
+        FilterChainResult result = chain.apply(
+                input("Engineer", "Java role",
+                        "Belgium, Poland, United Kingdom, Netherlands, Germany, France", "TestCo"),
+                false, false);
+
+        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+        assertThat(result.visaSponsorship()).isEqualTo(VisaSponsorship.UNKNOWN);
         verify(visaSponsorshipFilter, never()).filter(anyString(), anyBoolean());
     }
 

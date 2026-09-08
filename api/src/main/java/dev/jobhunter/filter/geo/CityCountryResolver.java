@@ -277,4 +277,37 @@ public class CityCountryResolver {
     public boolean isVisaExempt(String iso) {
         return "DE".equalsIgnoreCase(iso);
     }
+
+    /**
+     * Whether the location string mentions a visa-exempt country (currently DE).
+     * ATS-agnostic: checks the raw location text (e.g. "Belgium, Poland, United Kingdom,
+     * Netherlands, Germany, France") rather than a single resolved ISO, so multi-country
+     * postings that include Germany are treated as visa-exempt regardless of which ATS
+     * produced the string.
+     */
+    public boolean containsVisaExemptCountry(String location) {
+        if (location == null || location.isBlank()) return false;
+        String lower = location.toLowerCase(Locale.ROOT);
+
+        // 1. Profile DE patterns (germany, deutschland)
+        for (Pattern p : profileDePatterns) {
+            if (p.matcher(lower).find()) return true;
+        }
+
+        // 2. Standalone "DE" token (e.g. "Remote - DE", "BE, PL, DE, FR")
+        for (String segment : location.split("[,\n\\s]+")) {
+            String token = segment.trim();
+            if (token.length() == 2 && token.equalsIgnoreCase("de")) return true;
+        }
+
+        // 3. Any comma-separated segment resolves to DE (covers "Paris, Berlin" style lists)
+        for (String segment : location.split(",")) {
+            String trimmed = segment.trim();
+            if (trimmed.isEmpty()) continue;
+            Optional<String> iso = resolve(trimmed);
+            if (iso.isPresent() && "DE".equals(iso.get())) return true;
+        }
+
+        return false;
+    }
 }
