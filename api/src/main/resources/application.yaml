@@ -59,8 +59,8 @@ discovery:
   providers:
     jobspy:
       enabled: true
-      keywords: ["backend engineer", "Java developer", "Spring Boot", "Kotlin"]
-      locations: ["Germany", "Netherlands", "Italy", "Sweden", "Finland", "Poland", "Switzerland", "Estonia", "remote"]
+      keywords: ["backend engineer", "java", "Platform Engineer", "software developer"]
+      locations: ["Germany", "Netherlands", "Austria", "Belgium", "Czechia", "Denmark", "Finland", "France", "Greece", "Hungary", "Ireland", "Italy", "Luxembourg", "Poland", "Portugal", "Romania", "Spain", "Sweden", "Switzerland", "remote"]
     stepstone:
       enabled: true
       postal-codes: ["10115", "80331", "20095", "60311", "50667", "8001", "1201", "4001", "3001", "1000"]
@@ -68,8 +68,8 @@ discovery:
       enabled: false
     linkedin:
       enabled: ${LINKEDIN_MCP_ENABLED:true}
-      keywords: ["backend engineer", "Java developer", "Spring Boot", "Kotlin"]
-      locations: ["Germany", "Netherlands", "Italy", "Sweden", "Finland", "Poland", "Switzerland", "Estonia", "remote"]
+      keywords: ["backend engineer", "java", "Platform Engineer", "software developer"]
+      locations: ["Germany", "Netherlands", "Italy", "Sweden", "Finland", "Poland", "Switzerland", "Estonia", "remote", "Austria", "Denmark", "Spain", "France", "Belgium", "Portugal", "Czechia", "Hungary", "Romania", "Greece", "Luxembourg", "Malta", "Croatia", "Slovenia", "Slovakia", "Bulgaria", "Lithuania", "Latvia", "Cyprus", "Ireland"]
 
 linkedin-mcp:
   enabled: ${LINKEDIN_MCP_ENABLED:true}

@@ -69,6 +69,9 @@ public class McpStrategy implements FetchStrategy {
         String datePosted = context.config() != null
                 ? (String) context.config().getOrDefault("date-posted", "week")
                 : "week";
+        int maxPages = context.config() != null
+                ? ((Number) context.config().getOrDefault("max-pages", 10)).intValue()
+                : 10;
 
         for (String keyword : keywords) {
             for (String location : locations) {
@@ -85,7 +88,8 @@ public class McpStrategy implements FetchStrategy {
                     Map<String, Object> params = Map.of(
                             "keywords", keyword,
                             "location", location,
-                            "date_posted", datePosted
+                            "date_posted", datePosted,
+                            "max_pages", maxPages
                     );
                     JsonNode result = httpMcpClient.callTool("search_jobs", params);
                     List<RawAggregatorJob> jobs = parseSearchResponse(result);

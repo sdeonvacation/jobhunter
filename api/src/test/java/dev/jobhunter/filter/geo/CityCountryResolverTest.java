@@ -139,6 +139,44 @@ class CityCountryResolverTest {
         assertThat(resolver.resolve(location)).contains(expectedIso);
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "Lisbon, PT",
+        "Porto, PT",
+        "Portugal, PT",
+        "Prague, CZ",
+        "Brno, CZ",
+        "Czechia, CZ",
+        "Czech Republic, CZ",
+        "Budapest, HU",
+        "Hungary, HU",
+        "Bucharest, RO",
+        "Cluj-Napoca, RO",
+        "Romania, RO",
+        "Thessaloniki, GR",
+        "Greece, GR",
+        "Luxembourg, LU",
+        "Valletta, MT",
+        "Malta, MT",
+        "Zagreb, HR",
+        "Croatia, HR",
+        "Ljubljana, SI",
+        "Slovenia, SI",
+        "Bratislava, SK",
+        "Slovakia, SK",
+        "Sofia, BG",
+        "Bulgaria, BG",
+        "Vilnius, LT",
+        "Lithuania, LT",
+        "Riga, LV",
+        "Latvia, LV",
+        "Limassol, CY",
+        "Cyprus, CY"
+    })
+    void newTargetEuropeanCities_resolveCorrectly(String location, String expectedIso) {
+        assertThat(resolver.resolve(location)).contains(expectedIso);
+    }
+
     // -------------------------------------------------------------------------
     // Non-target countries
     // -------------------------------------------------------------------------

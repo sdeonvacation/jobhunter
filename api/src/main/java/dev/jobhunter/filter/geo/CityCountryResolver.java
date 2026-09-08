@@ -46,6 +46,10 @@ public class CityCountryResolver {
         Map.entry("estonia", "EE"),
         Map.entry("portugal", "PT"), Map.entry("romania", "RO"), Map.entry("czechia", "CZ"),
         Map.entry("czech republic", "CZ"), Map.entry("hungary", "HU"), Map.entry("belgium", "BE"),
+        Map.entry("greece", "GR"), Map.entry("luxembourg", "LU"), Map.entry("malta", "MT"),
+        Map.entry("croatia", "HR"), Map.entry("slovenia", "SI"), Map.entry("slovakia", "SK"),
+        Map.entry("bulgaria", "BG"), Map.entry("lithuania", "LT"), Map.entry("latvia", "LV"),
+        Map.entry("cyprus", "CY"),
         Map.entry("norway", "NO"), Map.entry("brasil", "BR"), Map.entry("brazil", "BR"),
         Map.entry("mexico", "MX"), Map.entry("argentina", "AR"), Map.entry("ukraine", "UA"),
         Map.entry("israel", "IL"), Map.entry("turkey", "TR"), Map.entry("türkiye", "TR")
@@ -63,6 +67,10 @@ public class CityCountryResolver {
         Map.entry("ee", "EE"),
         Map.entry("pt", "PT"), Map.entry("ro", "RO"), Map.entry("cz", "CZ"),
         Map.entry("hu", "HU"), Map.entry("be", "BE"), Map.entry("no", "NO"),
+        Map.entry("gr", "GR"), Map.entry("lu", "LU"), Map.entry("mt", "MT"),
+        Map.entry("hr", "HR"), Map.entry("si", "SI"), Map.entry("sk", "SK"),
+        Map.entry("bg", "BG"), Map.entry("lt", "LT"), Map.entry("lv", "LV"),
+        Map.entry("cy", "CY"),
         Map.entry("br", "BR"), Map.entry("mx", "MX"), Map.entry("ua", "UA"),
         Map.entry("il", "IL"), Map.entry("tr", "TR")
     );

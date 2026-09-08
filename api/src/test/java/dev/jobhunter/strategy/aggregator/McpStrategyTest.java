@@ -229,6 +229,22 @@ class McpStrategyTest {
             verify(httpMcpClient).callTool(eq("search_jobs"), argThat(params ->
                     "week".equals(params.get("date_posted"))));
         }
+
+        @Test
+        @DisplayName("Should pass max_pages=10 by default")
+        void shouldPassMaxPages() {
+            when(rateLimiter.acquire(ToolCategory.SEARCH)).thenReturn(true);
+            when(httpMcpClient.callTool(eq("search_jobs"), any()))
+                    .thenReturn(buildSearchResponse("", List.of()));
+
+            FetchContext context = FetchContext.forSearch(
+                    List.of("java"), List.of("Berlin"), 200, 10, null);
+
+            strategy.fetch(context);
+
+            verify(httpMcpClient).callTool(eq("search_jobs"), argThat(params ->
+                    10 == ((Number) params.get("max_pages")).intValue()));
+        }
     }
 
     @Nested
