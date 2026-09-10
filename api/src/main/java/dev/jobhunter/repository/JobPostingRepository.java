@@ -224,6 +224,19 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
                                            @Param("aggregatorSources") List<JobSource> aggregatorSources,
                                            Pageable pageable);
 
+    /**
+     * Rolling-window digest query: returns visible (KEEP) jobs discovered within the last
+     * {@code since} window based on their creation timestamp. Unlike {@link #findRecentlyPostedJobs},
+     * this is a true rolling 24h window keyed off {@code createdAt}, so jobs discovered late in the
+     * day are not lost to a calendar-day boundary.
+     */
+    @Query("SELECT j FROM JobPosting j LEFT JOIN j.matchScore ms LEFT JOIN j.opportunityScore os " +
+           "WHERE j.isActive = true AND j.applied = false AND j.hidden = false " +
+           "AND j.languageFilter = :filter AND j.createdAt >= :since")
+    Page<JobPosting> findDigestJobsSince(@Param("filter") FilterDecision filter,
+                                         @Param("since") LocalDateTime since,
+                                         Pageable pageable);
+
     @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.visaSponsorship = 'PENDING' AND j.discoveredDate < :cutoff")
     List<JobPosting> findActivePendingVisaJobsDiscoveredBefore(@Param("cutoff") LocalDate cutoff);
 

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -36,12 +37,12 @@ public class DailyDigestService {
     public DigestSnapshot computeDigest() {
         LocalDate today = LocalDate.now();
 
-        // Count visible (KEEP) jobs discovered today via a direct query.
-        // The old code fetched the first 500 active jobs (unsorted) and filtered in
-        // memory, which missed today's jobs entirely once the DB grew past 500 active rows.
+        // Count visible (KEEP) jobs discovered within the last 24 hours via a rolling window.
+        // Keyed off createdAt (a timestamp), not discoveredDate (a calendar date), so jobs
+        // discovered late in the day are not lost to a calendar-day boundary.
+        LocalDateTime since = LocalDateTime.now().minusHours(24);
         Page<JobPosting> recentJobs = jobPostingRepository
-                .findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndDiscoveredDate(
-                        FilterDecision.KEEP, today, PageRequest.of(0, 500));
+                .findDigestJobsSince(FilterDecision.KEEP, since, PageRequest.of(0, 500));
         int newJobsCount = (int) recentJobs.getTotalElements();
 
         // Find top opportunity (highest opportunity score among today's jobs)
