@@ -7,7 +7,7 @@ import dev.jobhunter.repository.JobPostingRepository;
 import dev.jobhunter.repository.OpportunityScoreRepository;
 import dev.jobhunter.repository.RecruiterPostCheckRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "linkedin-mcp", name = "enabled", havingValue = "true")
+@ConditionalOnExpression("${linkedin-mcp.enabled:true} && ${linkedin-mcp.recruiter-post-check.automated.enabled:true}")
 public class RecruiterPostDetectionScheduler {
 
     private final RecruiterPostDetectionService recruiterPostDetectionService;

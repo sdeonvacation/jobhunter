@@ -209,6 +209,48 @@ class PostSearchServiceImplTest {
     }
 
     @Test
+    @DisplayName("Company reference leading a post segment becomes the author with an absolute company URL")
+    void parsesCompanyAsPosterWithRelativeUrl() throws Exception {
+        // Real sidecar shape: relative company path, company name leads the post segment.
+        JsonNode response = objectMapper.readTree(
+                "{\"sections\":{\"search_results\":\"Feed post\\n\\nDevOpsHunt \\uD83C\\uDDE9\\uD83C\\uDDEA\\n\\n3w • \\n\\nFollow\\n\\nSoda Data is hiring a Senior Backend Engineer!\"},"
+                        + "\"references\":{\"search_results\":["
+                        + "{\"kind\":\"company\",\"url\":\"/company/devopshunt-deutschland/\",\"text\":\"DevOpsHunt \\uD83C\\uDDE9\\uD83C\\uDDEA\"}"
+                        + "]}}");
+        when(rateLimiter.acquire(ToolCategory.SEARCH)).thenReturn(true);
+        when(httpMcpClient.callTool(eq("search_posts"), anyMap())).thenReturn(response);
+
+        List<SignalScorer.CandidatePost> posts = service.searchCandidates(ctx, new CallBudget(6), true, null);
+
+        assertThat(posts).hasSize(1);
+        SignalScorer.CandidatePost p = posts.get(0);
+        assertThat(p.authorName()).isEqualTo("DevOpsHunt \uD83C\uDDE9\uD83C\uDDEA");
+        assertThat(p.authorLinkedinUrl()).isEqualTo("https://www.linkedin.com/company/devopshunt-deutschland/");
+        assertThat(p.snippet()).contains("Soda Data is hiring a Senior Backend Engineer!");
+    }
+
+    @Test
+    @DisplayName("Company merely mentioned in a post body is not a candidate")
+    void ignoresCompanyMentionedInPostBody() throws Exception {
+        // "Flix" appears inside the recruiter's post but is not the poster.
+        JsonNode response = objectMapper.readTree(
+                "{\"sections\":{\"search_results\":\"Feed post\\n\\nMel Theuer\\n\\n3w • \\n\\nFollow\\n\\nFlix is hiring a Senior Engineer!\"},"
+                        + "\"references\":{\"search_results\":["
+                        + "{\"kind\":\"person\",\"url\":\"/in/melissandetheuer/\",\"text\":\"Mel Theuer\"},"
+                        + "{\"kind\":\"company\",\"url\":\"/company/flixbus-flixtrain/\",\"text\":\"Flix\"}"
+                        + "]}}");
+        when(rateLimiter.acquire(ToolCategory.SEARCH)).thenReturn(true);
+        when(httpMcpClient.callTool(eq("search_posts"), anyMap())).thenReturn(response);
+
+        List<SignalScorer.CandidatePost> posts = service.searchCandidates(ctx, new CallBudget(6), true, null);
+
+        assertThat(posts).hasSize(1);
+        SignalScorer.CandidatePost p = posts.get(0);
+        assertThat(p.authorName()).isEqualTo("Mel Theuer");
+        assertThat(p.authorLinkedinUrl()).isEqualTo("https://www.linkedin.com/in/melissandetheuer/");
+    }
+
+    @Test
     @DisplayName("content[0].text wrapping the real search_posts shape is parsed")
     void parsesContentWrappedRealShape() throws Exception {
         // The sidecar wraps results as content[0].text containing a JSON string with

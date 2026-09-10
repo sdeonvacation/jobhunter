@@ -264,10 +264,20 @@ public class PostSearchServiceImpl implements PostSearchService {
                 if ("person".equals(kind) && !text.isBlank()) {
                     String segment = segmentForAuthor(segments, text);
                     String headline = extractHeadline(segment != null ? segment : rawText, text);
-                    posts.add(new SignalScorer.CandidatePost(null, text, headline, url,
+                    posts.add(new SignalScorer.CandidatePost(null, text, headline, absoluteLinkedinUrl(url),
                             segment != null ? segment : rawText, null));
+                } else if ("company".equals(kind) && !text.isBlank()) {
+                    // A company reference is the poster only when its name leads a post
+                    // segment (e.g. "DevOpsHunt" posting). Companies merely mentioned in
+                    // post bodies (e.g. "Flix" inside a recruiter's post) are not candidates.
+                    String segment = segmentAuthoredBy(segments, text);
+                    if (segment != null) {
+                        String headline = extractHeadline(segment, text);
+                        posts.add(new SignalScorer.CandidatePost(null, text, headline, absoluteLinkedinUrl(url),
+                                segment, null));
+                    }
                 } else if (("feed_post".equals(kind) || "article".equals(kind)) && !url.isBlank()) {
-                    posts.add(new SignalScorer.CandidatePost(url, null, null, null,
+                    posts.add(new SignalScorer.CandidatePost(absoluteLinkedinUrl(url), null, null, null,
                             segments.isEmpty() ? rawText : segments.get(0), null));
                 }
             }
@@ -317,6 +327,44 @@ public class PostSearchServiceImpl implements PostSearchService {
             }
         }
         return null;
+    }
+
+    /** Returns the segment whose first non-blank line is the given author name (the poster). */
+    private String segmentAuthoredBy(List<String> segments, String authorName) {
+        if (segments.isEmpty() || authorName == null || authorName.isBlank()) {
+            return null;
+        }
+        for (String segment : segments) {
+            String firstLine = firstNonBlankLine(segment);
+            if (firstLine != null && (firstLine.equals(authorName) || firstLine.startsWith(authorName))) {
+                return segment;
+            }
+        }
+        return null;
+    }
+
+    private String firstNonBlankLine(String text) {
+        if (text == null) {
+            return null;
+        }
+        for (String line : text.split("\n")) {
+            String trimmed = line.trim();
+            if (!trimmed.isBlank()) {
+                return trimmed;
+            }
+        }
+        return null;
+    }
+
+    /** Prefixes relative LinkedIn paths (e.g. /in/jane, /company/acme) with the site origin. */
+    private String absoluteLinkedinUrl(String url) {
+        if (url == null || url.isBlank()) {
+            return null;
+        }
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+            return url;
+        }
+        return "https://www.linkedin.com" + (url.startsWith("/") ? url : "/" + url);
     }
 
     /**

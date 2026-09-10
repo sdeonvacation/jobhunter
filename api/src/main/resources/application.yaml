@@ -95,7 +95,7 @@ linkedin-mcp:
     ai-verification-enabled: true
     recency-window: all          # "all" = no date filter (sidecar supports past-24h/past-week/past-month)
     automated:
-      enabled: true
+      enabled: false
       top-n: 10
       daily-call-budget: 40
       slim-mode: true

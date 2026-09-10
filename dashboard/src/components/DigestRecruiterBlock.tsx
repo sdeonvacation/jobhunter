@@ -47,23 +47,36 @@ export default function DigestRecruiterBlock({ result }: Props) {
           {result.verdict}
         </span>
       </div>
-      <p className="text-sm font-medium text-text-primary mt-1.5">{best.authorName}</p>
+      <p className="text-sm font-medium text-text-primary mt-1.5">
+        {best.authorLinkedinUrl ? (
+          <a
+            href={best.authorLinkedinUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="hover:text-accent hover:underline"
+          >
+            {best.authorName}
+          </a>
+        ) : (
+          best.authorName
+        )}
+      </p>
       {best.authorTitle && <p className="text-xs text-text-muted">{best.authorTitle}</p>}
       {snippet && <p className="text-xs text-text-secondary mt-1">{snippet}</p>}
       {best.postedAt && <p className="text-xs text-text-muted mt-1">posted {best.postedAt}</p>}
       <div className="flex items-center gap-3 mt-2">
-        <a
-          href={best.postUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          className="text-xs text-accent hover:underline"
-        >
-          View post
-        </a>
+        {best.postUrl && (
+          <a
+            href={best.postUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="text-xs text-accent hover:underline"
+          >
+            View post
+          </a>
+        )}
         {result.contactId && (
           <button
             type="button"

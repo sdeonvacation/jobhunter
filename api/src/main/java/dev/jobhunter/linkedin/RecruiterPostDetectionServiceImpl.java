@@ -11,6 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -135,12 +137,12 @@ public class RecruiterPostDetectionServiceImpl implements RecruiterPostDetection
         if (best != null) {
             verdict = best.verdict;
             confidence = verdict == RecruiterPostVerdict.HIGH ? 0.9 : 0.6;
-            matchedPosts = List.of(toMatchedPost(best.post));
+            matchedPosts = List.of(toMatchedPost(best.post, ctx));
             contactId = createOrLinkContact(best.post, ctx, jobUrl);
         } else {
             verdict = RecruiterPostVerdict.UNCERTAIN;
             confidence = 0.3;
-            matchedPosts = scored.stream().map(sc -> toMatchedPost(sc.post)).toList();
+            matchedPosts = scored.stream().map(sc -> toMatchedPost(sc.post, ctx)).toList();
         }
 
         return persistAndReturn(jobUrl, verdict, confidence, matchedPosts, contactId, budget.used(), now, config);
@@ -250,9 +252,33 @@ public class RecruiterPostDetectionServiceImpl implements RecruiterPostDetection
         return new RecruiterPostCheckResult(check.getJobUrl(), verdict, confidence, matchedPosts, contactId, callsUsed);
     }
 
-    private MatchedPost toMatchedPost(SignalScorer.CandidatePost post) {
-        return new MatchedPost(post.postUrl(), post.authorName(), post.authorTitle(),
+    private MatchedPost toMatchedPost(SignalScorer.CandidatePost post, JobContextResolver.JobContext ctx) {
+        String postUrl = post.postUrl();
+        if (postUrl == null || postUrl.isBlank()) {
+            // The sidecar often returns no per-post permalink (LinkedIn search results
+            // don't expose them). Fall back to a content search that surfaces the post.
+            postUrl = linkedinContentSearchUrl(ctx);
+        }
+        return new MatchedPost(postUrl, post.authorName(), post.authorTitle(),
                 post.authorLinkedinUrl(), post.snippet(), post.postedAt());
+    }
+
+    private String linkedinContentSearchUrl(JobContextResolver.JobContext ctx) {
+        StringBuilder keywords = new StringBuilder();
+        if (ctx.company() != null && !ctx.company().isBlank()) {
+            keywords.append(ctx.company().trim());
+        }
+        if (ctx.title() != null && !ctx.title().isBlank()) {
+            if (!keywords.isEmpty()) {
+                keywords.append(' ');
+            }
+            keywords.append(ctx.title().trim());
+        }
+        if (keywords.isEmpty()) {
+            return "https://www.linkedin.com/search/results/content/";
+        }
+        return "https://www.linkedin.com/search/results/content/?keywords="
+                + URLEncoder.encode(keywords.toString(), StandardCharsets.UTF_8);
     }
 
     private String truncate(String text, int maxLength) {
