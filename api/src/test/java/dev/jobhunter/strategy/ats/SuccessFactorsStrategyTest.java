@@ -13,7 +13,9 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -516,5 +518,202 @@ class SuccessFactorsStrategyTest {
         FetchResult result = extractor.fetch(FetchContext.forEndpoint(endpoint));
         assertEquals(ExtractionStatus.ERROR, result.status());
         assertEquals("classic SF: missing company param", result.errorMessage());
+    }
+
+    // --- Fraunhofer CSB (Career Site Builder) support ---
+
+    private String loadFixture(String name) {
+        try (var in = getClass().getResourceAsStream("/fixtures/successfactors/" + name)) {
+            if (in == null) {
+                throw new IllegalStateException("Missing fixture: " + name);
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("Failed to read fixture: " + name, e);
+        }
+    }
+
+    private String buildSearchPage(List<String[]> rows, String paginationLabel) {
+        StringBuilder sb = new StringBuilder("<html><body><div>").append(paginationLabel).append("</div><table>");
+        for (String[] row : rows) {
+            sb.append("<tr class=\"data-row\"><td><a href=\"").append(row[0]).append("\">")
+                    .append(row[1]).append("</a></td>");
+            if (row.length > 2 && row[2] != null && !row[2].isBlank()) {
+                sb.append("<td>").append(row[2]).append("</td>");
+            }
+            sb.append("</tr>");
+        }
+        return sb.append("</table></body></html>").toString();
+    }
+
+    private static final String MICRODATA_DETAIL = """
+            <html><body>
+            <div class="jobdescription"><p>Detail description for the job posting.</p></div>
+            <meta itemprop="datePosted" content="Mon Aug 31 02:00:00 UTC 2026">
+            <meta itemprop="streetAddress" content="Darmstadt, DE, 64295">
+            </body></html>
+            """;
+
+    @Test
+    void parseTotalCount_fraunhoferFixture() {
+        String html = loadFixture("fraunhofer-search.html");
+        assertEquals(162, extractor.parseTotalCount(html));
+    }
+
+    @Test
+    void parseListings_fraunhoferFixture() {
+        String html = loadFixture("fraunhofer-search.html");
+        List<SuccessFactorsStrategy.JobListing> listings =
+                extractor.parseListings(html, "https://jobs.fraunhofer.de");
+
+        assertEquals(25, listings.size());
+        for (SuccessFactorsStrategy.JobListing listing : listings) {
+            assertTrue(listing.externalId().matches("\\d+"), "externalId must be numeric: " + listing.externalId());
+            assertTrue(listing.url().startsWith("https://jobs.fraunhofer.de/job/"),
+                    "url must be absolute: " + listing.url());
+        }
+        // First listing carries a city in the second table cell (colShifttype)
+        assertThat(listings.get(0).location()).isNotBlank();
+    }
+
+    @Test
+    void parseDescription_fraunhoferDetailFixture() {
+        String html = loadFixture("fraunhofer-detail.html");
+        String description = extractor.parseDescription(html);
+
+        assertNotNull(description);
+        assertFalse(description.isBlank());
+        assertTrue(description.length() > 200);
+        assertTrue(description.contains("expanding its new location in Heilbronn"));
+        // Full JD must be captured, not just the .jobdescription first section:
+        // the skills section (Java, C/C++, Python) lives outside .jobdescription
+        // but inside span[itemprop=description].
+        assertTrue(description.contains("Java, C/C++, Python"));
+        assertTrue(description.contains("compiler construction"));
+        assertTrue(description.contains("What we offer"));
+    }
+
+    @Test
+    void buildSearchUrl_withQueryParams() {
+        String url = extractor.buildSearchUrl("https://jobs.fraunhofer.de/search/?q=Software&locale=en_US", 25);
+        assertEquals("https://jobs.fraunhofer.de/search/?q=Software&locationsearch=Germany&locale=en_US&startrow=25", url);
+    }
+
+    @Test
+    void buildSearchUrl_bareOriginDefaults() {
+        String url = extractor.buildSearchUrl("https://jobs.fraunhofer.de", 0);
+        assertEquals("https://jobs.fraunhofer.de/search/?q=&locationsearch=Germany&locale=en_US&startrow=0", url);
+    }
+
+    @Test
+    void parsePostedDate_fraunhoferFixture() {
+        String html = loadFixture("fraunhofer-detail.html");
+        assertEquals(LocalDate.of(2026, 8, 31), extractor.parsePostedDate(html));
+    }
+
+    @Test
+    void parsePostedDate_malformed_returnsNull() {
+        String html = "<html><body><meta itemprop=\"datePosted\" content=\"not-a-date\"></body></html>";
+        assertNull(extractor.parsePostedDate(html));
+    }
+
+    @Test
+    void parsePostedDate_absent_returnsNull() {
+        String html = "<html><body><p>No microdata here</p></body></html>";
+        assertNull(extractor.parsePostedDate(html));
+    }
+
+    @Test
+    void parseStreetAddress_fraunhoferFixture() {
+        String html = loadFixture("fraunhofer-detail.html");
+        assertEquals("Darmstadt, DE, 64295", extractor.parseStreetAddress(html));
+    }
+
+    @Test
+    void parseStreetAddress_absent_returnsNull() {
+        String html = "<html><body><p>No microdata here</p></body></html>";
+        assertNull(extractor.parseStreetAddress(html));
+    }
+
+    @Test
+    void fetch_qSoftwareEndpoint_paginatesAndPopulatesMicrodata() {
+        // Two pages: 25 + 2 = 27 listings -> 2 search pages + 27 detail pages
+        List<String[]> page1Rows = new java.util.ArrayList<>();
+        for (int i = 1; i <= 25; i++) {
+            page1Rows.add(new String[]{"/job/Berlin-Dev-10557/" + (1000 + i) + "/", "Job " + i, "Berlin"});
+        }
+        List<String[]> page2Rows = List.of(
+                new String[]{"/job/Munich-Eng-80331/2001/", "Job 26", "Munich"},
+                new String[]{"/job/Hamburg-Dev-20095/2002/", "Job 27", "Hamburg"}
+        );
+        String page1 = buildSearchPage(page1Rows, "Results 1 – 25 of 27");
+        String page2 = buildSearchPage(page2Rows, "Results 26 – 27 of 27");
+
+        when(responseSpec.bodyToMono(String.class))
+                .thenReturn(Mono.just(page1))   // search page 1
+                .thenReturn(Mono.just(page2))   // search page 2
+                .thenReturn(Mono.just(MICRODATA_DETAIL)); // detail pages (reused for all 27)
+
+        CareerEndpoint endpoint = CareerEndpoint.builder()
+                .url("https://jobs.fraunhofer.de/search/?q=Software&locale=en_US")
+                .atsType(AtsType.SUCCESSFACTORS)
+                .build();
+
+        FetchResult result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertEquals(ExtractionStatus.SUCCESS, result.status());
+        assertEquals(27, result.totalFound());
+        assertEquals(27, result.jobs().size());
+        assertTrue(result.jobs().stream().anyMatch(j -> LocalDate.of(2026, 8, 31).equals(j.postedDate())));
+        assertTrue(result.jobs().get(0).applyUrl().startsWith("https://jobs.fraunhofer.de/job/"));
+    }
+
+    @Test
+    void fetch_locationFallsBackToStreetAddress() {
+        // Listing row has no second td and its URL carries a blank city segment (" "), so
+        // parseListings yields a blank location; the assembled job location must fall back
+        // to the detail page's streetAddress microdata.
+        String searchHtml = buildSearchPage(
+                List.<String[]>of(new String[]{"/job/ /12345/", "Job"}),
+                "Results 1 – 1 of 1");
+
+        when(responseSpec.bodyToMono(String.class))
+                .thenReturn(Mono.just(searchHtml))
+                .thenReturn(Mono.just(MICRODATA_DETAIL));
+
+        CareerEndpoint endpoint = CareerEndpoint.builder()
+                .url("https://jobs.fraunhofer.de")
+                .atsType(AtsType.SUCCESSFACTORS)
+                .build();
+
+        FetchResult result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertEquals(ExtractionStatus.SUCCESS, result.status());
+        assertEquals(1, result.totalFound());
+        assertEquals("Darmstadt, DE, 64295", result.jobs().get(0).location());
+    }
+
+    @Test
+    void fetch_bareOriginEndpoint_keepsLegacyBehavior() {
+        String searchHtml = buildSearchPage(
+                List.<String[]>of(new String[]{"/job/Berlin-Dev-10557/111/", "Developer", "Berlin"}),
+                "Results 1 – 1 of 1");
+        String detailHtml = "<html><body><div class=\"jobdescription\"><p>Legacy detail</p></div></body></html>";
+
+        when(responseSpec.bodyToMono(String.class))
+                .thenReturn(Mono.just(searchHtml))
+                .thenReturn(Mono.just(detailHtml));
+
+        CareerEndpoint endpoint = CareerEndpoint.builder()
+                .url("https://jobs.fraunhofer.de")
+                .atsType(AtsType.SUCCESSFACTORS)
+                .build();
+
+        FetchResult result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertEquals(ExtractionStatus.SUCCESS, result.status());
+        assertEquals(1, result.totalFound());
+        assertEquals("Berlin", result.jobs().get(0).location());
+        assertTrue(result.jobs().get(0).applyUrl().startsWith("https://jobs.fraunhofer.de/job/"));
     }
 }

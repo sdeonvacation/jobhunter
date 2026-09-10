@@ -20,6 +20,9 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -32,6 +35,8 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(45);
     private static final long DETAIL_FETCH_DELAY_MS = 150;
     private static final int MAX_DESCRIPTION_LENGTH = 10_000;
+    private static final DateTimeFormatter POSTED_DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss zzz yyyy", Locale.ENGLISH);
     private static final Pattern TOTAL_COUNT_PATTERN = Pattern.compile("Results\\s+\\d+\\s*[–-]\\s*\\d+\\s+of\\s+(\\d+)");
     private static final Pattern ARIA_TOTAL_PATTERN = Pattern.compile("Results\\s+\\d+\\s+to\\s+\\d+\\s+of\\s+(\\d+)");
     private static final Pattern SHOWING_TOTAL_PATTERN = Pattern.compile("Showing\\s+\\d+\\s+to\\s+\\d+\\s+of\\s+(\\d+)");
@@ -82,43 +87,44 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
         if (isClassicBoard(endpoint.getUrl())) {
             return fetchClassic(endpoint);
         }
-        String baseUrl = normalizeBaseUrl(endpoint.getUrl());
+        String endpointUrl = endpoint.getUrl();
+        String origin = extractOrigin(endpointUrl);
         Instant start = Instant.now();
 
         try {
             // Fetch first page to determine total count
-            String firstPageHtml = fetchSearchPage(baseUrl, 0);
+            String firstPageHtml = fetchSearchPage(endpointUrl, 0);
             if (firstPageHtml == null || firstPageHtml.isBlank()) {
-                log.info("SuccessFactors [{}]: empty response", baseUrl);
+                log.info("SuccessFactors [{}]: empty response", endpointUrl);
                 return FetchResult.empty(elapsed(start));
             }
 
             int totalCount = parseTotalCount(firstPageHtml);
             if (totalCount == 0) {
-                log.info("SuccessFactors [{}]: no jobs found", baseUrl);
+                log.info("SuccessFactors [{}]: no jobs found", endpointUrl);
                 return FetchResult.empty(elapsed(start));
             }
 
-            log.info("SuccessFactors [{}]: page 1, found {} total jobs", baseUrl, totalCount);
+            log.info("SuccessFactors [{}]: page 1, found {} total jobs", endpointUrl, totalCount);
 
-            // Parse first page
-            List<JobListing> allListings = new ArrayList<>(parseListings(firstPageHtml, baseUrl));
+            // Parse first page (detail hrefs are root-relative, so join against scheme://host only)
+            List<JobListing> allListings = new ArrayList<>(parseListings(firstPageHtml, origin));
 
             // Fetch remaining pages
             int totalPages = (int) Math.ceil((double) totalCount / PAGE_SIZE);
             for (int page = 2; page <= totalPages; page++) {
                 int offset = (page - 1) * PAGE_SIZE;
                 try {
-                    String pageHtml = fetchSearchPage(baseUrl, offset);
+                    String pageHtml = fetchSearchPage(endpointUrl, offset);
                     if (pageHtml != null && !pageHtml.isBlank()) {
-                        List<JobListing> pageListings = parseListings(pageHtml, baseUrl);
+                        List<JobListing> pageListings = parseListings(pageHtml, origin);
                         allListings.addAll(pageListings);
                         log.info("SuccessFactors [{}]: page {}/{}, accumulated {} listings",
-                                baseUrl, page, totalPages, allListings.size());
+                                endpointUrl, page, totalPages, allListings.size());
                     }
                 } catch (Exception e) {
                     log.warn("SuccessFactors [{}]: failed to fetch page {} (offset {}): {}",
-                            baseUrl, page, offset, e.getMessage());
+                            endpointUrl, page, offset, e.getMessage());
                 }
             }
 
@@ -126,24 +132,27 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
                 return FetchResult.empty(elapsed(start));
             }
 
-            // Fetch detail pages for descriptions
+            // Fetch detail pages for descriptions, posted dates, and street addresses
             List<RawAggregatorJob> jobs = new ArrayList<>();
             for (int i = 0; i < allListings.size(); i++) {
                 JobListing listing = allListings.get(i);
-                String description = fetchDescription(listing.url());
+                JobDetail detail = fetchDetail(listing.url());
                 if (i > 0 && i % 50 == 0) {
                     log.info("SuccessFactors [{}]: fetched {}/{} detail pages",
-                            baseUrl, i, allListings.size());
+                            endpointUrl, i, allListings.size());
                 }
 
+                String location = (listing.location() == null || listing.location().isBlank())
+                        ? detail.streetAddress()
+                        : listing.location();
                 jobs.add(new RawAggregatorJob(
                         listing.externalId(),
                         listing.title(),
                         null,
-                        listing.location(),
-                        description,
+                        location,
+                        detail.description(),
                         listing.url(),
-                        null,
+                        detail.postedDate(),
                         null,
                         null,
                         null,
@@ -156,17 +165,17 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
                 }
             }
 
-            log.info("SuccessFactors [{}]: extracted {} jobs", baseUrl, jobs.size());
+            log.info("SuccessFactors [{}]: extracted {} jobs", endpointUrl, jobs.size());
             return FetchResult.success(jobs, elapsed(start));
 
         } catch (WebClientResponseException.Forbidden e) {
-            log.warn("SuccessFactors [{}]: access forbidden (403)", baseUrl);
+            log.warn("SuccessFactors [{}]: access forbidden (403)", endpointUrl);
             return FetchResult.protectedEndpoint(elapsed(start));
         } catch (WebClientResponseException.Unauthorized e) {
-            log.warn("SuccessFactors [{}]: unauthorized (401)", baseUrl);
+            log.warn("SuccessFactors [{}]: unauthorized (401)", endpointUrl);
             return FetchResult.protectedEndpoint(elapsed(start));
         } catch (Exception e) {
-            log.error("SuccessFactors [{}]: extraction failed: {}", baseUrl, e.getMessage());
+            log.error("SuccessFactors [{}]: extraction failed: {}", endpointUrl, e.getMessage());
             return FetchResult.error(e.getMessage(), elapsed(start));
         }
     }
@@ -387,8 +396,36 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
         return firstWords;
     }
 
-    private String fetchSearchPage(String baseUrl, int startRow) {
-        String url = baseUrl + "/search/?q=&locationsearch=Germany&locale=en_US&startrow=" + startRow;
+    String buildSearchUrl(String endpointUrl, int startRow) {
+        String origin = extractOrigin(endpointUrl);
+        if (origin == null) {
+            return null;
+        }
+        String q = "";
+        String locationSearch = "Germany";
+        String locale = "en_US";
+        int queryStart = endpointUrl.indexOf('?');
+        if (queryStart >= 0 && queryStart < endpointUrl.length() - 1) {
+            // Reuse raw (already-encoded) values verbatim to avoid double-encoding
+            String rawQuery = endpointUrl.substring(queryStart + 1);
+            for (String pair : rawQuery.split("&")) {
+                int eq = pair.indexOf('=');
+                String name = eq < 0 ? pair : pair.substring(0, eq);
+                String value = eq < 0 ? "" : pair.substring(eq + 1);
+                switch (name.toLowerCase(Locale.ROOT)) {
+                    case "q" -> q = value;
+                    case "locationsearch" -> locationSearch = value;
+                    case "locale" -> locale = value;
+                    default -> { /* ignore unrelated params */ }
+                }
+            }
+        }
+        return origin + "/search/?q=" + q + "&locationsearch=" + locationSearch
+                + "&locale=" + locale + "&startrow=" + startRow;
+    }
+
+    private String fetchSearchPage(String endpointUrl, int startRow) {
+        String url = buildSearchUrl(endpointUrl, startRow);
         return webClient.get()
                 .uri(url)
                 .retrieve()
@@ -505,24 +542,69 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
         return listings;
     }
 
-    private String fetchDescription(String jobUrl) {
+    private JobDetail fetchDetail(String jobUrl) {
         try {
             String html = fetchDetailPage(jobUrl);
             if (html == null || html.isBlank()) {
-                return null;
+                return new JobDetail(null, null, null);
             }
-            return parseDescription(html);
+            return new JobDetail(parseDescription(html), parsePostedDate(html), parseStreetAddress(html));
         } catch (Exception e) {
             log.debug("SuccessFactors: failed to fetch detail page {}: {}", jobUrl, e.getMessage());
+            return new JobDetail(null, null, null);
+        }
+    }
+
+    LocalDate parsePostedDate(String html) {
+        if (html == null || html.isBlank()) {
             return null;
         }
+        try {
+            Element dateMeta = Jsoup.parse(html).selectFirst("meta[itemprop=datePosted]");
+            if (dateMeta == null) {
+                return null;
+            }
+            String content = dateMeta.attr("content");
+            if (content == null || content.isBlank()) {
+                return null;
+            }
+            return ZonedDateTime.parse(content, POSTED_DATE_FORMATTER).toLocalDate();
+        } catch (Exception e) {
+            log.debug("SuccessFactors: failed to parse datePosted microdata: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    String parseStreetAddress(String html) {
+        if (html == null || html.isBlank()) {
+            return null;
+        }
+        Element addressMeta = Jsoup.parse(html).selectFirst("meta[itemprop=streetAddress]");
+        if (addressMeta == null) {
+            return null;
+        }
+        String content = addressMeta.attr("content");
+        if (content == null || content.isBlank()) {
+            return null;
+        }
+        return content.trim();
     }
 
     String parseDescription(String html) {
         Document doc = Jsoup.parse(html);
 
-        // Try common SuccessFactors description containers
-        Element descriptionEl = doc.selectFirst(".jobdescription");
+        // Try common SuccessFactors description containers.
+        // CSB detail pages wrap the full JD in .jobDisplay .content. The nested
+        // .jobdescription / [itemprop=description] spans only cover the first
+        // section on pages with malformed <p>-in-<p> nesting (Jsoup closes the
+        // span early), so prefer the outer container first.
+        Element descriptionEl = doc.selectFirst(".jobDisplay .content");
+        if (descriptionEl == null) {
+            descriptionEl = doc.selectFirst("[itemprop=description]");
+        }
+        if (descriptionEl == null) {
+            descriptionEl = doc.selectFirst(".jobdescription");
+        }
         if (descriptionEl == null) {
             descriptionEl = doc.selectFirst(".job-description");
         }
@@ -586,15 +668,6 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
         return baseUrl + (href.startsWith("/") ? href : "/" + href);
     }
 
-    private String normalizeBaseUrl(String url) {
-        // Remove trailing slash
-        String normalized = url.trim();
-        while (normalized.endsWith("/")) {
-            normalized = normalized.substring(0, normalized.length() - 1);
-        }
-        return normalized;
-    }
-
     private void sleep(long millis) {
         try {
             Thread.sleep(millis);
@@ -605,4 +678,7 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
 
     // Internal record for intermediate listing data
     record JobListing(String externalId, String title, String location, String url) {}
+
+    // Internal record for parsed detail-page data (single fetch, no second HTTP request)
+    record JobDetail(String description, LocalDate postedDate, String streetAddress) {}
 }

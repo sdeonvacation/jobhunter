@@ -24,5 +24,6 @@
     <include file="db/changelog/017-outreach-contact-nullable-company.sql"/>
     <include file="db/changelog/018-add-job-dedup-hash.sql"/>
     <include file="db/changelog/019-recruiter-post-check.sql"/>
+    <include file="db/changelog/020-seed-fraunhofer.sql"/>
 
 </databaseChangeLog>
