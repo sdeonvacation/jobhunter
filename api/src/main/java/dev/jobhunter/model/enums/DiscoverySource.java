@@ -13,5 +13,6 @@ public enum DiscoverySource {
     INSTAFFO,
     BUILTIN_EUROPE,
     JOBGETHER,
-    WORK_IN_FINLAND
+    WORK_IN_FINLAND,
+    GLOBAL_MOVE
 }

@@ -234,6 +234,19 @@ aggregator:
         categories: "software-development,ict,deep-tech,engineering"
         limit: "50"
         delayBetweenPagesMs: "500"
+    - name: globalmove
+      strategy: globalmove
+      job-source: GLOBAL_MOVE
+      discovery-source: GLOBAL_MOVE
+      url: "https://globalmove.relocate.me/jobs"
+      frequency-hours: 12 # informational only
+      max-results: 300
+      visa-exempt: true
+      config:
+        delay-between-pages-ms: "800"
+
+globalmove:
+  keepalive-schedule: "0 0 * * * ?"
 
 server:
   port: 8089

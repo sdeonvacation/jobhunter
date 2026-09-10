@@ -599,7 +599,7 @@ class AggregatorIngestionServiceImplTest {
 
         when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
         when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.BERLIN_STARTUP_JOBS)).thenReturn(new HashSet<>());
-        when(jobPostingRepository.findDedupHashesBySource(JobSource.BERLIN_STARTUP_JOBS)).thenReturn(List.of());
+        when(jobPostingRepository.findAllDedupHashes()).thenReturn(List.of());
         when(jobPostingRepository.findAtsFingerprintsExcludingSources(JobSource.aggregators())).thenReturn(new HashSet<>());
         when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp");
         when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean()))
@@ -622,5 +622,28 @@ class AggregatorIngestionServiceImplTest {
         verify(jobPostingRepository).save(captor.capture());
         assertThat(captor.getValue().getDedupHash())
                 .isEqualTo(dev.jobhunter.util.DedupHashUtil.compute("https://apply.example.com/ext-1"));
+    }
+
+    @Test
+    void ingest_duplicateApplyUrlHashFromOtherSource_isDuplicate() {
+        // L5 cross-source: a job whose applyUrl hash already exists under a DIFFERENT source
+        // (e.g. a JOBGETHER row with the same original-board URL) must be suppressed, not inserted.
+        var sourceConfig = createSourceConfig(JobSource.GLOBAL_MOVE, DiscoverySource.GLOBAL_MOVE);
+        var job = createJob("gm-1", "Backend Engineer", "Acme Corp");
+        var fetchResult = FetchResult.success(List.of(job), Duration.ofMillis(100));
+
+        when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
+        when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.GLOBAL_MOVE)).thenReturn(new HashSet<>());
+        when(jobPostingRepository.findAllDedupHashes())
+                .thenReturn(List.of(dev.jobhunter.util.DedupHashUtil.compute("https://apply.example.com/gm-1")));
+        when(jobPostingRepository.findAtsFingerprintsExcludingSources(JobSource.aggregators())).thenReturn(new HashSet<>());
+        when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
+        when(aggregatorRunRepository.save(any(AggregatorRun.class))).thenAnswer(i -> i.getArgument(0));
+
+        IngestionStats stats = service.ingest(sourceConfig);
+
+        assertThat(stats.created()).isZero();
+        assertThat(stats.duplicates()).isEqualTo(1);
+        verify(jobPostingRepository, never()).save(any(JobPosting.class));
     }
 }

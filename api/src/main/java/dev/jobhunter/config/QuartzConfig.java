@@ -4,6 +4,7 @@ import dev.jobhunter.scheduler.AiCrawlScheduler;
 import dev.jobhunter.scheduler.DigestScheduler;
 import dev.jobhunter.scheduler.DiscoveryScheduler;
 import dev.jobhunter.scheduler.GdprPurgeScheduler;
+import dev.jobhunter.scheduler.GlobalMoveKeepaliveJob;
 import dev.jobhunter.scheduler.PipelineScheduler;
 import dev.jobhunter.scheduler.ScoringScheduler;
 import dev.jobhunter.scheduler.StuckJobJanitorScheduler;
@@ -272,6 +273,32 @@ public class QuartzConfig {
         return TriggerBuilder.newTrigger()
                 .forJob(stuckJobJanitorJobDetail)
                 .withIdentity("stuckJobJanitorTrigger", "stuck-job-janitor")
+                .withSchedule(
+                        CronScheduleBuilder.cronSchedule(cronExpression)
+                                .withMisfireHandlingInstructionFireAndProceed()
+                )
+                .build();
+    }
+
+    // --- GlobalMove Session Keepalive ---
+
+    @Bean
+    public JobDetail globalmoveKeepaliveJobDetail() {
+        return JobBuilder.newJob(GlobalMoveKeepaliveJob.class)
+                .withIdentity("globalmoveKeepaliveJob", "globalmove")
+                .storeDurably()
+                .requestRecovery(true)
+                .build();
+    }
+
+    @Bean
+    public Trigger globalmoveKeepaliveTrigger(
+            JobDetail globalmoveKeepaliveJobDetail,
+            @Value("${globalmove.keepalive-schedule:0 0 * * * ?}") String cronExpression
+    ) {
+        return TriggerBuilder.newTrigger()
+                .forJob(globalmoveKeepaliveJobDetail)
+                .withIdentity("globalmoveKeepaliveTrigger", "globalmove")
                 .withSchedule(
                         CronScheduleBuilder.cronSchedule(cronExpression)
                                 .withMisfireHandlingInstructionFireAndProceed()

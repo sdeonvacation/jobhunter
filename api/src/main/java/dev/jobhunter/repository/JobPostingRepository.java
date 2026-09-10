@@ -204,6 +204,9 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
     @Query("SELECT j.dedupHash FROM JobPosting j WHERE j.source = :source AND j.dedupHash IS NOT NULL")
     List<String> findDedupHashesBySource(@Param("source") JobSource source);
 
+    @Query("SELECT j.dedupHash FROM JobPosting j WHERE j.dedupHash IS NOT NULL")
+    List<String> findAllDedupHashes();
+
     List<JobPosting> findByPosterContactId(UUID posterContactId);
 
     @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.languageFilter = 'KEEP' AND j.description IS NOT NULL AND j.description <> ''")

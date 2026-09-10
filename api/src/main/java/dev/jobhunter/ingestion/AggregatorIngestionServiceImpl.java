@@ -95,8 +95,8 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
         Set<String> knownExternalIds = jobPostingRepository.findExternalIdsBySourceAsSet(jobSource);
         // Load fingerprints from ATS (non-aggregator) sources for cross-source enrichment matching
         Set<String> knownFingerprints = jobPostingRepository.findAtsFingerprintsExcludingSources(JobSource.aggregators());
-        // L5: pre-load dedup_hash set for this source (cross-source duplicate detection by normalized applyUrl)
-        Set<String> knownDedupHashes = new HashSet<>(jobPostingRepository.findDedupHashesBySource(jobSource));
+        // L5: pre-load dedup_hash set across ALL sources (cross-source duplicate detection by normalized applyUrl)
+        Set<String> knownDedupHashes = new HashSet<>(jobPostingRepository.findAllDedupHashes());
 
         for (RawAggregatorJob job : result.jobs()) {
             try {
