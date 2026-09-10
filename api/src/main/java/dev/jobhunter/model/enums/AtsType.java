@@ -19,6 +19,7 @@ public enum AtsType {
     ICIMS,
     JOBVITE,
     PINPOINT,
+    SCREENLOOP,
     STEPSTONE,
     ARBEITNOW,
     INDEED,

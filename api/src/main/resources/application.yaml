@@ -59,7 +59,7 @@ discovery:
   providers:
     jobspy:
       enabled: true
-      keywords: ["backend engineer", "java", "Platform Engineer", "software developer"]
+      keywords: ["backend engineer", "java", "AI Engineer", "Software Developer"]
       locations: ["Germany", "Netherlands", "Austria", "Belgium", "Czechia", "Denmark", "Finland", "France", "Greece", "Hungary", "Ireland", "Italy", "Luxembourg", "Poland", "Portugal", "Romania", "Spain", "Sweden", "Switzerland", "remote"]
     stepstone:
       enabled: true
@@ -68,7 +68,7 @@ discovery:
       enabled: false
     linkedin:
       enabled: ${LINKEDIN_MCP_ENABLED:true}
-      keywords: ["backend engineer", "java", "Platform Engineer", "software developer"]
+      keywords: ["backend engineer", "java", "AI Engineer", "Software Developer"]
       locations: ["Germany", "Netherlands", "Italy", "Sweden", "Finland", "Poland", "Switzerland", "Estonia", "remote", "Austria", "Denmark", "Spain", "France", "Belgium", "Portugal", "Czechia", "Hungary", "Romania", "Greece", "Luxembourg", "Malta", "Croatia", "Slovenia", "Slovakia", "Bulgaria", "Lithuania", "Latvia", "Cyprus", "Ireland"]
 
 linkedin-mcp:
@@ -234,6 +234,20 @@ aggregator:
         categories: "software-development,ict,deep-tech,engineering"
         limit: "50"
         delayBetweenPagesMs: "500"
+    - name: visajobs
+      strategy: visajobs
+      job-source: VISAJOBS
+      discovery-source: VISAJOBS
+      url: "https://svupfnfszawowpkqhwdn.supabase.co/rest/v1/jobs"
+      frequency-hours: 12 # informational only
+      max-results: 2000
+      visa-exempt: true
+      config:
+        apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2dXBmbmZzemF3b3dwa3Fod2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0OTEyNjYsImV4cCI6MjA5OTA2NzI2Nn0.GM9Uq_-ruw3Hvs94WDNzg0oMv9ToiXfgXEyMwFu4--Q"
+        auth-url: "https://svupfnfszawowpkqhwdn.supabase.co/auth/v1/token"
+        limit: "100"
+        visa-confirmed-only: "true"
+        delay-between-pages-ms: "400"
     - name: globalmove
       strategy: globalmove
       job-source: GLOBAL_MOVE
