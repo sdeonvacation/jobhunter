@@ -46,7 +46,7 @@ start_mcp() {
     return
   fi
   echo "Starting LinkedIn MCP..."
-  launchctl remove dev.jobhunter.mcp 2>/dev/null || true
+  launchctl bootout "gui/$(id -u)/dev.jobhunter.mcp" 2>/dev/null || true
   launchctl submit -l dev.jobhunter.mcp \
     -o "$LOG_DIR/mcp.log" -e "$LOG_DIR/mcp.log" \
     -- "$uvx_path" mcp-server-linkedin@latest --user-data-dir "$HOME/.linkedin-mcp/profile" --transport streamable-http --host 0.0.0.0 --port 8000 --log-level INFO
@@ -71,7 +71,7 @@ start_api() {
   fi
 
   echo "Starting API..."
-  launchctl remove dev.jobhunter.api 2>/dev/null || true
+  launchctl bootout "gui/$(id -u)/dev.jobhunter.api" 2>/dev/null || true
   for i in {1..20}; do
     launchctl print "gui/$(id -u)/dev.jobhunter.api" >/dev/null 2>&1 || break
     sleep 0.1
@@ -106,7 +106,7 @@ start_api() {
 
 start_dashboard() {
   echo "Starting Dashboard..."
-  launchctl remove dev.jobhunter.dashboard 2>/dev/null || true
+  launchctl bootout "gui/$(id -u)/dev.jobhunter.dashboard" 2>/dev/null || true
   launchctl submit -l dev.jobhunter.dashboard \
     -o "$LOG_DIR/dashboard.log" -e "$LOG_DIR/dashboard.log" \
     -- "$PROJECT_ROOT/scripts/start-dashboard.sh"
@@ -116,9 +116,9 @@ start_dashboard() {
 
 stop_all() {
   echo "Stopping JobHunter..."
-  launchctl remove dev.jobhunter.dashboard 2>/dev/null && echo "  Dashboard stopped" || true
-  launchctl remove dev.jobhunter.api 2>/dev/null && echo "  API stopped" || true
-  launchctl remove dev.jobhunter.mcp 2>/dev/null && echo "  MCP stopped" || true
+  launchctl bootout "gui/$(id -u)/dev.jobhunter.dashboard" 2>/dev/null && echo "  Dashboard stopped" || true
+  launchctl bootout "gui/$(id -u)/dev.jobhunter.api" 2>/dev/null && echo "  API stopped" || true
+  launchctl bootout "gui/$(id -u)/dev.jobhunter.mcp" 2>/dev/null && echo "  MCP stopped" || true
   echo "Done (DB left running)"
 }
 
