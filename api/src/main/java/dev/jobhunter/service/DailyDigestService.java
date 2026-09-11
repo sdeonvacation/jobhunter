@@ -37,12 +37,15 @@ public class DailyDigestService {
     public DigestSnapshot computeDigest() {
         LocalDate today = LocalDate.now();
 
-        // Count visible (KEEP) jobs discovered within the last 24 hours via a rolling window.
-        // Keyed off createdAt (a timestamp), not discoveredDate (a calendar date), so jobs
-        // discovered late in the day are not lost to a calendar-day boundary.
+        // Count visible (KEEP) jobs discovered within the last 24 hours via a rolling window,
+        // plus jobs re-posted/updated within the last day (so re-posted ATS jobs the user has
+        // not applied to re-surface). Keyed off createdAt (a timestamp), not discoveredDate
+        // (a calendar date), so jobs discovered late in the day are not lost to a calendar-day
+        // boundary.
         LocalDateTime since = LocalDateTime.now().minusHours(24);
+        LocalDate sinceDate = LocalDate.now().minusDays(1);
         Page<JobPosting> recentJobs = jobPostingRepository
-                .findDigestJobsSince(FilterDecision.KEEP, since, PageRequest.of(0, 500));
+                .findDigestJobsSince(FilterDecision.KEEP, since, sinceDate, PageRequest.of(0, 500));
         int newJobsCount = (int) recentJobs.getTotalElements();
 
         // Find top opportunity (highest opportunity score among today's jobs)

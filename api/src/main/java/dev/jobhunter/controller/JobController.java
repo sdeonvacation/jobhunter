@@ -254,15 +254,18 @@ public class JobController {
     public ResponseEntity<DailyDigestDto> getDailyDigest() {
         DigestSnapshot snapshot = dailyDigestService.computeDigest();
 
-         // Get top opportunities for the last 24h via a rolling window keyed off createdAt.
-         // Aggregator jobs (LinkedIn, Indeed, etc.) require explicit postedDate — discoveredDate
-         // is always "today" for these and would surface old posts as new.
+         // Get top opportunities for the last 24h via a rolling window keyed off createdAt,
+         // plus jobs re-posted/updated within the last day (so re-posted ATS jobs the user has
+         // not applied to re-surface). Aggregator jobs (LinkedIn, Indeed, etc.) require
+         // explicit postedDate — discoveredDate is always "today" for these and would surface
+         // old posts as new.
          LocalDateTime since = LocalDateTime.now().minusHours(24);
+         LocalDate sinceDate = LocalDate.now().minusDays(1);
          Pageable top5 = PageRequest.of(0, 5,
                  Sort.by(new Sort.Order(Sort.Direction.DESC, "matchScore.overallScore", Sort.NullHandling.NULLS_LAST))
                          .and(Sort.by(new Sort.Order(Sort.Direction.DESC, "opportunityScore.score", Sort.NullHandling.NULLS_LAST))));
          Page<JobPosting> topJobs = jobPostingRepository.findDigestJobsSince(
-                 FilterDecision.KEEP, since, top5);
+                 FilterDecision.KEEP, since, sinceDate, top5);
 
         List<JobSummaryDto> topOpportunities = topJobs.getContent().stream()
                 .map(DtoMapper::toJobSummary)
