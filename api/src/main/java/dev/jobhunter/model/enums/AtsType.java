@@ -20,6 +20,7 @@ public enum AtsType {
     JOBVITE,
     PINPOINT,
     SCREENLOOP,
+    PHENOM,
     STEPSTONE,
     ARBEITNOW,
     INDEED,
