@@ -75,18 +75,21 @@ public class PosterExtractionService implements PostCrawlHook {
             }
 
             PosterInfo info = posterInfo.get();
-            OutreachContact contact = upsertContact(info, job);
 
-            // Link poster to job posting
+            // Link poster metadata to the job regardless of contact creation.
             job.setPosterName(info.name());
             job.setPosterTitle(info.title());
             job.setPosterLinkedinUrl(info.linkedinUrl());
             job.setPosterAvatarUrl(info.avatarUrl());
-            job.setPosterContactId(contact.getId());
+
+            // OutreachContact.linkedinUrl is NOT NULL + UNIQUE; without it there is no stable
+            // identity/dedup key, so skip persisting a contact (name/title still linked above).
+            Optional<OutreachContact> contact = upsertContact(info, job);
+            contact.ifPresent(c -> job.setPosterContactId(c.getId()));
             jobPostingRepository.save(job);
 
             log.info("Extracted poster '{}' for job {} ({})", info.name(), job.getId(), atsType);
-            return Optional.of(contact);
+            return contact;
 
         } catch (Exception e) {
             log.warn("Poster extraction failed for job {}: {}", job.getId(), e.getMessage());
@@ -101,31 +104,36 @@ public class PosterExtractionService implements PostCrawlHook {
         return null;
     }
 
-    private OutreachContact upsertContact(PosterInfo info, JobPosting job) {
-        // Dedup by LinkedIn URL if available
-        if (info.linkedinUrl() != null) {
-            Optional<OutreachContact> existing = contactRepository.findByLinkedinUrl(info.linkedinUrl());
-            if (existing.isPresent()) {
-                OutreachContact contact = existing.get();
-                // Update fields if new data available
-                if (info.title() != null && contact.getTitle() == null) {
-                    contact.setTitle(info.title());
-                }
-                return contactRepository.save(contact);
+    private Optional<OutreachContact> upsertContact(PosterInfo info, JobPosting job) {
+        String linkedinUrl = info.linkedinUrl();
+        if (linkedinUrl == null || linkedinUrl.isBlank()) {
+            log.debug("No LinkedIn URL for poster '{}' — skipping OutreachContact creation for job {}",
+                    info.name(), job.getId());
+            return Optional.empty();
+        }
+
+        // Dedup by LinkedIn URL
+        Optional<OutreachContact> existing = contactRepository.findByLinkedinUrl(linkedinUrl);
+        if (existing.isPresent()) {
+            OutreachContact contact = existing.get();
+            // Update fields if new data available
+            if (info.title() != null && contact.getTitle() == null) {
+                contact.setTitle(info.title());
             }
+            return Optional.of(contactRepository.save(contact));
         }
 
         // Create new contact
         OutreachContact contact = OutreachContact.builder()
                 .personName(info.name())
                 .title(info.title())
-                .linkedinUrl(info.linkedinUrl())
+                .linkedinUrl(linkedinUrl)
                 .company(job.getCompany())
                 .discoveredVia(ContactDiscoverySource.JOB_POSTER)
                 .seniority(inferSeniority(info.title()))
                 .build();
 
-        return contactRepository.save(contact);
+        return Optional.of(contactRepository.save(contact));
     }
 
     /**
