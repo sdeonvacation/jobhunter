@@ -188,7 +188,7 @@ aggregator:
       frequency-hours: 6 # informational only
       max-results: 500
       config:
-        queries: "engineer,developer"
+        queries: "engineer,developer,AI"
     - name: jobgether-backend
       strategy: jobgether
       job-source: JOBGETHER
@@ -213,6 +213,14 @@ aggregator:
       frequency-hours: 8 # informational only
       max-results: 200
       visa-exempt: true
+    - name: jobgether-software
+      strategy: jobgether
+      job-source: JOBGETHER
+      discovery-source: JOBGETHER
+      url: "https://jobgether.com/remote-jobs/germany/ai-engineer"
+      frequency-hours: 8 # informational only
+      max-results: 200
+      visa-exempt: true
     - name: stepstone
       strategy: stepstone
       job-source: STEPSTONE
@@ -221,7 +229,7 @@ aggregator:
       frequency-hours: 12
       max-results: 100
       config:
-        queries: "java developer,backend engineer,software engineer,kotlin developer"
+        queries: "java developer,backend engineer,software engineer,ai engineer"
         cities: "berlin,muenchen,hamburg,frankfurt-am-main,koeln"
         delayBetweenMs: "1500"
         maxScrapePerRun: "40"

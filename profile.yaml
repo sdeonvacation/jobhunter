@@ -394,6 +394,7 @@ scoring:
     spring boot: 4.5
     kubernetes: 3.0
     docker: 2.5
+    python: 2.5
     aws: 2.5
     azure: 2.5
     kafka: 3.0
@@ -406,9 +407,7 @@ scoring:
     sql: 1.5
     rest: 2.0
     hibernate/jpa: 1.5
-    python: 1.0
     gradle: 1.0
-    kotlin: 1.0
     terraform: 1.0
     architecture: 1.0
     orchestration: 1.0
