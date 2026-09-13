@@ -244,7 +244,14 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
                                          @Param("sinceDate") LocalDate sinceDate,
                                          Pageable pageable);
 
-    @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.visaSponsorship = 'PENDING' AND j.discoveredDate < :cutoff")
+    /**
+     * Undecided PENDING visa jobs older than the cutoff. The {@code languageFilter = KEEP}
+     * predicate is deliberate: rows already rejected on language/YOE keep a stale PENDING
+     * flag (see DescriptionFilterChain#clearDeferredVisa) and reaping them would deactivate a
+     * job that was already correctly filtered AND overwrite its real filter_reason.
+     */
+    @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.visaSponsorship = 'PENDING' "
+            + "AND j.languageFilter = 'KEEP' AND j.discoveredDate < :cutoff")
     List<JobPosting> findActivePendingVisaJobsDiscoveredBefore(@Param("cutoff") LocalDate cutoff);
 
     @Query("SELECT j FROM JobPosting j WHERE j.source = :source AND j.applyUrl LIKE '%berlinstartupjobs.com%' AND j.isActive = true")

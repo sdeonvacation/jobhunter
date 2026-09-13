@@ -50,6 +50,7 @@ public class DescriptionFilterChain {
         if (langResult.decision() == FilterDecision.SKIP) {
             job.setLanguageFilter(FilterDecision.SKIP);
             job.setFilterReason(langResult.reason());
+            clearDeferredVisa(job);
             log.debug("Post-description language SKIP: job={} reason={}", job.getExternalId(), langResult.reason());
             return;
         }
@@ -60,6 +61,7 @@ public class DescriptionFilterChain {
         if (yoeResult.decision() == FilterDecision.SKIP) {
             job.setLanguageFilter(FilterDecision.SKIP);
             job.setFilterReason(yoeResult.reason());
+            clearDeferredVisa(job);
             log.debug("Post-description YOE SKIP: job={} yoe={} reason={}", job.getExternalId(), yoe, yoeResult.reason());
             return;
         }
@@ -78,6 +80,23 @@ public class DescriptionFilterChain {
                 job.setFilterReason(visaResult.reason());
                 log.debug("Post-description visa SKIP: job={} reason={}", job.getExternalId(), visaResult.reason());
             }
+        }
+    }
+
+    /**
+     * Clears a deferred visa flag once the job has been rejected on another
+     * description-dependent filter.
+     *
+     * <p>Leaving PENDING set has two bad effects: the row is excluded from
+     * enrichment (whose candidate query requires {@code language_filter = KEEP}) so
+     * it can never be resolved, and the visa reaper later relabels it as
+     * "pending timed out" - destroying the real rejection reason. The job is
+     * already decided, so the visa status is moot; UNKNOWN keeps it out of both
+     * the reaper and the visa badge.
+     */
+    private void clearDeferredVisa(JobPosting job) {
+        if (job.getVisaSponsorship() == VisaSponsorship.PENDING) {
+            job.setVisaSponsorship(VisaSponsorship.UNKNOWN);
         }
     }
 }

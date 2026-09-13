@@ -165,6 +165,8 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
 
                 if (chainResult.decision() == FilterDecision.SKIP) {
                     filtered++;
+                    log.debug("Skip [{}] title='{}' location='{}' reason={}",
+                            source.name(), job.title(), job.location(), chainResult.reason());
                     continue;
                 }
                 VisaSponsorship visaStatus = chainResult.visaSponsorship() != null
