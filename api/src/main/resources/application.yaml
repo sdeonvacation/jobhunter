@@ -146,6 +146,10 @@ aggregator:
       url: "https://berlinstartupjobs.com/engineering/"
       frequency-hours: 12 # informational only
       max-results: 30
+      config:
+        # Narrow the AI payload to the job-list container; falls back to the
+        # full (de-noised) page if the selector stops matching.
+        contentSelector: "ul.jobs-list-items"
     - name: arbeitnow
       strategy: rest-api
       job-source: ARBEITNOW

@@ -131,6 +131,19 @@ class OpenAiProviderTest {
     }
 
     @Test
+    void generateExtraction_sendsLargerTokenBudget() {
+        String responseBody = """
+                {"id":"chatcmpl-123","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"[]"},"finish_reason":"stop"}]}""";
+
+        stubFor(post("/v1/chat/completions").willReturn(okJson(responseBody)));
+
+        provider.generateExtraction("Extract jobs", "HTML");
+
+        verify(postRequestedFor(urlEqualTo("/v1/chat/completions"))
+                .withRequestBody(containing("\"max_tokens\":8192")));
+    }
+
+    @Test
     void extract_finishReasonStop_completeParse() {
         String content = """
                 {"skills":[{"name":"Kotlin","category":"Language","required":false,"rawMention":"Kotlin"}]}""";

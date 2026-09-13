@@ -15,6 +15,8 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 import java.util.Map;
 
+import org.mockito.ArgumentCaptor;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -260,6 +262,138 @@ class AiAggregatorStrategyTest {
 
             assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
             assertThat(result.errorMessage()).contains("Connection refused");
+        }
+
+        @Test
+        @DisplayName("sends every listing when the page has a large style/script preamble")
+        void sendsAllListingsDespiteLargePreamble() {
+            int listingCount = 25;
+            StringBuilder html = new StringBuilder("<html><head><style>");
+            html.append("x".repeat(60_000));
+            html.append("</style></head><body>");
+            html.append("<div class=\"preamble\">").append("y".repeat(20_000)).append("</div>");
+            html.append("<ul class=\"jobs-list-items\">");
+            for (int i = 0; i < listingCount; i++) {
+                html.append("<li class=\"bjs-jlid\"><div class=\"bjs-jlid__wrapper\"><h4 class=\"bjs-jlid__h\">")
+                        .append("<a href=\"https://berlinstartupjobs.com/engineering/job-").append(i).append("/\">Job ")
+                        .append(i).append("</a></h4>")
+                        .append("<img src=\"https://berlinstartupjobs.com/logo.png\" srcset=\"a 1x, b 2x\" style=\"width:100px\">")
+                        .append("</div></li>");
+            }
+            html.append("</ul></body></html>");
+
+            when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(html.toString()));
+            when(aiProvider.generateExtraction(anyString(), anyString())).thenReturn("[]");
+
+            FetchContext context = FetchContext.forSearch(List.of(), List.of(), 30, 3,
+                    Map.of("url", "https://berlinstartupjobs.com/engineering/"));
+
+            strategy.fetch(context);
+
+            ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
+            verify(aiProvider).generateExtraction(anyString(), payload.capture());
+            String sent = payload.getValue();
+
+            assertThat(sent.length()).isLessThanOrEqualTo(AiAggregatorStrategy.DEFAULT_MAX_HTML_CHARS);
+            for (int i = 0; i < listingCount; i++) {
+                assertThat(sent).contains("job-" + i + "/");
+            }
+        }
+
+        @Test
+        @DisplayName("narrows the AI payload to the configured contentSelector")
+        void narrowsToConfiguredContentSelector() {
+            String html = """
+                    <html><body>
+                      <div class="outside">SHOULD_NOT_BE_SENT <a href="https://x/outside">o</a></div>
+                      <ul class="jobs-list-items">
+                        <li class="bjs-jlid"><a href="https://berlinstartupjobs.com/engineering/inside/">Inside</a></li>
+                      </ul>
+                    </body></html>
+                    """;
+            String aiResponse = """
+                    [{"title": "Dev", "companyName": "Co", "location": "Berlin", "description": "Code", "applyUrl": "https://co.com/1"}]
+                    """;
+
+            when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(html));
+            when(aiProvider.generateExtraction(anyString(), anyString())).thenReturn(aiResponse);
+
+            FetchContext context = FetchContext.forSearch(List.of(), List.of(), 30, 3,
+                    Map.of("url", "https://berlinstartupjobs.com/engineering/",
+                           "contentSelector", "ul.jobs-list-items"));
+
+            FetchResult result = strategy.fetch(context);
+
+            assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+            ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
+            verify(aiProvider).generateExtraction(anyString(), payload.capture());
+            assertThat(payload.getValue()).contains("inside/").doesNotContain("SHOULD_NOT_BE_SENT");
+        }
+
+        @Test
+        @DisplayName("recovers a JSON array from an AI response with surrounding prose")
+        void recoversJsonArrayFromProse() {
+            String html = "<html><body>content</body></html>";
+            String aiResponse = """
+                    Here are the extracted job listings:
+                    [{"title": "Dev", "companyName": "Co", "location": "Berlin", "description": "Code", "applyUrl": "https://co.com/1"}]
+                    Hope that helps!
+                    """;
+
+            when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(html));
+            when(aiProvider.generateExtraction(anyString(), anyString())).thenReturn(aiResponse);
+
+            FetchContext context = FetchContext.forSearch(List.of(), List.of(), 30, 3,
+                    Map.of("url", "https://example.com"));
+
+            FetchResult result = strategy.fetch(context);
+
+            assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+            assertThat(result.jobs()).hasSize(1);
+            assertThat(result.jobs().get(0).title()).isEqualTo("Dev");
+        }
+
+        @Test
+        @DisplayName("recovers complete listings from a truncated AI response")
+        void recoversListingsFromTruncatedAiResponse() {
+            String html = "<html><body>content</body></html>";
+            // Simulates the model hitting its output-token ceiling mid-object.
+            String aiResponse = """
+                    [
+                      {"title": "Job1", "companyName": "Co1", "location": "Berlin", "description": "d1", "applyUrl": "https://co.com/1"},
+                      {"title": "Job2", "companyName": "Co2", "location": "Berlin", "description": "d2", "applyUrl": "https://co.com/2"},
+                      {"title": "Job3", "companyName": "Co3", "loc""";
+
+            when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(html));
+            when(aiProvider.generateExtraction(anyString(), anyString())).thenReturn(aiResponse);
+
+            FetchContext context = FetchContext.forSearch(List.of(), List.of(), 30, 3,
+                    Map.of("url", "https://example.com"));
+
+            FetchResult result = strategy.fetch(context);
+
+            assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+            assertThat(result.jobs()).hasSize(2);
+            assertThat(result.jobs().get(0).title()).isEqualTo("Job1");
+            assertThat(result.jobs().get(1).title()).isEqualTo("Job2");
+        }
+
+        @Test
+        @DisplayName("honours a configured maxHtmlChars limit")
+        void honoursConfiguredMaxHtmlChars() {
+            String html = "<html><body>" + "<a href=\"https://x/j\">J</a>".repeat(500) + "</body></html>";
+
+            when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(html));
+            when(aiProvider.generateExtraction(anyString(), anyString())).thenReturn("[]");
+
+            FetchContext context = FetchContext.forSearch(List.of(), List.of(), 30, 3,
+                    Map.of("url", "https://example.com", "maxHtmlChars", 100));
+
+            strategy.fetch(context);
+
+            ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
+            verify(aiProvider).generateExtraction(anyString(), payload.capture());
+            assertThat(payload.getValue().length()).isLessThanOrEqualTo(100);
         }
     }
 }

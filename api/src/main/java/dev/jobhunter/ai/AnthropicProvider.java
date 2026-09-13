@@ -24,6 +24,12 @@ public class AnthropicProvider implements AiProvider {
     private static final String ANTHROPIC_VERSION = "2023-06-01";
     private static final Duration TIMEOUT = Duration.ofSeconds(60);
 
+    /** Output budget for free-text generation (tailoring, cover letters). */
+    private static final int TEXT_MAX_TOKENS = 4096;
+
+    /** Output budget for aggregator extraction, which must echo many listings in one response. */
+    private static final int EXTRACTION_MAX_TOKENS = 8192;
+
     private final WebClient webClient;
     private final String apiKey;
     private final String baseUrl;
@@ -51,18 +57,18 @@ public class AnthropicProvider implements AiProvider {
 
     @Override
     public String generate(String systemPrompt, String userPrompt) {
-        return generate(systemPrompt, userPrompt, tailoringModel);
+        return generate(systemPrompt, userPrompt, tailoringModel, TEXT_MAX_TOKENS);
     }
 
     @Override
     public String generateExtraction(String systemPrompt, String userPrompt) {
-        return generate(systemPrompt, userPrompt, extractionModel);
+        return generate(systemPrompt, userPrompt, extractionModel, EXTRACTION_MAX_TOKENS);
     }
 
-    private String generate(String systemPrompt, String userPrompt, String model) {
+    private String generate(String systemPrompt, String userPrompt, String model, int maxTokens) {
         ObjectNode requestBody = objectMapper.createObjectNode();
         requestBody.put("model", model);
-        requestBody.put("max_tokens", 4096);
+        requestBody.put("max_tokens", maxTokens);
         requestBody.put("system", systemPrompt);
 
         ArrayNode messages = requestBody.putArray("messages");
