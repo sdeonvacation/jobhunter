@@ -62,7 +62,8 @@ tasks.named<JavaCompile>("compileTestJava") {
     source = source.filter { file ->
         val path = file.absolutePath
         !(path.contains("controller/AdminController") &&
-                !path.contains("AdminControllerScoringTriggerTest")) &&
+                !path.contains("AdminControllerScoringTriggerTest") &&
+                !path.contains("AdminControllerRefilterLanguageTest")) &&
         !path.contains("people/dto/PeopleDtoMapperTest") &&
         !path.contains("people/service/ContactDiscoveryServiceTest") &&
         !path.contains("people/service/ContactPriorityScorerTest") &&

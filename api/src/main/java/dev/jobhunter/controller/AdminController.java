@@ -223,10 +223,11 @@ public class AdminController {
     @PostMapping("/refilter-language")
     @Transactional
     public ResponseEntity<RefilterResult> refilterLanguage(@RequestParam(defaultValue = "false") boolean dryRun) {
-        List<JobPosting> jobs = jobPostingRepository.findActiveKeptJobsWithDescription();
-        int evaluated = 0, filtered = 0, kept = 0;
+        List<JobPosting> keptJobs = jobPostingRepository.findActiveKeptJobsWithDescription();
+        List<JobPosting> skippedJobs = jobPostingRepository.findActiveLanguageSkippedJobsWithDescription();
+        int evaluated = 0, filtered = 0, kept = 0, promoted = 0;
 
-        for (JobPosting job : jobs) {
+        for (JobPosting job : keptJobs) {
             evaluated++;
             FilterResult result = languageFilter.filter(job.getTitle(), job.getDescription());
             if (result.decision() == FilterDecision.SKIP) {
@@ -241,7 +242,27 @@ public class AdminController {
             }
         }
 
-        return ResponseEntity.ok(new RefilterResult(evaluated, filtered, kept, dryRun));
+        for (JobPosting job : skippedJobs) {
+            evaluated++;
+            FilterResult result = languageFilter.filter(job.getTitle(), job.getDescription());
+            if (result.decision() == FilterDecision.KEEP) {
+                if (!dryRun) {
+                    job.setLanguageFilter(FilterDecision.KEEP);
+                    job.setFilterReason(null);
+                    jobPostingRepository.save(job);
+                }
+                kept++;
+                promoted++;
+            } else {
+                if (!dryRun) {
+                    job.setFilterReason(result.reason());
+                    jobPostingRepository.save(job);
+                }
+                filtered++;
+            }
+        }
+
+        return ResponseEntity.ok(new RefilterResult(evaluated, filtered, kept, promoted, dryRun));
     }
 
     @PostMapping("/discover")
@@ -413,7 +434,7 @@ public class AdminController {
     public record RescoreResult(long deleted, long rescored) {}
     public record ResolveResult(int total, int resolved, int failed, int skipped) {}
     public record DiscoverResult(int providersQueried, int companiesFound, int newCompanies) {}
-    public record RefilterResult(int evaluated, int filtered, int kept, boolean dryRun) {}
+    public record RefilterResult(int evaluated, int filtered, int kept, int promoted, boolean dryRun) {}
 
     public record AggregatorStatus(
             String name, String sourceType, String strategyName,
