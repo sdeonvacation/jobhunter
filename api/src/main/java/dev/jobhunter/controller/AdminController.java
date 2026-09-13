@@ -23,7 +23,9 @@ import dev.jobhunter.scheduler.ScoringScheduler;
 import dev.jobhunter.filter.FilterResult;
 import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.service.CrawlService;
+import dev.jobhunter.service.JobTitleTranslator;
 import dev.jobhunter.source.SourceConfig;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,7 +61,9 @@ public class AdminController {
     private final LanguageFilter languageFilter;
     private final List<DescriptionBackfiller> descriptionBackfillers;
     private final List<BackfillPostProcessor> backfillPostProcessors;
+    private final JobTitleTranslator jobTitleTranslator;
 
+    @Autowired
     public AdminController(CrawlService crawlService, CareerEndpointRepository careerEndpointRepository,
                            ScoringScheduler scoringScheduler, DiscoveryService discoveryService,
                            PipelineScheduler pipelineScheduler,
@@ -73,7 +77,8 @@ public class AdminController {
                            @Qualifier("allSources") List<SourceConfig> sources,
                            LanguageFilter languageFilter,
                            List<DescriptionBackfiller> descriptionBackfillers,
-                           List<BackfillPostProcessor> backfillPostProcessors) {
+                           List<BackfillPostProcessor> backfillPostProcessors,
+                           JobTitleTranslator jobTitleTranslator) {
         this.crawlService = crawlService;
         this.careerEndpointRepository = careerEndpointRepository;
         this.scoringScheduler = scoringScheduler;
@@ -90,6 +95,28 @@ public class AdminController {
         this.languageFilter = languageFilter;
         this.descriptionBackfillers = descriptionBackfillers;
         this.backfillPostProcessors = backfillPostProcessors;
+        this.jobTitleTranslator = jobTitleTranslator;
+    }
+
+    /** Backward-compatible constructor: no title translation (used by tests predating the feature). */
+    public AdminController(CrawlService crawlService, CareerEndpointRepository careerEndpointRepository,
+                           ScoringScheduler scoringScheduler, DiscoveryService discoveryService,
+                           PipelineScheduler pipelineScheduler,
+                           AiCrawlScheduler aiCrawlScheduler,
+                           AggregatorIngestionService aggregatorIngestionService,
+                           AggregatorRunRepository aggregatorRunRepository,
+                           MatchScoreRepository matchScoreRepository,
+                           OpportunityScoreRepository opportunityScoreRepository,
+                           JobPostingRepository jobPostingRepository,
+                           Optional<HttpMcpClient> httpMcpClient,
+                           List<SourceConfig> sources,
+                           LanguageFilter languageFilter,
+                           List<DescriptionBackfiller> descriptionBackfillers,
+                           List<BackfillPostProcessor> backfillPostProcessors) {
+        this(crawlService, careerEndpointRepository, scoringScheduler, discoveryService, pipelineScheduler,
+                aiCrawlScheduler, aggregatorIngestionService, aggregatorRunRepository, matchScoreRepository,
+                opportunityScoreRepository, jobPostingRepository, httpMcpClient, sources, languageFilter,
+                descriptionBackfillers, backfillPostProcessors, null);
     }
 
     @PostMapping("/pipeline")
@@ -176,6 +203,21 @@ public class AdminController {
         scoringScheduler.scoreAllUnscored();
         long rescored = matchScoreRepository.count();
         return ResponseEntity.ok(new RescoreResult(deleted, rescored));
+    }
+
+    @PostMapping("/translate-titles")
+    public ResponseEntity<Map<String, Object>> translateTitles(@RequestParam String source) {
+        if (source == null || source.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Missing required parameter: source"));
+        }
+        JobSource jobSource;
+        try {
+            jobSource = JobSource.valueOf(source.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Unknown source: " + source));
+        }
+        int updated = jobTitleTranslator.translateExisting(jobSource);
+        return ResponseEntity.ok(Map.of("source", jobSource.name(), "updated", updated));
     }
 
     @PostMapping("/refilter-language")

@@ -1,5 +1,6 @@
 package dev.jobhunter.source;
 
+import dev.jobhunter.filter.FilterOverrides;
 import dev.jobhunter.model.enums.DiscoverySource;
 import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.strategy.FetchContext;
@@ -18,8 +19,45 @@ public record YamlSourceConfig(
         int frequencyHours,
         int maxResults,
         boolean visaExempt,
-        Map<String, Object> extraConfig
+        Map<String, Object> extraConfig,
+        FilterOverrides filterOverrides,
+        boolean translateTitles
 ) implements SourceConfig {
+
+    public YamlSourceConfig {
+        if (filterOverrides == null) {
+            filterOverrides = FilterOverrides.NONE;
+        }
+    }
+
+    /** Backward-compatible constructor: no source-scoped filter override, no title translation. */
+    public YamlSourceConfig(String name,
+                            JobSource sourceType,
+                            DiscoverySource discoverySource,
+                            FetchStrategy strategy,
+                            String url,
+                            int frequencyHours,
+                            int maxResults,
+                            boolean visaExempt,
+                            Map<String, Object> extraConfig) {
+        this(name, sourceType, discoverySource, strategy, url, frequencyHours, maxResults,
+                visaExempt, extraConfig, FilterOverrides.NONE, false);
+    }
+
+    /** Backward-compatible constructor: source-scoped filter override, no title translation. */
+    public YamlSourceConfig(String name,
+                            JobSource sourceType,
+                            DiscoverySource discoverySource,
+                            FetchStrategy strategy,
+                            String url,
+                            int frequencyHours,
+                            int maxResults,
+                            boolean visaExempt,
+                            Map<String, Object> extraConfig,
+                            FilterOverrides filterOverrides) {
+        this(name, sourceType, discoverySource, strategy, url, frequencyHours, maxResults,
+                visaExempt, extraConfig, filterOverrides, false);
+    }
 
     @Override
     public FetchContext buildContext() {

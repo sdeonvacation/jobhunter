@@ -262,6 +262,19 @@ aggregator:
       visa-exempt: true
       config:
         delay-between-pages-ms: "800"
+    - name: wissenschaftsstellen
+      strategy: wissenschaftsstellen
+      job-source: WISSENSCHAFTSSTELLEN
+      discovery-source: WISSENSCHAFTSSTELLEN
+      url: "https://wissenschaftsstellen.de"
+      frequency-hours: 12 # informational only
+      max-results: 300
+      translate-titles: true
+      config:
+        delayBetweenMs: "1000"
+        maxScrapePerRun: "120"
+        maxPages: "20"
+        maxConsecutiveDetailFailures: "5"
 
 globalmove:
   keepalive-schedule: "0 0 * * * ?"

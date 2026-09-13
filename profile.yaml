@@ -484,3 +484,36 @@ people:
     stale-contact-days: 90
   gdpr:
     contact-retention-days: 180
+
+# Named, reusable filter profiles (mechanism is in PersonalProfileLoader; policy is here).
+filter-profiles:
+  academic-university:
+    language-exempt: true
+    role:
+      include-patterns:
+        - "softwareentwickler"
+        - "\\bentwickler\\b"
+        - "software\\s+engineer"
+        - "research\\s+software"
+        - "data\\s+(scientist|engineer)"
+        - "machine\\s+learning"
+        - "\\bml\\b"
+        - "\\bki\\b"
+        - "\\bai\\b"
+        - "backend"
+        - "full[\\s-]?stack"
+        - "informatik"
+        - "\\bit\\b"
+        - "software"
+        - "engineer"
+        - "cloud"
+        - "devops"
+        - "datenbank"
+        - "hpc"
+        - "scientific\\s+computing"
+      exclude-keywords: []
+
+# Per-source overrides: either reference a named profile, or define inline.
+source-filter-overrides:
+  wissenschaftsstellen:
+    profile: academic-university

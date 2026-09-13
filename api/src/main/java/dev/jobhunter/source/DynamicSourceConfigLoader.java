@@ -1,8 +1,10 @@
 package dev.jobhunter.source;
 
+import dev.jobhunter.filter.FilterOverrides;
 import dev.jobhunter.ingestion.StrategyRegistry;
 import dev.jobhunter.model.enums.DiscoverySource;
 import dev.jobhunter.model.enums.JobSource;
+import dev.jobhunter.service.PersonalProfileLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -20,7 +22,12 @@ public class DynamicSourceConfigLoader {
     private static final Logger log = LoggerFactory.getLogger(DynamicSourceConfigLoader.class);
 
     @Bean
-    public List<SourceConfig> dynamicSources(AggregatorSourceProperties props, StrategyRegistry registry) {
+    public List<SourceConfig> dynamicSources(AggregatorSourceProperties props,
+                                             StrategyRegistry registry,
+                                             PersonalProfileLoader profileLoader) {
+        Map<String, FilterOverrides> overrides = profileLoader.getSourceFilterOverrides();
+        Map<String, FilterOverrides> resolvedOverrides = overrides != null ? overrides : Map.of();
+
         List<SourceConfig> sources = props.getSources().stream()
                 .filter(AggregatorSourceProperties.SourceEntry::isEnabled)
                 .filter(entry -> {
@@ -44,7 +51,9 @@ public class DynamicSourceConfigLoader {
                             entry.getFrequencyHours(),
                             entry.getMaxResults(),
                             entry.isVisaExempt(),
-                            config
+                            config,
+                            resolvedOverrides.getOrDefault(entry.getName(), FilterOverrides.NONE),
+                            entry.isTranslateTitles()
                     );
                 })
                 .toList();

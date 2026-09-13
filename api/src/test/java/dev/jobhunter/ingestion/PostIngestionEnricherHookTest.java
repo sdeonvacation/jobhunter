@@ -87,7 +87,7 @@ class PostIngestionEnricherHookTest {
         when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
         when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.LINKEDIN)).thenReturn(new HashSet<>());
         when(jobPostingRepository.findAtsFingerprintsExcludingSources(any())).thenReturn(new HashSet<>());
-        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean()))
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(FilterChainResult.keep(null, null));
         when(companyRepository.findByNormalizedName("testco")).thenReturn(Optional.of(
                 Company.builder().id(UUID.randomUUID()).name("TestCo").normalizedName("testco")

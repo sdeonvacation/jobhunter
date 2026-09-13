@@ -126,6 +126,25 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
     @Query(value = "SELECT id FROM job_posting WHERE CAST(id AS TEXT) LIKE :prefix || '%' LIMIT 1", nativeQuery = true)
     Optional<UUID> findIdByPrefix(@Param("prefix") String prefix);
 
+    /**
+     * Title-translation cache seed: distinct (stored English title, original title) pairs for a
+     * source. Rows are [translatedTitle, originalTitle]; only rows carrying a preserved original
+     * title are returned.
+     */
+    @Query(value = "SELECT DISTINCT j.title, j.raw_content->>'titleOriginal' FROM job_posting j " +
+           "WHERE j.source = :source AND j.raw_content->>'titleOriginal' IS NOT NULL",
+           nativeQuery = true)
+    List<Object[]> findTranslatedTitlesBySource(@Param("source") String source);
+
+    /**
+     * Title-translation backfill: active rows for a source that never had their original title
+     * preserved (i.e. were ingested before translation was enabled or while it was unavailable).
+     */
+    @Query(value = "SELECT * FROM job_posting WHERE source = :source " +
+           "AND (raw_content->>'titleOriginal') IS NULL AND is_active = true",
+           nativeQuery = true)
+    List<JobPosting> findUntranslatedBySource(@Param("source") String source);
+
     @Query("SELECT jp FROM JobPosting jp WHERE jp.company.normalizedName = :companyName " +
            "AND LOWER(jp.title) LIKE LOWER(CONCAT('%', :titleKeyword, '%')) " +
            "AND jp.isActive = true AND jp.source NOT IN :excludedSources")

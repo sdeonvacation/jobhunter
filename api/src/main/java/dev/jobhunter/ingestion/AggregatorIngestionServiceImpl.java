@@ -18,17 +18,21 @@ import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.AggregatorRunRepository;
 import dev.jobhunter.repository.CompanyRepository;
 import dev.jobhunter.repository.JobPostingRepository;
+import dev.jobhunter.service.JobTitleTranslator;
 import dev.jobhunter.source.SourceConfig;
 import dev.jobhunter.strategy.FetchResult;
 import dev.jobhunter.strategy.RawAggregatorJob;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,20 +47,35 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
     private final AggregatorRunRepository aggregatorRunRepository;
     private final JobFilterChain jobFilterChain;
     private final DeduplicationFilter deduplicationFilter;
+    private final JobTitleTranslator jobTitleTranslator;
     private final List<PostIngestionEnricher> postIngestionEnrichers;
 
+    @Autowired
     public AggregatorIngestionServiceImpl(JobPostingRepository jobPostingRepository,
                                           CompanyRepository companyRepository,
                                           AggregatorRunRepository aggregatorRunRepository,
                                           JobFilterChain jobFilterChain,
                                           DeduplicationFilter deduplicationFilter,
+                                          JobTitleTranslator jobTitleTranslator,
                                           List<PostIngestionEnricher> postIngestionEnrichers) {
         this.jobPostingRepository = jobPostingRepository;
         this.companyRepository = companyRepository;
         this.aggregatorRunRepository = aggregatorRunRepository;
         this.jobFilterChain = jobFilterChain;
         this.deduplicationFilter = deduplicationFilter;
+        this.jobTitleTranslator = jobTitleTranslator;
         this.postIngestionEnrichers = postIngestionEnrichers;
+    }
+
+    /** Backward-compatible constructor: no title translation (used by tests predating the feature). */
+    public AggregatorIngestionServiceImpl(JobPostingRepository jobPostingRepository,
+                                          CompanyRepository companyRepository,
+                                          AggregatorRunRepository aggregatorRunRepository,
+                                          JobFilterChain jobFilterChain,
+                                          DeduplicationFilter deduplicationFilter,
+                                          List<PostIngestionEnricher> postIngestionEnrichers) {
+        this(jobPostingRepository, companyRepository, aggregatorRunRepository,
+                jobFilterChain, deduplicationFilter, null, postIngestionEnrichers);
     }
 
     @Override
@@ -98,6 +117,10 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
         // L5: pre-load dedup_hash set across ALL sources (cross-source duplicate detection by normalized applyUrl)
         Set<String> knownDedupHashes = new HashSet<>(jobPostingRepository.findAllDedupHashes());
 
+        List<AcceptedJob> acceptedJobs = new ArrayList<>();
+
+        // Pass A: dedup / URL validation / ATS enrichment / filtering. No persistence yet, so title
+        // translation can run as one batched call after filtering and before saving.
         for (RawAggregatorJob job : result.jobs()) {
             try {
                 // Skip if exact source+externalId already known (in-memory check)
@@ -161,7 +184,8 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                 // Unified filter chain (isAggregator=true; visaExempt from source config)
                 RawJobInput filterInput = new RawJobInput(job.title(), job.description(), job.location(),
                         job.companyName() != null ? job.companyName() : "");
-                FilterChainResult chainResult = jobFilterChain.apply(filterInput, true, source.visaExempt());
+                FilterChainResult chainResult = jobFilterChain.apply(filterInput, true, source.visaExempt(),
+                        source.filterOverrides());
 
                 if (chainResult.decision() == FilterDecision.SKIP) {
                     filtered++;
@@ -169,25 +193,67 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                             source.name(), job.title(), job.location(), chainResult.reason());
                     continue;
                 }
-                VisaSponsorship visaStatus = chainResult.visaSponsorship() != null
-                        ? chainResult.visaSponsorship() : VisaSponsorship.UNKNOWN;
 
                 // Resolve company (uses per-batch cache to avoid duplicate-insert within same transaction)
                 Company company = resolveCompany(job.companyName(), source, companyCache);
 
-                // Build and save JobPosting
+                acceptedJobs.add(new AcceptedJob(job, chainResult, company, fingerprint, dedupHash));
+                // Update in-memory sets at acceptance time so within-batch duplicates are still caught
+                knownExternalIds.add(job.externalId());
+                knownFingerprints.add(fingerprint);
+                if (dedupHash != null) {
+                    knownDedupHashes.add(dedupHash);
+                }
+            } catch (Exception e) {
+                log.warn("Error processing job [{}] from source [{}]: {}",
+                        job.externalId(), source.name(), e.getMessage());
+                errors++;
+            }
+        }
+
+        // One batched translation call for the distinct survivor titles (opt-in per source).
+        Map<String, String> translations = Map.of();
+        if (jobTitleTranslator != null && source.translateTitles() && !acceptedJobs.isEmpty()) {
+            Set<String> distinctTitles = new LinkedHashSet<>();
+            for (AcceptedJob accepted : acceptedJobs) {
+                String title = accepted.job().title();
+                if (title != null && !title.isBlank()) {
+                    distinctTitles.add(title);
+                }
+            }
+            if (!distinctTitles.isEmpty()) {
+                translations = jobTitleTranslator.translate(jobSource, distinctTitles);
+            }
+        }
+
+        // Pass B: build and persist. Use the English title only when a translation actually changed it.
+        for (AcceptedJob accepted : acceptedJobs) {
+            try {
+                RawAggregatorJob job = accepted.job();
+                FilterChainResult chainResult = accepted.chainResult();
+                String originalTitle = job.title();
+                String translated = translations.get(originalTitle);
+                boolean titleChanged = translated != null && !translated.isBlank()
+                        && !translated.equals(originalTitle);
+                VisaSponsorship visaStatus = chainResult.visaSponsorship() != null
+                        ? chainResult.visaSponsorship() : VisaSponsorship.UNKNOWN;
+                // Preserve the original title only when it was actually replaced.
+                Map<String, Object> rawContent = titleChanged
+                        ? Map.of("titleOriginal", originalTitle)
+                        : null;
+
                 JobPosting posting = JobPosting.builder()
                         .source(jobSource)
                         .externalId(job.externalId())
-                        .title(job.title())
-                        .company(company)
+                        .title(titleChanged ? translated : originalTitle)
+                        .company(accepted.company())
                         .location(job.location())
                         .locationCountry(chainResult.countryIso())
                         .locationCity(LocationCountryParser.extractCity(job.location()))
                         .description(job.description())
                         .applyUrl(job.applyUrl())
-                        .fingerprint(fingerprint)
-                        .dedupHash(dedupHash)
+                        .fingerprint(accepted.fingerprint())
+                        .dedupHash(accepted.dedupHash())
                         .postedDate(job.postedDate())
                         .discoveredDate(LocalDate.now())
                         .salaryMin(job.salaryMin())
@@ -197,17 +263,13 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                         .isActive(true)
                         .languageFilter(FilterDecision.KEEP)
                         .visaSponsorship(visaStatus)
+                        .rawContent(rawContent)
                         .build();
                 jobPostingRepository.save(posting);
-                knownExternalIds.add(job.externalId());  // prevent duplicates within same batch
-                knownFingerprints.add(fingerprint);       // prevent duplicate enrichment
-                if (dedupHash != null) {
-                    knownDedupHashes.add(dedupHash);     // L5: prevent URL-based dupes within same batch
-                }
                 created++;
             } catch (Exception e) {
-                log.warn("Error processing job [{}] from source [{}]: {}",
-                        job.externalId(), source.name(), e.getMessage());
+                log.warn("Error saving job [{}] from source [{}]: {}",
+                        accepted.job().externalId(), source.name(), e.getMessage());
                 errors++;
             }
         }
@@ -271,5 +333,13 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
         run.setElapsedMs(elapsedMs);
         run.setErrorMessage(errorMessage);
         aggregatorRunRepository.save(run);
+    }
+
+    /** Job that survived pass A (dedup + filter) and is awaiting persistence in pass B. */
+    private record AcceptedJob(RawAggregatorJob job,
+                               FilterChainResult chainResult,
+                               Company company,
+                               String fingerprint,
+                               String dedupHash) {
     }
 }

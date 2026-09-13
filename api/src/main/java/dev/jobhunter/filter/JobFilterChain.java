@@ -44,7 +44,8 @@ public class JobFilterChain {
     }
 
     /**
-     * Apply lang→role→location→visa→yoe→dedup filter cascade.
+     * Apply lang→role→location→visa→yoe→dedup filter cascade with the global filter config.
+     * Delegates to the 4-arg overload with {@link FilterOverrides#NONE} (endpoint crawl path).
      *
      * @param input        the raw job data
      * @param isAggregator true for aggregator-sourced jobs (enables visa PENDING deferral)
@@ -52,15 +53,32 @@ public class JobFilterChain {
      * @return FilterChainResult with decision, reason, visa status, and extracted YOE
      */
     public FilterChainResult apply(RawJobInput input, boolean isAggregator, boolean visaExempt) {
+        return apply(input, isAggregator, visaExempt, FilterOverrides.NONE);
+    }
+
+    /**
+     * Apply lang→role→location→visa→yoe→dedup filter cascade with source-scoped overrides.
+     *
+     * @param input        the raw job data
+     * @param isAggregator true for aggregator-sourced jobs (enables visa PENDING deferral)
+     * @param visaExempt   true for visa-exempt sources (expat portals); skips visa detection, sets LIKELY
+     * @param overrides    source-scoped overrides; null behaves as {@link FilterOverrides#NONE}
+     * @return FilterChainResult with decision, reason, visa status, and extracted YOE
+     */
+    public FilterChainResult apply(RawJobInput input, boolean isAggregator, boolean visaExempt,
+                                   FilterOverrides overrides) {
+        FilterOverrides effective = overrides != null ? overrides : FilterOverrides.NONE;
         try {
-            // 1. Language filter
-            FilterResult langResult = languageFilter.filter(input.title(), input.description());
-            if (langResult.decision() == FilterDecision.SKIP) {
-                return FilterChainResult.skip(langResult.reason());
+            // 1. Language filter — skipped entirely for language-exempt sources (e.g. German university boards).
+            if (!effective.languageExempt()) {
+                FilterResult langResult = languageFilter.filter(input.title(), input.description());
+                if (langResult.decision() == FilterDecision.SKIP) {
+                    return FilterChainResult.skip(langResult.reason());
+                }
             }
 
-            // 2. Role filter
-            FilterResult roleResult = roleRelevanceFilter.filter(input.title());
+            // 2. Role filter — the override replaces the global compiled set when present.
+            FilterResult roleResult = roleRelevanceFilter.filter(input.title(), effective);
             if (roleResult.decision() == FilterDecision.SKIP) {
                 return FilterChainResult.skip(roleResult.reason());
             }

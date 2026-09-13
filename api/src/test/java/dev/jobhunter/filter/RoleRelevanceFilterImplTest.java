@@ -150,4 +150,67 @@ class RoleRelevanceFilterImplTest {
         // "devops" exclude keyword matches case-insensitively
         assertThat(filter.filter("DevOps ENGINEER").decision()).isEqualTo(FilterDecision.SKIP);
     }
+
+    // --- Source-scoped overrides ---
+
+    private static final FilterOverrides ACADEMIC = new FilterOverrides(
+            List.of("software", "engineer", "informatik", "administrator", "mitarbeiter", "wissenschaftliche"),
+            List.of(),
+            true);
+
+    @Test
+    void override_keepsAcademicTitles() {
+        assertThat(filter.filter("Wissenschaftliche*r Mitarbeiter*in", ACADEMIC).decision())
+                .isEqualTo(FilterDecision.KEEP);
+        assertThat(filter.filter("IT-Administrator", ACADEMIC).decision())
+                .isEqualTo(FilterDecision.KEEP);
+    }
+
+    @Test
+    void override_emptyExclude_doesNotDropPromotionOrPhd() {
+        // Global exclude keywords (phd, student, promotion, ...) must not apply under the override.
+        assertThat(filter.filter("PhD Student Software Engineer", ACADEMIC).decision())
+                .isEqualTo(FilterDecision.KEEP);
+        assertThat(filter.filter("Promotion Software Developer", ACADEMIC).decision())
+                .isEqualTo(FilterDecision.KEEP);
+        assertThat(filter.filter("Wissenschaftliche*r Mitarbeiter*in (Promotion)", ACADEMIC).decision())
+                .isEqualTo(FilterDecision.KEEP);
+    }
+
+    @Test
+    void override_excludeKeywordStillTakesPriority() {
+        FilterOverrides withExclude = new FilterOverrides(
+                List.of("software", "engineer"), List.of("manager", "phd"), false);
+
+        assertThat(filter.filter("Software Manager", withExclude).decision()).isEqualTo(FilterDecision.SKIP);
+        assertThat(filter.filter("PhD Software Engineer", withExclude).decision()).isEqualTo(FilterDecision.SKIP);
+    }
+
+    @Test
+    void override_titleNotMatchingOverrides_skip() {
+        FilterResult result = filter.filter("HR Manager", ACADEMIC);
+
+        assertThat(result.decision()).isEqualTo(FilterDecision.SKIP);
+        assertThat(result.reason()).isEqualTo("non-engineering role");
+    }
+
+    @Test
+    void noneOverride_identicalToGlobal() {
+        for (String title : List.of("HR Manager", "DevOps Engineer", "SENIOR SOFTWARE ENGINEER", "Data Analyst")) {
+            assertThat(filter.filter(title, FilterOverrides.NONE)).isEqualTo(filter.filter(title));
+        }
+    }
+
+    @Test
+    void nullOverride_identicalToGlobal() {
+        assertThat(filter.filter("HR Manager", null)).isEqualTo(filter.filter("HR Manager"));
+        assertThat(filter.filter("Senior Backend Engineer", null))
+                .isEqualTo(filter.filter("Senior Backend Engineer"));
+    }
+
+    @Test
+    void override_nullOrBlankTitle_keep() {
+        assertThat(filter.filter(null, ACADEMIC).decision()).isEqualTo(FilterDecision.KEEP);
+        assertThat(filter.filter("   ", ACADEMIC).decision()).isEqualTo(FilterDecision.KEEP);
+    }
 }

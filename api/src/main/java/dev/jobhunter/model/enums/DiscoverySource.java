@@ -15,5 +15,6 @@ public enum DiscoverySource {
     JOBGETHER,
     WORK_IN_FINLAND,
     VISAJOBS,
-    GLOBAL_MOVE
+    GLOBAL_MOVE,
+    WISSENSCHAFTSSTELLEN
 }

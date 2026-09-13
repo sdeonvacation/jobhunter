@@ -2,6 +2,7 @@ package dev.jobhunter.ingestion;
 
 import dev.jobhunter.filter.DeduplicationFilter;
 import dev.jobhunter.filter.FilterChainResult;
+import dev.jobhunter.filter.FilterOverrides;
 import dev.jobhunter.filter.JobFilterChain;
 import dev.jobhunter.model.AggregatorRun;
 import dev.jobhunter.model.Company;
@@ -14,6 +15,7 @@ import dev.jobhunter.model.enums.JobSource;
 import dev.jobhunter.repository.AggregatorRunRepository;
 import dev.jobhunter.repository.CompanyRepository;
 import dev.jobhunter.repository.JobPostingRepository;
+import dev.jobhunter.service.JobTitleTranslator;
 import dev.jobhunter.source.SourceConfig;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
@@ -50,6 +52,7 @@ class AggregatorIngestionServiceImplTest {
     @Mock private AggregatorRunRepository aggregatorRunRepository;
     @Mock private JobFilterChain jobFilterChain;
     @Mock private DeduplicationFilter deduplicationFilter;
+    @Mock private JobTitleTranslator jobTitleTranslator;
     @Mock private FetchStrategy fetchStrategy;
 
     private AggregatorIngestionServiceImpl service;
@@ -58,7 +61,7 @@ class AggregatorIngestionServiceImplTest {
     void setUp() {
         service = new AggregatorIngestionServiceImpl(
                 jobPostingRepository, companyRepository, aggregatorRunRepository,
-                jobFilterChain, deduplicationFilter,
+                jobFilterChain, deduplicationFilter, jobTitleTranslator,
                 List.of());
     }
 
@@ -95,7 +98,7 @@ class AggregatorIngestionServiceImplTest {
         when(jobPostingRepository.findAtsFingerprintsExcludingSources(JobSource.aggregators())).thenReturn(new HashSet<>());
         when(deduplicationFilter.generateFingerprint("Backend Engineer", "Acme Corp", "Berlin"))
                 .thenReturn("fingerprint-abc");
-        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean()))
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(FilterChainResult.keep(null, null));
 
         Company company = Company.builder().id(UUID.randomUUID()).name("Acme Corp")
@@ -210,7 +213,7 @@ class AggregatorIngestionServiceImplTest {
         when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
         when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
                 .thenReturn("fp");
-        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean()))
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(FilterChainResult.skip("German title"));
         when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
         when(aggregatorRunRepository.save(any(AggregatorRun.class))).thenAnswer(i -> i.getArgument(0));
@@ -231,7 +234,7 @@ class AggregatorIngestionServiceImplTest {
         when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
         when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
                 .thenReturn("fp");
-        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean()))
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(FilterChainResult.skip("Not engineering role"));
         when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
         when(aggregatorRunRepository.save(any(AggregatorRun.class))).thenAnswer(i -> i.getArgument(0));
@@ -280,7 +283,7 @@ class AggregatorIngestionServiceImplTest {
         when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.BERLIN_STARTUP_JOBS)).thenReturn(new HashSet<>());
         when(jobPostingRepository.findAtsFingerprintsExcludingSources(JobSource.aggregators())).thenReturn(new HashSet<>());
         when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp");
-        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean()))
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(FilterChainResult.keep(null, null));
         when(companyRepository.findByNormalizedName("new startup gmbh")).thenReturn(Optional.empty());
 
@@ -314,7 +317,7 @@ class AggregatorIngestionServiceImplTest {
         when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.ARBEITNOW)).thenReturn(new HashSet<>());
         when(jobPostingRepository.findAtsFingerprintsExcludingSources(JobSource.aggregators())).thenReturn(new HashSet<>());
         when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp");
-        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean()))
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(FilterChainResult.keep(null, 2));
         when(companyRepository.findByNormalizedName("acme corp")).thenReturn(
                 Optional.of(Company.builder().id(UUID.randomUUID()).name("Acme Corp").normalizedName("acme corp").isActive(true).status(CompanyStatus.ACTIVE).build()));
@@ -348,7 +351,7 @@ class AggregatorIngestionServiceImplTest {
         when(jobPostingRepository.findAtsFingerprintsExcludingSources(JobSource.aggregators())).thenReturn(new HashSet<>());
         when(deduplicationFilter.generateFingerprint("Backend Engineer", "", "Berlin")).thenReturn("fp");
         // ATS fingerprint matching is skipped when companyName is null (Bug #3 fix)
-        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean()))
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(FilterChainResult.keep(null, null));
 
         Company unknownCompany = Company.builder().id(UUID.randomUUID()).name("Unknown")
@@ -380,7 +383,7 @@ class AggregatorIngestionServiceImplTest {
         when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.BERLIN_STARTUP_JOBS)).thenReturn(new HashSet<>());
         when(jobPostingRepository.findAtsFingerprintsExcludingSources(JobSource.aggregators())).thenReturn(new HashSet<>());
         when(deduplicationFilter.generateFingerprint("Backend Engineer", "  ", "Berlin")).thenReturn("fp");
-        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean()))
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(FilterChainResult.keep(null, null));
 
         Company unknownCompany = Company.builder().id(UUID.randomUUID()).name("Unknown")
@@ -448,7 +451,7 @@ class AggregatorIngestionServiceImplTest {
         // Distinct fingerprints per job — avoids knownFingerprints cross-hit after first save
         when(deduplicationFilter.generateFingerprint("Backend Engineer", "Acme Corp", "Berlin")).thenReturn("fp-1");
         when(deduplicationFilter.generateFingerprint("Frontend Engineer", "Beta Corp", "Berlin")).thenReturn("fp-2");
-        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean()))
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(FilterChainResult.keep(null, null));
         Company company = Company.builder().id(UUID.randomUUID()).name("Acme Corp")
                 .normalizedName("acme corp").isActive(true).status(CompanyStatus.ACTIVE).build();
@@ -481,7 +484,7 @@ class AggregatorIngestionServiceImplTest {
         when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.BERLIN_STARTUP_JOBS)).thenReturn(new HashSet<>());
         when(jobPostingRepository.findAtsFingerprintsExcludingSources(JobSource.aggregators())).thenReturn(new HashSet<>());
         when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp");
-        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean()))
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(FilterChainResult.keep(null, null));
         Company company = Company.builder().id(UUID.randomUUID()).name("Acme Corp")
                 .normalizedName("acme corp").isActive(true).status(CompanyStatus.ACTIVE).build();
@@ -560,7 +563,7 @@ class AggregatorIngestionServiceImplTest {
         verify(jobPostingRepository, never()).save(any(JobPosting.class));
         // L1 fires before fingerprint generation
         verify(deduplicationFilter, never()).generateFingerprint(anyString(), anyString(), anyString());
-        verify(jobFilterChain, never()).apply(any(), anyBoolean(), anyBoolean());
+        verify(jobFilterChain, never()).apply(any(), anyBoolean(), anyBoolean(), any());
     }
 
     @Test
@@ -582,7 +585,7 @@ class AggregatorIngestionServiceImplTest {
         assertThat(stats.created()).isZero();
         verify(jobPostingRepository, never()).save(any(JobPosting.class));
         verify(deduplicationFilter, never()).generateFingerprint(anyString(), anyString(), anyString());
-        verify(jobFilterChain, never()).apply(any(), anyBoolean(), anyBoolean());
+        verify(jobFilterChain, never()).apply(any(), anyBoolean(), anyBoolean(), any());
     }
 
     @Test
@@ -602,7 +605,7 @@ class AggregatorIngestionServiceImplTest {
         when(jobPostingRepository.findAllDedupHashes()).thenReturn(List.of());
         when(jobPostingRepository.findAtsFingerprintsExcludingSources(JobSource.aggregators())).thenReturn(new HashSet<>());
         when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp");
-        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean()))
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean(), any()))
                 .thenReturn(FilterChainResult.keep(null, null));
         Company company = Company.builder().id(UUID.randomUUID()).name("Acme Corp")
                 .normalizedName("acme corp").isActive(true).status(CompanyStatus.ACTIVE).build();
@@ -645,5 +648,123 @@ class AggregatorIngestionServiceImplTest {
         assertThat(stats.created()).isZero();
         assertThat(stats.duplicates()).isEqualTo(1);
         verify(jobPostingRepository, never()).save(any(JobPosting.class));
+    }
+
+    @Test
+    void ingest_threadsSourceFilterOverridesIntoFilterChain() {
+        FilterOverrides overrides = new FilterOverrides(List.of("software"), List.of(), true);
+        SourceConfig sourceConfig = new SourceConfig() {
+            @Override public String name() { return "wissenschaftsstellen"; }
+            @Override public JobSource sourceType() { return JobSource.BERLIN_STARTUP_JOBS; }
+            @Override public DiscoverySource discoverySource() { return DiscoverySource.BERLIN_STARTUP_JOBS; }
+            @Override public FetchStrategy strategy() { return fetchStrategy; }
+            @Override public FetchContext buildContext() {
+                return FetchContext.forSearch(List.of(), List.of(), 100, 5, Map.of());
+            }
+            @Override public int frequencyHours() { return 12; }
+            @Override public boolean isEnabled() { return true; }
+            @Override public FilterOverrides filterOverrides() { return overrides; }
+        };
+        var job = createJob("ext-1", "Wissenschaftliche*r Mitarbeiter*in", "Uni Bonn");
+        var fetchResult = FetchResult.success(List.of(job), Duration.ofMillis(100));
+
+        when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
+        when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.BERLIN_STARTUP_JOBS))
+                .thenReturn(new HashSet<>());
+        when(jobPostingRepository.findAtsFingerprintsExcludingSources(JobSource.aggregators()))
+                .thenReturn(new HashSet<>());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp");
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean(), any()))
+                .thenReturn(FilterChainResult.keep(null, null));
+
+        Company company = Company.builder().id(UUID.randomUUID()).name("Uni Bonn")
+                .normalizedName("uni bonn").isActive(true).status(CompanyStatus.ACTIVE).build();
+        when(companyRepository.findByNormalizedName(anyString())).thenReturn(Optional.of(company));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(aggregatorRunRepository.findBySourceName("wissenschaftsstellen")).thenReturn(Optional.empty());
+        when(aggregatorRunRepository.save(any(AggregatorRun.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.ingest(sourceConfig);
+
+        ArgumentCaptor<FilterOverrides> captor = ArgumentCaptor.forClass(FilterOverrides.class);
+        verify(jobFilterChain).apply(any(), anyBoolean(), anyBoolean(), captor.capture());
+        assertThat(captor.getValue()).isSameAs(overrides);
+    }
+
+    @Test
+    void ingest_translateTitlesEnabled_translatesBatchOnceAndPreservesGermanTitle() {
+        SourceConfig sourceConfig = new SourceConfig() {
+            @Override public String name() { return "wissenschaftsstellen"; }
+            @Override public JobSource sourceType() { return JobSource.WISSENSCHAFTSSTELLEN; }
+            @Override public DiscoverySource discoverySource() { return DiscoverySource.WISSENSCHAFTSSTELLEN; }
+            @Override public FetchStrategy strategy() { return fetchStrategy; }
+            @Override public FetchContext buildContext() {
+                return FetchContext.forSearch(List.of(), List.of(), 100, 5, Map.of());
+            }
+            @Override public int frequencyHours() { return 12; }
+            @Override public boolean isEnabled() { return true; }
+            @Override public boolean translateTitles() { return true; }
+        };
+        var job = createJob("ws-1", "Softwareentwickler", "Uni Bonn");
+        var fetchResult = FetchResult.success(List.of(job), Duration.ofMillis(100));
+
+        when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
+        when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.WISSENSCHAFTSSTELLEN))
+                .thenReturn(new HashSet<>());
+        when(jobPostingRepository.findAtsFingerprintsExcludingSources(JobSource.aggregators()))
+                .thenReturn(new HashSet<>());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp-ws");
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean(), any()))
+                .thenReturn(FilterChainResult.keep(null, null));
+        when(jobTitleTranslator.translate(any(), any()))
+                .thenReturn(Map.of("Softwareentwickler", "Software Engineer"));
+
+        Company company = Company.builder().id(UUID.randomUUID()).name("Uni Bonn")
+                .normalizedName("uni bonn").isActive(true).status(CompanyStatus.ACTIVE).build();
+        when(companyRepository.findByNormalizedName(anyString())).thenReturn(Optional.of(company));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(aggregatorRunRepository.findBySourceName("wissenschaftsstellen")).thenReturn(Optional.empty());
+        when(aggregatorRunRepository.save(any(AggregatorRun.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.ingest(sourceConfig);
+
+        verify(jobTitleTranslator, times(1)).translate(any(), any());
+        ArgumentCaptor<JobPosting> captor = ArgumentCaptor.forClass(JobPosting.class);
+        verify(jobPostingRepository).save(captor.capture());
+        JobPosting saved = captor.getValue();
+        assertThat(saved.getTitle()).isEqualTo("Software Engineer");
+        assertThat(saved.getRawContent()).containsEntry("titleOriginal", "Softwareentwickler");
+    }
+
+    @Test
+    void ingest_translateTitlesDisabled_skipsTranslatorAndLeavesRawContentNull() {
+        var sourceConfig = createSourceConfig(JobSource.WISSENSCHAFTSSTELLEN, DiscoverySource.WISSENSCHAFTSSTELLEN);
+        var job = createJob("ws-2", "Softwareentwickler", "Uni Bonn");
+        var fetchResult = FetchResult.success(List.of(job), Duration.ofMillis(100));
+
+        when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
+        when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.WISSENSCHAFTSSTELLEN))
+                .thenReturn(new HashSet<>());
+        when(jobPostingRepository.findAtsFingerprintsExcludingSources(JobSource.aggregators()))
+                .thenReturn(new HashSet<>());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp-ws2");
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean(), any()))
+                .thenReturn(FilterChainResult.keep(null, null));
+
+        Company company = Company.builder().id(UUID.randomUUID()).name("Uni Bonn")
+                .normalizedName("uni bonn").isActive(true).status(CompanyStatus.ACTIVE).build();
+        when(companyRepository.findByNormalizedName(anyString())).thenReturn(Optional.of(company));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
+        when(aggregatorRunRepository.save(any(AggregatorRun.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.ingest(sourceConfig);
+
+        verify(jobTitleTranslator, never()).translate(any(), any());
+        ArgumentCaptor<JobPosting> captor = ArgumentCaptor.forClass(JobPosting.class);
+        verify(jobPostingRepository).save(captor.capture());
+        JobPosting saved = captor.getValue();
+        assertThat(saved.getTitle()).isEqualTo("Softwareentwickler");
+        assertThat(saved.getRawContent()).isNull();
     }
 }

@@ -1,6 +1,7 @@
 package dev.jobhunter.service;
 
 import lombok.extern.slf4j.Slf4j;
+import dev.jobhunter.filter.FilterOverrides;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
@@ -12,6 +13,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -27,6 +29,12 @@ public class PersonalProfileLoader {
 
     private PersonalProfile profile;
 
+    /** Named, reusable filter profiles parsed from profile.yaml {@code filter-profiles}. */
+    private Map<String, FilterOverrides> filterProfiles = Map.of();
+
+    /** Fully-resolved per-source overrides keyed by source config {@code name}. */
+    private Map<String, FilterOverrides> sourceFilterOverrides = Map.of();
+
     @PostConstruct
     @SuppressWarnings("unchecked")
     public void load() {
@@ -34,16 +42,33 @@ public class PersonalProfileLoader {
             Yaml yaml = new Yaml();
             Map<String, Object> data = yaml.load(is);
             this.profile = parseProfile(data);
+            this.filterProfiles = parseFilterProfiles(
+                    (Map<String, Object>) data.getOrDefault("filter-profiles", null));
+            this.sourceFilterOverrides = resolveSourceFilterOverrides(
+                    (Map<String, Object>) data.getOrDefault("source-filter-overrides", null),
+                    this.filterProfiles);
             log.info("Personal profile loaded: {} with {} skills",
                     profile.name(), profile.skills().size());
         } catch (IOException e) {
             log.warn("Could not load profile.yaml, using empty profile: {}", e.getMessage());
             this.profile = emptyProfile();
+            this.filterProfiles = Map.of();
+            this.sourceFilterOverrides = Map.of();
         }
     }
 
     public PersonalProfile getProfile() {
         return profile;
+    }
+
+    /** Named reusable profiles (introspection/tests). */
+    public Map<String, FilterOverrides> getFilterProfiles() {
+        return filterProfiles;
+    }
+
+    /** Resolved per-source overrides; a source absent from the map behaves as {@link FilterOverrides#NONE}. */
+    public Map<String, FilterOverrides> getSourceFilterOverrides() {
+        return sourceFilterOverrides;
     }
 
     @SuppressWarnings("unchecked")
@@ -239,6 +264,98 @@ public class PersonalProfileLoader {
         int hoursOld = searchMap.containsKey("hours-old")
                 ? ((Number) searchMap.get("hours-old")).intValue() : 24;
         return new PersonalProfile.IndeedSearchConfig(keywords, locations, resultsWanted, hoursOld);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, FilterOverrides> parseFilterProfiles(Map<String, Object> profilesMap) {
+        if (profilesMap == null) return Map.of();
+
+        Map<String, FilterOverrides> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : profilesMap.entrySet()) {
+            result.put(entry.getKey(), parseOverrides((Map<String, Object>) entry.getValue()));
+        }
+        return result;
+    }
+
+    /** Build a FilterOverrides from a raw map (named profile or inline top-level override). */
+    @SuppressWarnings("unchecked")
+    private FilterOverrides parseOverrides(Map<String, Object> overridesMap) {
+        if (overridesMap == null) return FilterOverrides.NONE;
+
+        boolean languageExempt = Boolean.TRUE.equals(overridesMap.get("language-exempt"));
+
+        List<String> includePatterns = List.of();
+        List<String> excludeKeywords = List.of();
+        Map<String, Object> roleMap = (Map<String, Object>) overridesMap.get("role");
+        if (roleMap != null) {
+            includePatterns = (List<String>) roleMap.getOrDefault("include-patterns", List.of());
+            excludeKeywords = (List<String>) roleMap.getOrDefault("exclude-keywords", List.of());
+        }
+
+        return new FilterOverrides(nullSafe(includePatterns), nullSafe(excludeKeywords), languageExempt);
+    }
+
+    /**
+     * Resolve {@code source-filter-overrides} entries to a per-source map. A entry either
+     * references a named profile ({@code profile:}) — with optional inline keys merged over it —
+     * or is defined fully inline. A missing referenced profile warns and resolves to NONE.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, FilterOverrides> resolveSourceFilterOverrides(Map<String, Object> overridesMap,
+                                                                      Map<String, FilterOverrides> profiles) {
+        if (overridesMap == null) return Map.of();
+
+        Map<String, FilterOverrides> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : overridesMap.entrySet()) {
+            String sourceName = entry.getKey();
+            Map<String, Object> sourceMap = (Map<String, Object>) entry.getValue();
+            if (sourceMap == null) {
+                result.put(sourceName, FilterOverrides.NONE);
+                continue;
+            }
+
+            FilterOverrides base = FilterOverrides.NONE;
+            Object profileRef = sourceMap.get("profile");
+            if (profileRef instanceof String name) {
+                FilterOverrides referenced = profiles.get(name);
+                if (referenced == null) {
+                    log.warn("source-filter-overrides.{} references unknown filter profile '{}'; using NONE",
+                            sourceName, name);
+                } else {
+                    base = referenced;
+                }
+            }
+
+            result.put(sourceName, mergeOverrides(base, sourceMap));
+        }
+        return result;
+    }
+
+    /** Merge inline {@code language-exempt}/role keys over a base override (inline wins when present). */
+    @SuppressWarnings("unchecked")
+    private FilterOverrides mergeOverrides(FilterOverrides base, Map<String, Object> sourceMap) {
+        boolean languageExempt = sourceMap.containsKey("language-exempt")
+                ? Boolean.TRUE.equals(sourceMap.get("language-exempt"))
+                : base.languageExempt();
+
+        List<String> includePatterns = nullSafe(base.roleIncludePatterns());
+        List<String> excludeKeywords = nullSafe(base.roleExcludeKeywords());
+
+        Object roleValue = sourceMap.get("role");
+        if (roleValue instanceof Map<?, ?> roleMap) {
+            if (roleMap.containsKey("include-patterns")) {
+                includePatterns = nullSafe((List<String>) roleMap.get("include-patterns"));
+            }
+            if (roleMap.containsKey("exclude-keywords")) {
+                excludeKeywords = nullSafe((List<String>) roleMap.get("exclude-keywords"));
+            }
+        }
+
+        return new FilterOverrides(includePatterns, excludeKeywords, languageExempt);
+    }
+
+    private static List<String> nullSafe(List<String> value) {
+        return value != null ? value : List.of();
     }
 
     private PersonalProfile emptyProfile() {

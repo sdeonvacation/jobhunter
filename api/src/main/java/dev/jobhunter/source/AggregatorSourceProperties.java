@@ -30,6 +30,7 @@ public class AggregatorSourceProperties {
         private int maxResults = 50;
         private boolean enabled = true;
         private boolean visaExempt = false;
+        private boolean translateTitles = false;
         private Map<String, String> config = new HashMap<>();
 
         public String getName() { return name; }
@@ -58,6 +59,9 @@ public class AggregatorSourceProperties {
 
         public boolean isVisaExempt() { return visaExempt; }
         public void setVisaExempt(boolean visaExempt) { this.visaExempt = visaExempt; }
+
+        public boolean isTranslateTitles() { return translateTitles; }
+        public void setTranslateTitles(boolean translateTitles) { this.translateTitles = translateTitles; }
 
         public Map<String, String> getConfig() { return config; }
         public void setConfig(Map<String, String> config) { this.config = config; }

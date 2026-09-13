@@ -1,5 +1,6 @@
 package dev.jobhunter.service;
 
+import dev.jobhunter.filter.FilterOverrides;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.core.io.FileSystemResource;
@@ -387,5 +388,148 @@ class PersonalProfileLoaderTest {
         ReflectionTestUtils.setField(loader, "profileResource", new FileSystemResource(file.toFile()));
         loader.load();
         return loader;
+    }
+
+    // --- Filter profiles + source overrides ---
+
+    @Test
+    void load_parsesFilterProfiles() throws IOException {
+        String yaml = """
+                name: Test
+                filter-profiles:
+                  academic-university:
+                    language-exempt: true
+                    role:
+                      include-patterns:
+                        - "software"
+                        - "engineer"
+                      exclude-keywords: []
+                """;
+
+        PersonalProfileLoader loader = createLoader(yaml);
+
+        assertThat(loader.getFilterProfiles()).containsKey("academic-university");
+        FilterOverrides profile = loader.getFilterProfiles().get("academic-university");
+        assertThat(profile.languageExempt()).isTrue();
+        assertThat(profile.roleIncludePatterns()).containsExactly("software", "engineer");
+        assertThat(profile.roleExcludeKeywords()).isEmpty();
+    }
+
+    @Test
+    void load_resolvesProfileReference() throws IOException {
+        String yaml = """
+                name: Test
+                filter-profiles:
+                  academic-university:
+                    language-exempt: true
+                    role:
+                      include-patterns: ["software"]
+                      exclude-keywords: []
+                source-filter-overrides:
+                  wissenschaftsstellen:
+                    profile: academic-university
+                """;
+
+        PersonalProfileLoader loader = createLoader(yaml);
+
+        FilterOverrides profile = loader.getFilterProfiles().get("academic-university");
+        assertThat(loader.getSourceFilterOverrides()).containsKey("wissenschaftsstellen");
+        assertThat(loader.getSourceFilterOverrides().get("wissenschaftsstellen")).isEqualTo(profile);
+    }
+
+    @Test
+    void load_inlineMergesOverReferencedProfile() throws IOException {
+        String yaml = """
+                name: Test
+                filter-profiles:
+                  academic-university:
+                    language-exempt: true
+                    role:
+                      include-patterns: ["software"]
+                      exclude-keywords: ["manager"]
+                source-filter-overrides:
+                  wissenschaftsstellen:
+                    profile: academic-university
+                    language-exempt: false
+                    role:
+                      exclude-keywords: []
+                """;
+
+        PersonalProfileLoader loader = createLoader(yaml);
+        FilterOverrides resolved = loader.getSourceFilterOverrides().get("wissenschaftsstellen");
+
+        // language-exempt and exclude-keywords overridden inline; include-patterns inherited
+        assertThat(resolved.languageExempt()).isFalse();
+        assertThat(resolved.roleExcludeKeywords()).isEmpty();
+        assertThat(resolved.roleIncludePatterns()).containsExactly("software");
+    }
+
+    @Test
+    void load_inlineOnlyOverride_noProfileReference() throws IOException {
+        String yaml = """
+                name: Test
+                source-filter-overrides:
+                  wissenschaftsstellen:
+                    language-exempt: true
+                    role:
+                      include-patterns: ["software", "informatik"]
+                      exclude-keywords: ["manager"]
+                """;
+
+        PersonalProfileLoader loader = createLoader(yaml);
+        FilterOverrides resolved = loader.getSourceFilterOverrides().get("wissenschaftsstellen");
+
+        assertThat(resolved.languageExempt()).isTrue();
+        assertThat(resolved.roleIncludePatterns()).containsExactly("software", "informatik");
+        assertThat(resolved.roleExcludeKeywords()).containsExactly("manager");
+    }
+
+    @Test
+    void load_missingProfile_referenceResolvesToNone_noException() throws IOException {
+        String yaml = """
+                name: Test
+                source-filter-overrides:
+                  wissenschaftsstellen:
+                    profile: does-not-exist
+                """;
+
+        PersonalProfileLoader loader = createLoader(yaml);
+
+        assertThat(loader.getSourceFilterOverrides()).containsKey("wissenschaftsstellen");
+        assertThat(loader.getSourceFilterOverrides().get("wissenschaftsstellen"))
+                .isEqualTo(FilterOverrides.NONE);
+    }
+
+    @Test
+    void load_absentSourceOverride_notPresent() throws IOException {
+        String yaml = """
+                name: Test
+                filter-profiles:
+                  academic-university:
+                    language-exempt: true
+                source-filter-overrides:
+                  some-other-source:
+                    language-exempt: true
+                """;
+
+        PersonalProfileLoader loader = createLoader(yaml);
+
+        assertThat(loader.getSourceFilterOverrides()).doesNotContainKey("wissenschaftsstellen");
+        assertThat(loader.getFilterProfiles()).containsKey("academic-university");
+    }
+
+    @Test
+    void load_missingOverrideBlocks_emptyMaps() throws IOException {
+        String yaml = """
+                name: Test
+                filters:
+                  yoe:
+                    max-years: 5
+                """;
+
+        PersonalProfileLoader loader = createLoader(yaml);
+
+        assertThat(loader.getFilterProfiles()).isEmpty();
+        assertThat(loader.getSourceFilterOverrides()).isEmpty();
     }
 }
