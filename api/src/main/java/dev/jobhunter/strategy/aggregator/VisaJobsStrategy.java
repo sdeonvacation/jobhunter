@@ -88,7 +88,7 @@ public class VisaJobsStrategy implements FetchStrategy {
         try {
             int offset = 0;
             while (seen.size() < context.maxResults()) {
-                String token = tokenProvider.getAccessToken(authUrl);
+                String token = tokenProvider.getAccessToken(authUrl, apikey);
 
                 List<JsonNode> rows;
                 try {
@@ -96,7 +96,7 @@ public class VisaJobsStrategy implements FetchStrategy {
                 } catch (WebClientResponseException e) {
                     if (e.getStatusCode().value() == 401) {
                         tokenProvider.invalidate();
-                        String freshToken = tokenProvider.getAccessToken(authUrl);
+                        String freshToken = tokenProvider.getAccessToken(authUrl, apikey);
                         rows = fetchPage(url, apikey, offset, limit, visaOnly, freshToken);
                     } else if (e.getStatusCode().value() == 429) {
                         return FetchResult.rateLimited(elapsed(start));
