@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 public class InstaffoStrategy extends SitemapScrapeStrategy {
 
     private static final Pattern URL_PATTERN =
-            Pattern.compile("^https://jobs\\.instaffo\\.com/en/job/.+$");
+            Pattern.compile("^https://jobs\\.instaffo\\.com/(?:en|de)/job/.+$");
     private static final Pattern EXTERNAL_ID_PATTERN =
             Pattern.compile("-([a-f0-9]{12})$");
     private static final Pattern SALARY_PATTERN =

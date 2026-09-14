@@ -100,14 +100,32 @@ class InstaffoStrategyTest {
             </body></html>
             """;
 
-    private static final String JOB_HTML_NO_JSONLD = """
-            <!DOCTYPE html><html>
-            <head><title>Data Scientist at DataCo</title></head>
-            <body>
-            <h1>Data Scientist</h1>
-            <p>Work with data at DataCo</p>
-            </body></html>
-            """;
+     private static final String JOB_HTML_NO_JSONLD = """
+             <!DOCTYPE html><html>
+             <head><title>Data Scientist at DataCo</title></head>
+             <body>
+             <h1>Data Scientist</h1>
+             <p>Work with data at DataCo</p>
+             </body></html>
+             """;
+
+     private static final String JOB_HTML_DE = """
+             <!DOCTYPE html><html>
+             <head><title>German Job at GermanCo</title></head>
+             <body>
+             <h1>German Job</h1>
+             <script type="application/ld+json">
+             {
+               "@type": "JobPosting",
+               "title": "German Job",
+               "hiringOrganization": {"name": "GermanCo"},
+               "datePosted": "2024-07-01",
+               "description": "<p>German engineering role.</p>",
+               "jobLocation": [{"address": {"addressLocality": "Munich"}}]
+             }
+             </script>
+             </body></html>
+             """;
 
     // --- Setup ---
 
@@ -166,35 +184,40 @@ class InstaffoStrategyTest {
     @DisplayName("fetch()")
     class FetchTests {
 
-        @Test
-        @DisplayName("happy path: 2 EN URLs scraped, 1 DE filtered out")
-        void happyPath() {
-            when(responseSpec.bodyToMono(String.class))
-                    .thenReturn(Mono.just(SITEMAP_2EN_1DE))
-                    .thenReturn(Mono.just(JOB_HTML_WITH_SALARY))
-                    .thenReturn(Mono.just(JOB_HTML_NO_SALARY));
+         @Test
+         @DisplayName("happy path: 2 EN + 1 DE URLs scraped")
+         void happyPath() {
+             when(responseSpec.bodyToMono(String.class))
+                     .thenReturn(Mono.just(SITEMAP_2EN_1DE))
+                     .thenReturn(Mono.just(JOB_HTML_WITH_SALARY))
+                     .thenReturn(Mono.just(JOB_HTML_NO_SALARY))
+                     .thenReturn(Mono.just(JOB_HTML_DE));
 
-            FetchResult result = strategy.fetch(context(Map.of()));
+             FetchResult result = strategy.fetch(context(Map.of()));
 
-            assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
-            assertThat(result.jobs()).hasSize(2);
+             assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+             assertThat(result.jobs()).hasSize(3);
 
-            RawAggregatorJob job1 = result.jobs().get(0);
-            assertThat(job1.title()).isEqualTo("Backend Engineer");
-            assertThat(job1.companyName()).isEqualTo("Acme GmbH");
-            assertThat(job1.location()).isEqualTo("Berlin");
-            assertThat(job1.salaryMin()).isEqualByComparingTo("80000");
-            assertThat(job1.salaryMax()).isEqualByComparingTo("95000");
-            assertThat(job1.salaryCurrency()).isEqualTo("EUR");
-            assertThat(job1.externalId()).isEqualTo("abc123456789");
-            assertThat(job1.applyUrl()).isEqualTo("https://jobs.instaffo.com/en/job/backend-engineer-abc123456789");
+             RawAggregatorJob job1 = result.jobs().get(0);
+             assertThat(job1.title()).isEqualTo("Backend Engineer");
+             assertThat(job1.companyName()).isEqualTo("Acme GmbH");
+             assertThat(job1.location()).isEqualTo("Berlin");
+             assertThat(job1.salaryMin()).isEqualByComparingTo("80000");
+             assertThat(job1.salaryMax()).isEqualByComparingTo("95000");
+             assertThat(job1.salaryCurrency()).isEqualTo("EUR");
+             assertThat(job1.externalId()).isEqualTo("abc123456789");
+             assertThat(job1.applyUrl()).isEqualTo("https://jobs.instaffo.com/en/job/backend-engineer-abc123456789");
 
-            RawAggregatorJob job2 = result.jobs().get(1);
-            assertThat(job2.title()).isEqualTo("Frontend Developer");
-            assertThat(job2.salaryMin()).isNull();
-            assertThat(job2.salaryCurrency()).isNull();
-            assertThat(job2.externalId()).isEqualTo("def012345678");
-        }
+             RawAggregatorJob job2 = result.jobs().get(1);
+             assertThat(job2.title()).isEqualTo("Frontend Developer");
+             assertThat(job2.salaryMin()).isNull();
+             assertThat(job2.salaryCurrency()).isNull();
+             assertThat(job2.externalId()).isEqualTo("def012345678");
+
+             RawAggregatorJob job3 = result.jobs().get(2);
+             assertThat(job3.title()).isEqualTo("German Job");
+             assertThat(job3.applyUrl()).isEqualTo("https://jobs.instaffo.com/de/job/german-job-xyz999999999");
+         }
 
         @Test
         @DisplayName("incremental: 3 already-known jobs skipped, 2 scraped")
@@ -240,21 +263,23 @@ class InstaffoStrategyTest {
             assertThat(result.status()).isEqualTo(ExtractionStatus.RATE_LIMITED);
         }
 
-        @Test
-        @DisplayName("404 on detail page is skipped silently, other jobs returned")
-        void notFoundSkipped() {
-            when(responseSpec.bodyToMono(String.class))
-                    .thenReturn(Mono.just(SITEMAP_2EN_1DE))
-                    .thenReturn(Mono.error(WebClientResponseException.create(
-                            404, "Not Found", null, null, null)))
-                    .thenReturn(Mono.just(JOB_HTML_NO_SALARY));
+         @Test
+         @DisplayName("404 on detail page is skipped silently, other jobs returned")
+         void notFoundSkipped() {
+             when(responseSpec.bodyToMono(String.class))
+                     .thenReturn(Mono.just(SITEMAP_2EN_1DE))
+                     .thenReturn(Mono.error(WebClientResponseException.create(
+                             404, "Not Found", null, null, null)))
+                     .thenReturn(Mono.just(JOB_HTML_NO_SALARY))
+                     .thenReturn(Mono.just(JOB_HTML_DE));
 
-            FetchResult result = strategy.fetch(context(Map.of()));
+             FetchResult result = strategy.fetch(context(Map.of()));
 
-            assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
-            assertThat(result.jobs()).hasSize(1);
-            assertThat(result.jobs().get(0).title()).isEqualTo("Frontend Developer");
-        }
+             assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+             assertThat(result.jobs()).hasSize(2);
+             assertThat(result.jobs().get(0).title()).isEqualTo("Frontend Developer");
+             assertThat(result.jobs().get(1).title()).isEqualTo("German Job");
+         }
 
         @Test
         @DisplayName("maxScrapePerRun=1 caps scraping to 1 job")
