@@ -463,6 +463,21 @@ class SuccessFactorsStrategyTest {
     }
 
     @Test
+    void extractLocation_ignoresHyphenSeparatedFunctionWord() {
+        // Many boards use the hyphen as a seniority/function separator, not a location marker.
+        assertNull(extractor.extractLocation("AVP-Ratings (Covered Bonds)", null));
+        assertNull(extractor.extractLocation("Asst Dir-Product Manager", null));
+        assertNull(extractor.extractLocation("Associate Director - Relationship Manager - Banking", null));
+    }
+
+    @Test
+    void extractLocation_doesNotMatchCityInsideWord() {
+        // "gent" inside "agents"/"urgent" must not resolve to Ghent.
+        assertNull(extractor.extractLocation("Backend Engineer", "Our agents handle urgent escalations."));
+        assertEquals("Germany", extractor.extractLocation("Backend Engineer", "based in Germany"));
+    }
+
+    @Test
     void fetch_usesClassicPath_whenClassicBoard() {
         when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(CLASSIC_XML));
 

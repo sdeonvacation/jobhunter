@@ -47,6 +47,8 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
     private static final String CLASSIC_XML_LOCALE = "en_GB";
     private static final Pattern TITLE_HYPHEN_CITY_PATTERN =
             Pattern.compile("-\\s*([A-ZÀ-Ü][a-zà-ü]+(?:\\s+[A-ZÀ-Ü][a-zà-ü]+)*)");
+    // A numeric postcode directly after a hyphen segment is a strong location hint, e.g. "Velizy (78)".
+    private static final Pattern POSTCODE_SUFFIX_PATTERN = Pattern.compile("^\\s*\\(\\d{2,6}\\)");
     private static final List<String> CLASSIC_COUNTRIES = List.of(
             "Germany", "Deutschland", "France", "Spain", "Netherlands", "Austria", "Switzerland", "Belgium",
             "Poland", "Portugal", "Italy", "United Kingdom", "Ireland", "Sweden", "Denmark", "Finland",
@@ -333,11 +335,22 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
 
     String extractLocation(String title, String description) {
         if (title != null && !title.isBlank()) {
-            // Priority 1a: last hyphen-segment that looks like a city, e.g. "... - CDI 35h - Velizy (78)"
+            // Priority 1a: last hyphen-segment that is a known location, e.g. "... - CDI 35h - Velizy (78)".
+            // The hyphen is not a location signal on its own: many boards use it to separate
+            // seniority from function ("AVP-Ratings", "Asst Dir-Product Manager", "... - Banking").
+            // Accept a segment only when it is a known place, or when it is followed by a
+            // numeric postcode ("Velizy (78)").
             Matcher hyphenMatcher = TITLE_HYPHEN_CITY_PATTERN.matcher(title);
             String hyphenCity = null;
             while (hyphenMatcher.find()) {
-                hyphenCity = hyphenMatcher.group(1);
+                String candidate = hyphenMatcher.group(1);
+                String firstWord = candidate.trim().split("\\s+")[0].toLowerCase(Locale.ROOT);
+                String after = title.substring(hyphenMatcher.end());
+                boolean knownPlace = LOCATION_FIRST_WORDS.contains(firstWord);
+                boolean followedByPostcode = POSTCODE_SUFFIX_PATTERN.matcher(after).lookingAt();
+                if (knownPlace || followedByPostcode) {
+                    hyphenCity = candidate;
+                }
             }
             if (hyphenCity != null) {
                 return hyphenCity;
@@ -354,13 +367,13 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
             String haystack = description.toLowerCase(Locale.ROOT);
             // Priority 2: known countries
             for (String country : CLASSIC_COUNTRIES) {
-                if (haystack.contains(country.toLowerCase(Locale.ROOT))) {
+                if (containsWord(haystack, country.toLowerCase(Locale.ROOT))) {
                     return country;
                 }
             }
             // Priority 3: major cities
             for (String city : CLASSIC_CITIES) {
-                if (haystack.contains(city.toLowerCase(Locale.ROOT))) {
+                if (containsWord(haystack, city.toLowerCase(Locale.ROOT))) {
                     return city;
                 }
             }
@@ -383,6 +396,25 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
             }
         }
         return null;
+    }
+
+    /**
+     * Whole-word (letter-boundary) containment check. A plain String.contains matches
+     * "gent" inside "agent"/"urgent"/"intelligent", and \b does not treat umlauts
+     * (Köln, Zürich, Düsseldorf) as word characters in Java by default.
+     */
+    private static boolean containsWord(String haystackLower, String needleLower) {
+        int i = 0;
+        while ((i = haystackLower.indexOf(needleLower, i)) >= 0) {
+            boolean leftBoundary = i == 0 || !Character.isLetter(haystackLower.charAt(i - 1));
+            int end = i + needleLower.length();
+            boolean rightBoundary = end >= haystackLower.length() || !Character.isLetter(haystackLower.charAt(end));
+            if (leftBoundary && rightBoundary) {
+                return true;
+            }
+            i = end;
+        }
+        return false;
     }
 
     private static Set<String> locationFirstWords() {
