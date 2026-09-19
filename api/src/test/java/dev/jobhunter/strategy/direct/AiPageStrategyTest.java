@@ -7,6 +7,8 @@ import dev.jobhunter.model.enums.ExtractionStatus;
 import dev.jobhunter.strategy.FetchContext;
 import dev.jobhunter.strategy.FetchResult;
 import dev.jobhunter.strategy.RawAggregatorJob;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -903,6 +905,151 @@ class AiPageStrategyTest {
         assertThat(id1).isEqualTo(id2);
         assertThat(id1).isNotEqualTo(id3);
         assertThat(id1).hasSize(16);
+    }
+
+    // -------------------------------------------------------------------------
+    // link_selector — explicit container scoping for CUSTOM endpoints
+    // -------------------------------------------------------------------------
+
+    @Nested
+    class LinkSelectorScoping {
+
+        private static final String BASE_URL = "https://berlinstartupjobs.com/engineering/";
+
+        /**
+         * Mirrors the berlinstartupjobs.com listing page: the real postings live in
+         * {@code li.bjs-jlid h4 a}, while the sidebar holds skill-area and company links.
+         * Because the hostname contains "job", the legacy URL-keyword heuristic matches
+         * every anchor on this page.
+         */
+        private static final String BERLIN_STARTUP_JOBS_HTML = """
+                <html><body>
+                <div class="sidebar">
+                    <a href="https://berlinstartupjobs.com/skill-areas/kubernetes/">Kubernetes</a>
+                    <a href="https://berlinstartupjobs.com/companies/datatroniq/">DATATRONiQ</a>
+                </div>
+                <ul class="jobs-list-items">
+                    <li class="bjs-jlid"><h4><a href="https://berlinstartupjobs.com/engineering/senior-backend-engineer-golang/">Senior Backend Developer - Go &amp; Kubernetes</a></h4></li>
+                    <li class="bjs-jlid"><h4><a href="https://berlinstartupjobs.com/engineering/senior-frontend-engineer-react/">Senior Frontend Developer - React</a></h4></li>
+                    <li class="bjs-jlid"><h4><a href="https://berlinstartupjobs.com/engineering/platform-engineer-aws/">Platform Engineer - AWS</a></h4></li>
+                </ul>
+                </body></html>
+                """;
+
+        private static final List<String> REAL_JOB_TITLES = List.of(
+                "Senior Backend Developer - Go & Kubernetes",
+                "Senior Frontend Developer - React",
+                "Platform Engineer - AWS");
+
+        private Document doc() {
+            return Jsoup.parse(BERLIN_STARTUP_JOBS_HTML, BASE_URL);
+        }
+
+        @Test
+        void linkSelector_onAnchor_scopesCandidatesToTheListingContainer() {
+            var candidates = extractor.extractCandidateJobs(doc(), BASE_URL, "li.bjs-jlid h4 a");
+
+            assertThat(candidates).extracting(AiPageStrategy.CandidateJob::title)
+                    .containsExactlyElementsOf(REAL_JOB_TITLES);
+            assertThat(candidates).extracting(AiPageStrategy.CandidateJob::applyUrl)
+                    .allMatch(url -> url.startsWith("https://berlinstartupjobs.com/engineering/"));
+        }
+
+        @Test
+        void linkSelector_onContainer_usesDescendantAnchors() {
+            var candidates = extractor.extractCandidateJobs(doc(), BASE_URL, "li.bjs-jlid");
+
+            assertThat(candidates).extracting(AiPageStrategy.CandidateJob::title)
+                    .containsExactlyElementsOf(REAL_JOB_TITLES);
+        }
+
+        @Test
+        void linkSelector_scopedMode_ignoresSidebarSkillAreaAndCompanyLinks() {
+            var candidates = extractor.extractCandidateJobs(doc(), BASE_URL, "li.bjs-jlid h4 a");
+
+            assertThat(candidates).extracting(AiPageStrategy.CandidateJob::applyUrl)
+                    .noneMatch(url -> url.contains("skill-areas") || url.contains("/companies/"));
+        }
+
+        @Test
+        void linkSelector_matchingNothing_fallsBackToUnscopedHeuristic() {
+            var fallback = extractor.extractCandidateJobs(doc(), BASE_URL, "li.does-not-exist a");
+            var unscoped = extractor.extractCandidateJobs(doc(), BASE_URL);
+
+            assertThat(fallback).isEqualTo(unscoped);
+            assertThat(fallback).extracting(AiPageStrategy.CandidateJob::title)
+                    .contains("Kubernetes", "DATATRONiQ");
+        }
+
+        @Test
+        void blankLinkSelector_isTreatedAsAbsent() {
+            var blank = extractor.extractCandidateJobs(doc(), BASE_URL, "   ");
+            var unscoped = extractor.extractCandidateJobs(doc(), BASE_URL);
+
+            assertThat(blank).isEqualTo(unscoped);
+        }
+
+        @Test
+        void withoutLinkSelector_knownHostContamination_stillTreatsSkillAreaLinkAsCandidate() {
+            // Known limitation of the legacy heuristic: JOB_HREF_PATTERN is tested against the
+            // absolute href, so "berlinstartupjobs.com" matches "job" for every anchor.
+            var candidates = extractor.extractCandidateJobs(doc(), BASE_URL);
+
+            assertThat(candidates).extracting(AiPageStrategy.CandidateJob::applyUrl)
+                    .contains("https://berlinstartupjobs.com/skill-areas/kubernetes/",
+                            "https://berlinstartupjobs.com/companies/datatroniq/");
+            assertThat(candidates).hasSize(5); // 3 real postings + 2 sidebar links
+        }
+
+        @Test
+        void fetch_linkSelectorFromAtsSlug_sendsOnlyScopedCandidatesToAi() {
+            when(aiProvider.isAvailable()).thenReturn(true);
+            extractor.setHtmlResponse(BERLIN_STARTUP_JOBS_HTML);
+            when(aiProvider.extract(anyString(), anyString(), eq(AiExtractionResponse.class)))
+                    .thenReturn(new AiExtractionResponse(List.of(
+                            new AiExtractionResponse.AiJobEntry(
+                                    "Senior Backend Developer - Go & Kubernetes", null,
+                                    "https://berlinstartupjobs.com/engineering/senior-backend-engineer-golang/"))));
+
+            var endpoint = CareerEndpoint.builder()
+                    .atsType(AtsType.CUSTOM)
+                    .url(BASE_URL)
+                    .atsSlug("{\"link_selector\":\"li.bjs-jlid h4 a\"}")
+                    .build();
+
+            var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+            assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+            assertThat(result.jobs()).extracting(RawAggregatorJob::title)
+                    .containsExactly("Senior Backend Developer - Go & Kubernetes");
+            verify(aiProvider).extract(anyString(), argThat(content ->
+                    content.contains("/engineering/senior-backend-engineer-golang/")
+                            && !content.contains("skill-areas")
+                            && !content.contains("/companies/")),
+                    eq(AiExtractionResponse.class));
+        }
+
+        @Test
+        void fetch_linkSelectorCamelCaseAlias_isAccepted() {
+            when(aiProvider.isAvailable()).thenReturn(true);
+            extractor.setHtmlResponse(BERLIN_STARTUP_JOBS_HTML);
+            when(aiProvider.extract(anyString(), anyString(), eq(AiExtractionResponse.class)))
+                    .thenReturn(new AiExtractionResponse(List.of()));
+
+            var endpoint = CareerEndpoint.builder()
+                    .atsType(AtsType.CUSTOM)
+                    .url(BASE_URL)
+                    .atsSlug("{\"linkSelector\":\"li.bjs-jlid h4 a\"}")
+                    .build();
+
+            extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+            verify(aiProvider).extract(anyString(), argThat(content ->
+                    content.contains("/engineering/")
+                            && !content.contains("skill-areas")
+                            && !content.contains("/companies/")),
+                    eq(AiExtractionResponse.class));
+        }
     }
 
     // -------------------------------------------------------------------------

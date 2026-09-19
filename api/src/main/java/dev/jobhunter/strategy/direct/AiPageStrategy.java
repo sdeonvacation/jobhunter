@@ -91,6 +91,7 @@ public class AiPageStrategy implements FetchStrategy {
             String applyBase = null;
             boolean jsonApi = false;
             String jobsPath = null;
+            String linkSelector = null;
             Map<String, String> extraHeaders = new HashMap<>();
             if (atsSlug != null && atsSlug.startsWith("{")) {
                 try {
@@ -107,6 +108,9 @@ public class AiPageStrategy implements FetchStrategy {
                     if (hn.isObject()) {
                         hn.fields().forEachRemaining(e -> extraHeaders.put(e.getKey(), e.getValue().asText()));
                     }
+                    JsonNode ls = cfg.path("link_selector");
+                    if (ls.isMissingNode() || ls.isNull()) ls = cfg.path("linkSelector");
+                    if (!ls.isMissingNode() && !ls.isNull()) linkSelector = ls.asText();
                 } catch (Exception ex) {
                     log.debug("AiPageStrategy: could not parse ats_slug as config for [{}]: {}", endpoint.getId(), ex.getMessage());
                 }
@@ -149,7 +153,7 @@ public class AiPageStrategy implements FetchStrategy {
             } else {
                 htmlDoc = Jsoup.parse(content, endpoint.getUrl());
                 removeNonContentElements(htmlDoc);
-                candidates = extractCandidateJobs(htmlDoc, endpoint.getUrl());
+                candidates = extractCandidateJobs(htmlDoc, endpoint.getUrl(), linkSelector);
             }
 
             List<AiExtractionResponse.AiJobEntry> allEntries = new ArrayList<>();
@@ -457,16 +461,47 @@ public class AiPageStrategy implements FetchStrategy {
     }
 
     List<CandidateJob> extractCandidateJobs(Document doc, String baseUrl) {
+        return extractCandidateJobs(doc, baseUrl, null);
+    }
+
+    /**
+     * Extracts candidate job links from the page.
+     *
+     * <p>When {@code linkSelector} is set, anchors are scoped to that CSS selector instead of
+     * the whole document and {@link #JOB_HREF_PATTERN} is not applied: the selector is the
+     * scoping mechanism, whereas the pattern is tested against the absolute href and therefore
+     * matches any host containing {@code job}/{@code career}/etc. (e.g. berlinstartupjobs.com),
+     * turning every anchor into a candidate. All other filters are unchanged.
+     *
+     * <p>An absent/blank selector keeps the legacy URL-keyword heuristic byte-for-byte. A
+     * selector that matches nothing logs a warning and falls back to that heuristic.
+     */
+    List<CandidateJob> extractCandidateJobs(Document doc, String baseUrl, String linkSelector) {
         List<CandidateJob> candidates = new ArrayList<>();
-        Elements links = doc.select("a[href]");
+
+        boolean scoped = linkSelector != null && !linkSelector.isBlank();
+        Elements links;
+        if (scoped) {
+            links = selectScopedAnchors(doc, linkSelector);
+            if (links.isEmpty()) {
+                log.warn("link_selector '{}' matched nothing; falling back to URL-keyword heuristic", linkSelector);
+                links = doc.select("a[href]");
+                scoped = false;
+            }
+        } else {
+            links = doc.select("a[href]");
+        }
 
         for (Element link : links) {
             String href = link.attr("abs:href");
             if (href.isEmpty()) {
                 href = link.attr("href");
             }
+            if (href.isEmpty()) {
+                continue;
+            }
 
-            if (!JOB_HREF_PATTERN.matcher(href).find()) {
+            if (!scoped && !JOB_HREF_PATTERN.matcher(href).find()) {
                 continue;
             }
 
@@ -498,6 +533,23 @@ public class AiPageStrategy implements FetchStrategy {
         }
 
         return candidates.stream().distinct().collect(Collectors.toList());
+    }
+
+    /**
+     * Resolves the anchors matched by {@code selector}: an element that is itself an
+     * {@code <a>} is used directly, any other element contributes its descendant
+     * {@code a[href]} elements (so both {@code li.job h4 a} and {@code li.job} work).
+     */
+    private Elements selectScopedAnchors(Document doc, String selector) {
+        Elements anchors = new Elements();
+        for (Element element : doc.select(selector)) {
+            if (element.tagName().equalsIgnoreCase("a")) {
+                anchors.add(element);
+            } else {
+                anchors.addAll(element.select("a[href]"));
+            }
+        }
+        return anchors;
     }
 
     private boolean isNavigationLink(String text) {
