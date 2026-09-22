@@ -22,6 +22,9 @@ public class LinkedInSource implements SourceConfig {
     private static final int DEFAULT_MAX_RESULTS = 200;
     private static final int DEFAULT_FREQUENCY_HOURS = 6;
     private static final String DEFAULT_DATE_POSTED = "week";
+    private static final int DEFAULT_MAX_PAGES = 2;
+    private static final int DEFAULT_PAIRS_PER_RUN = 12;
+    private static final int DEFAULT_SEARCH_RESERVE = 5;
 
     private final McpStrategy mcpStrategy;
     private final List<String> keywords;
@@ -29,6 +32,9 @@ public class LinkedInSource implements SourceConfig {
     private final int maxResults;
     private final int frequencyHours;
     private final String datePosted;
+    private final int maxPages;
+    private final int pairsPerRun;
+    private final int searchReserve;
 
     public LinkedInSource(McpStrategy mcpStrategy, DiscoveryProperties discoveryProperties) {
         this.mcpStrategy = mcpStrategy;
@@ -39,12 +45,18 @@ public class LinkedInSource implements SourceConfig {
             this.maxResults = config.maxResults() != null ? config.maxResults() : DEFAULT_MAX_RESULTS;
             this.frequencyHours = config.frequencyHours() != null ? config.frequencyHours() : DEFAULT_FREQUENCY_HOURS;
             this.datePosted = config.datePosted() != null ? config.datePosted() : DEFAULT_DATE_POSTED;
+            this.maxPages = config.maxPages() != null ? config.maxPages() : DEFAULT_MAX_PAGES;
+            this.pairsPerRun = config.pairsPerRun() != null ? config.pairsPerRun() : DEFAULT_PAIRS_PER_RUN;
+            this.searchReserve = config.searchReserve() != null ? config.searchReserve() : DEFAULT_SEARCH_RESERVE;
         } else {
             this.keywords = List.of();
             this.locations = List.of();
             this.maxResults = DEFAULT_MAX_RESULTS;
             this.frequencyHours = DEFAULT_FREQUENCY_HOURS;
             this.datePosted = DEFAULT_DATE_POSTED;
+            this.maxPages = DEFAULT_MAX_PAGES;
+            this.pairsPerRun = DEFAULT_PAIRS_PER_RUN;
+            this.searchReserve = DEFAULT_SEARCH_RESERVE;
         }
     }
 
@@ -70,8 +82,12 @@ public class LinkedInSource implements SourceConfig {
 
     @Override
     public FetchContext buildContext() {
-        Map<String, Object> config = Map.of("date-posted", datePosted);
-        return FetchContext.forSearch(keywords, locations, maxResults, 10, config);
+        Map<String, Object> config = Map.of(
+                "date-posted", datePosted,
+                "max-pages", maxPages,
+                "pairs-per-run", pairsPerRun,
+                "search-reserve", searchReserve);
+        return FetchContext.forSearch(keywords, locations, maxResults, maxPages, config);
     }
 
     @Override

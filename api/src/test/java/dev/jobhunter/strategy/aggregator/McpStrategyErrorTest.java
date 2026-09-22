@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.jobhunter.linkedin.HttpMcpClient;
 import dev.jobhunter.linkedin.LinkedInRateLimiter;
+import dev.jobhunter.linkedin.LinkedInSearchCursor;
 import dev.jobhunter.linkedin.ToolCategory;
 import dev.jobhunter.model.enums.ExtractionStatus;
 import dev.jobhunter.strategy.FetchContext;
@@ -20,6 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class McpStrategyErrorTest {
@@ -33,7 +36,8 @@ class McpStrategyErrorTest {
     void setUp() {
         httpMcpClient = mock(HttpMcpClient.class);
         rateLimiter = mock(LinkedInRateLimiter.class);
-        strategy = new McpStrategy(httpMcpClient, rateLimiter);
+        when(rateLimiter.getRemainingTokens(ToolCategory.SEARCH)).thenReturn(20);
+        strategy = new McpStrategy(httpMcpClient, rateLimiter, new LinkedInSearchCursor());
     }
 
     @Test
@@ -112,5 +116,25 @@ class McpStrategyErrorTest {
 
         assertThat(result.status()).isEqualTo(ExtractionStatus.EMPTY);
         assertThat(result.errorMessage()).isNull();
+    }
+
+    @Test
+    @DisplayName("Should advance the cursor past a permanently failing pair")
+    void shouldAdvanceCursorPastPermanentlyFailingPair() {
+        LinkedInSearchCursor cursor = new LinkedInSearchCursor();
+        McpStrategy rotating = new McpStrategy(httpMcpClient, rateLimiter, cursor);
+        when(rateLimiter.acquire(ToolCategory.SEARCH)).thenReturn(true);
+        when(httpMcpClient.callTool(eq("search_jobs"), any()))
+                .thenThrow(new RuntimeException("Connection refused"));
+
+        FetchContext context = FetchContext.forSearch(
+                List.of("k1", "k2", "k3"), List.of("l1", "l2"), 200, 2,
+                Map.of("pairs-per-run", 2));
+
+        FetchResult result = rotating.fetch(context);
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
+        assertThat(cursor.getOffset()).isEqualTo(2);
+        verify(httpMcpClient, times(4)).callTool(eq("search_jobs"), any());
     }
 }

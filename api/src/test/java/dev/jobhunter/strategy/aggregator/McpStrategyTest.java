@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.jobhunter.linkedin.HttpMcpClient;
 import dev.jobhunter.linkedin.LinkedInRateLimiter;
+import dev.jobhunter.linkedin.LinkedInSearchCursor;
+import dev.jobhunter.linkedin.McpClientException;
 import dev.jobhunter.linkedin.ToolCategory;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.model.enums.ExtractionStatus;
@@ -37,7 +39,8 @@ class McpStrategyTest {
     void setUp() {
         httpMcpClient = mock(HttpMcpClient.class);
         rateLimiter = mock(LinkedInRateLimiter.class);
-        strategy = new McpStrategy(httpMcpClient, rateLimiter);
+        when(rateLimiter.getRemainingTokens(ToolCategory.SEARCH)).thenReturn(20);
+        strategy = new McpStrategy(httpMcpClient, rateLimiter, new LinkedInSearchCursor());
     }
 
     @Test
@@ -169,9 +172,10 @@ class McpStrategyTest {
         @Test
         @DisplayName("Should iterate keywords x locations")
         void shouldIterateKeywordsAndLocations() {
+            String searchText = "Dev\nCorp\nBerlin (Remote)\n";
             when(rateLimiter.acquire(ToolCategory.SEARCH)).thenReturn(true);
             when(httpMcpClient.callTool(eq("search_jobs"), any()))
-                    .thenReturn(buildSearchResponse("", List.of()));
+                    .thenReturn(buildSearchResponse(searchText, List.of("1")));
 
             FetchContext context = FetchContext.forSearch(
                     List.of("java", "kotlin"), List.of("Berlin", "Munich"), 200, 10, Map.of());
@@ -231,7 +235,7 @@ class McpStrategyTest {
         }
 
         @Test
-        @DisplayName("Should pass max_pages=10 by default")
+        @DisplayName("Should pass max_pages=2 by default")
         void shouldPassMaxPages() {
             when(rateLimiter.acquire(ToolCategory.SEARCH)).thenReturn(true);
             when(httpMcpClient.callTool(eq("search_jobs"), any()))
@@ -243,7 +247,7 @@ class McpStrategyTest {
             strategy.fetch(context);
 
             verify(httpMcpClient).callTool(eq("search_jobs"), argThat(params ->
-                    10 == ((Number) params.get("max_pages")).intValue()));
+                    2 == ((Number) params.get("max_pages")).intValue()));
         }
     }
 
@@ -550,6 +554,165 @@ class McpStrategyTest {
             var result = strategy.parseJobLines(lines);
             assertThat(result).hasSize(1);
             assertThat(result.get(0).postedDate()).isEqualTo(LocalDate.now().minusWeeks(2));
+        }
+    }
+
+    @Nested
+    @DisplayName("Search window")
+    class SearchWindowTests {
+
+        private JsonNode oneJobResponse(String jobId, String title) {
+            return buildSearchResponse(title + "\nAcme Corp\nBerlin (Hybrid)\n", List.of(jobId));
+        }
+
+        @Test
+        @DisplayName("Round-robin pairs vary the keyword fastest")
+        void roundRobinPairsVaryKeywordFastest() {
+            List<McpStrategy.SearchPair> pairs = McpStrategy.buildRoundRobinPairs(
+                    List.of("k1", "k2"), List.of("l1", "l2"));
+
+            assertThat(pairs).extracting(McpStrategy.SearchPair::keyword)
+                    .containsExactly("k1", "k2", "k1", "k2");
+            assertThat(pairs).extracting(McpStrategy.SearchPair::location)
+                    .containsExactly("l1", "l1", "l2", "l2");
+            assertThat(pairs.subList(0, 2)).extracting(McpStrategy.SearchPair::keyword)
+                    .containsExactlyInAnyOrder("k1", "k2");
+        }
+
+        @Test
+        @DisplayName("A window of 4 pairs touches all 4 keywords across 3 locations")
+        void windowOfFourTouchesAllKeywords() {
+            List<McpStrategy.SearchPair> pairs = McpStrategy.buildRoundRobinPairs(
+                    List.of("k1", "k2", "k3", "k4"), List.of("l1", "l2", "l3"));
+
+            assertThat(pairs).hasSize(12);
+            assertThat(pairs.subList(0, 4)).extracting(McpStrategy.SearchPair::keyword)
+                    .containsExactlyInAnyOrder("k1", "k2", "k3", "k4");
+        }
+
+        @Test
+        @DisplayName("Consecutive runs start at different pairs and advance the cursor")
+        void consecutiveRunsRotateStartPair() {
+            LinkedInSearchCursor cursor = new LinkedInSearchCursor();
+            McpStrategy rotating = new McpStrategy(httpMcpClient, rateLimiter, cursor);
+            when(rateLimiter.acquire(ToolCategory.SEARCH)).thenReturn(true);
+            when(httpMcpClient.callTool(eq("search_jobs"), any()))
+                    .thenReturn(oneJobResponse("1", "Backend Engineer"));
+
+            FetchContext context = FetchContext.forSearch(
+                    List.of("k1", "k2"), List.of("l1", "l2"), 200, 2,
+                    Map.of("pairs-per-run", 1));
+
+            rotating.fetch(context);
+            rotating.fetch(context);
+
+            verify(httpMcpClient).callTool(eq("search_jobs"),
+                    argThat(p -> "k1".equals(p.get("keywords")) && "l1".equals(p.get("location"))));
+            verify(httpMcpClient).callTool(eq("search_jobs"),
+                    argThat(p -> "k2".equals(p.get("keywords")) && "l1".equals(p.get("location"))));
+            assertThat(cursor.getOffset()).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("Cursor wraps modulo totalPairs")
+        void cursorWrapsModuloTotalPairs() {
+            LinkedInSearchCursor cursor = new LinkedInSearchCursor();
+
+            cursor.advance(3, 4);
+            assertThat(cursor.getOffset()).isEqualTo(3);
+            cursor.advance(3, 4);
+            assertThat(cursor.getOffset()).isEqualTo(2);
+            cursor.advance(2, 4);
+            assertThat(cursor.getOffset()).isZero();
+        }
+
+        @Test
+        @DisplayName("Stops before calling the MCP when tokens are at or below the reserve")
+        void stopsWhenTokensAtOrBelowReserve() {
+            when(rateLimiter.getRemainingTokens(ToolCategory.SEARCH)).thenReturn(5);
+
+            FetchContext context = FetchContext.forSearch(
+                    List.of("k1"), List.of("l1"), 200, 2, Map.of("search-reserve", 5));
+
+            FetchResult result = strategy.fetch(context);
+
+            assertThat(result.status()).isEqualTo(ExtractionStatus.EMPTY);
+            verify(httpMcpClient, never()).callTool(any(), any());
+            verify(rateLimiter, never()).acquire(ToolCategory.SEARCH);
+        }
+
+        @Test
+        @DisplayName("Proceeds when tokens are above the reserve")
+        void proceedsWhenTokensAboveReserve() {
+            when(rateLimiter.getRemainingTokens(ToolCategory.SEARCH)).thenReturn(6);
+            when(rateLimiter.acquire(ToolCategory.SEARCH)).thenReturn(true);
+            when(httpMcpClient.callTool(eq("search_jobs"), any()))
+                    .thenReturn(oneJobResponse("1", "Backend Engineer"));
+
+            FetchContext context = FetchContext.forSearch(
+                    List.of("k1"), List.of("l1"), 200, 2, Map.of("search-reserve", 5));
+
+            assertThat(strategy.fetch(context).jobs()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("pairs-per-run caps acquire calls even when maxResults is not reached")
+        void pairsPerRunCapsAcquireCalls() {
+            when(rateLimiter.acquire(ToolCategory.SEARCH)).thenReturn(true);
+            when(httpMcpClient.callTool(eq("search_jobs"), any()))
+                    .thenReturn(oneJobResponse("1", "Backend Engineer"));
+
+            FetchContext context = FetchContext.forSearch(
+                    List.of("k1", "k2", "k3", "k4"), List.of("l1", "l2", "l3"), 200, 2,
+                    Map.of("pairs-per-run", 3));
+
+            FetchResult result = strategy.fetch(context);
+
+            assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+            verify(rateLimiter, times(3)).acquire(ToolCategory.SEARCH);
+            verify(httpMcpClient, times(3)).callTool(eq("search_jobs"), any());
+        }
+
+        @Test
+        @DisplayName("Instant empty response aborts the run and leaves the cursor unchanged")
+        void instantEmptyAbortsWithoutAdvancingCursor() {
+            LinkedInSearchCursor cursor = new LinkedInSearchCursor();
+            McpStrategy fresh = new McpStrategy(httpMcpClient, rateLimiter, cursor);
+            when(rateLimiter.acquire(ToolCategory.SEARCH)).thenReturn(true);
+            when(httpMcpClient.callTool(eq("search_jobs"), any()))
+                    .thenReturn(buildSearchResponse("", List.of()));
+
+            FetchContext context = FetchContext.forSearch(
+                    List.of("k1", "k2"), List.of("l1", "l2"), 200, 2, Map.of());
+
+            FetchResult result = fresh.fetch(context);
+
+            assertThat(result.status()).isEqualTo(ExtractionStatus.EMPTY);
+            assertThat(cursor.getOffset()).isZero();
+            verify(rateLimiter, times(1)).acquire(ToolCategory.SEARCH);
+            verify(httpMcpClient, times(1)).callTool(eq("search_jobs"), any());
+        }
+
+        @Test
+        @DisplayName("Refreshes the session and retries a failing pair exactly once")
+        void retriesPairOnceAfterSessionRefresh() {
+            when(rateLimiter.acquire(ToolCategory.SEARCH)).thenReturn(true);
+            when(httpMcpClient.isSessionValid()).thenReturn(true);
+            when(httpMcpClient.callTool(eq("search_jobs"), any()))
+                    .thenThrow(new McpClientException("MCP returned 404 (stale session)", 404))
+                    .thenReturn(oneJobResponse("123", "Senior AI Product Engineer"));
+
+            FetchContext context = FetchContext.forSearch(
+                    List.of("AI Engineer"), List.of("Germany"), 200, 2, Map.of());
+
+            FetchResult result = strategy.fetch(context);
+
+            assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+            assertThat(result.jobs()).hasSize(1);
+            assertThat(result.jobs().get(0).externalId()).isEqualTo("123");
+            verify(httpMcpClient, times(2)).callTool(eq("search_jobs"), any());
+            verify(httpMcpClient).isSessionValid();
+            verify(rateLimiter, times(1)).acquire(ToolCategory.SEARCH);
         }
     }
 }

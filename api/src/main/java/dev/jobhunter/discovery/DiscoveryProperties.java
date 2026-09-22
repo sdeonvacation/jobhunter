@@ -20,7 +20,10 @@ public record DiscoveryProperties(
             Integer frequencyHours,
             Integer resultsWanted,
             Integer hoursOld,
-            String datePosted
+            String datePosted,
+            Integer maxPages,
+            Integer pairsPerRun,
+            Integer searchReserve
     ) {
         public ProviderConfig {
             if (keywords == null) keywords = List.of();

@@ -27,7 +27,8 @@ class IndeedSourceTest {
     private DiscoveryProperties buildProperties(List<String> keywords, List<String> locations,
                                                  Integer resultsWanted, Integer hoursOld, Integer frequencyHours) {
         var config = new DiscoveryProperties.ProviderConfig(
-                true, keywords, locations, null, null, frequencyHours, resultsWanted, hoursOld, null);
+                true, keywords, locations, null, null, frequencyHours, resultsWanted, hoursOld, null,
+                null, null, null);
         return new DiscoveryProperties(null, Map.of("jobspy", config));
     }
 

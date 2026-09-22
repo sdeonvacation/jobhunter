@@ -3,6 +3,7 @@ package dev.jobhunter.strategy.aggregator;
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.jobhunter.linkedin.HttpMcpClient;
 import dev.jobhunter.linkedin.LinkedInRateLimiter;
+import dev.jobhunter.linkedin.LinkedInSearchCursor;
 import dev.jobhunter.linkedin.McpClientException;
 import dev.jobhunter.linkedin.ToolCategory;
 import dev.jobhunter.model.enums.AtsType;
@@ -35,12 +36,22 @@ public class McpStrategy implements FetchStrategy {
     private static final Pattern VERIFICATION_SUFFIX =
             Pattern.compile("\\s+with verification\\s*$", Pattern.CASE_INSENSITIVE);
 
+    /** A 0-job response faster than this means the sidecar is not ready yet. */
+    static final long INSTANT_EMPTY_THRESHOLD_MS = 1500;
+
+    static final int DEFAULT_MAX_PAGES = 2;
+    static final int DEFAULT_PAIRS_PER_RUN = 12;
+    static final int DEFAULT_SEARCH_RESERVE = 5;
+
     private final HttpMcpClient httpMcpClient;
     private final LinkedInRateLimiter rateLimiter;
+    private final LinkedInSearchCursor searchCursor;
 
-    public McpStrategy(HttpMcpClient httpMcpClient, LinkedInRateLimiter rateLimiter) {
+    public McpStrategy(HttpMcpClient httpMcpClient, LinkedInRateLimiter rateLimiter,
+                       LinkedInSearchCursor searchCursor) {
         this.httpMcpClient = httpMcpClient;
         this.rateLimiter = rateLimiter;
+        this.searchCursor = searchCursor;
     }
 
     @Override
@@ -63,60 +74,149 @@ public class McpStrategy implements FetchStrategy {
             return FetchResult.empty(Duration.between(start, Instant.now()));
         }
 
+        Map<String, Object> config = context.config();
+        String datePosted = configString(config, "date-posted", "week");
+        int maxPages = configInt(config, "max-pages", DEFAULT_MAX_PAGES);
+        int pairsPerRun = configInt(config, "pairs-per-run", DEFAULT_PAIRS_PER_RUN);
+        int searchReserve = configInt(config, "search-reserve", DEFAULT_SEARCH_RESERVE);
+
+        List<SearchPair> pairs = buildRoundRobinPairs(keywords, locations);
+        int totalPairs = pairs.size();
+        int startOffset = Math.floorMod(searchCursor.getOffset(), totalPairs);
+        int windowSize = Math.min(pairsPerRun, totalPairs);
+
+        log.info("LinkedIn MCP search window: start={}, pairs-per-run={}, totalPairs={}",
+                startOffset, windowSize, totalPairs);
+
         List<RawAggregatorJob> allJobs = new ArrayList<>();
         String lastError = null;
         int errorCount = 0;
-        String datePosted = context.config() != null
-                ? (String) context.config().getOrDefault("date-posted", "week")
-                : "week";
-        int maxPages = context.config() != null
-                ? ((Number) context.config().getOrDefault("max-pages", 10)).intValue()
-                : 10;
+        int attempted = 0;
+        int cursorAdvance = 0;
+        boolean rateLimited = false;
 
-        for (String keyword : keywords) {
-            for (String location : locations) {
-                if (!rateLimiter.acquire(ToolCategory.SEARCH)) {
-                    log.warn("Rate limit hit during LinkedIn MCP fetch");
-                    if (allJobs.isEmpty()) {
-                        return FetchResult.rateLimited(Duration.between(start, Instant.now()));
-                    }
-                    // Return what we have so far
-                    return FetchResult.success(allJobs, Duration.between(start, Instant.now()));
-                }
-
-                try {
-                    Map<String, Object> params = Map.of(
-                            "keywords", keyword,
-                            "location", location,
-                            "date_posted", datePosted,
-                            "max_pages", maxPages
-                    );
-                    JsonNode result = httpMcpClient.callTool("search_jobs", params);
-                    List<RawAggregatorJob> jobs = parseSearchResponse(result);
-                    allJobs.addAll(jobs);
-                } catch (Exception e) {
-                    log.error("LinkedIn MCP search failed for '{}' in '{}': {}", keyword, location, e.getMessage());
-                    lastError = e.getMessage();
-                    errorCount++;
-                }
-
-                if (allJobs.size() >= context.maxResults()) {
-                    break;
-                }
-            }
-            if (allJobs.size() >= context.maxResults()) {
+        for (int i = 0; i < windowSize; i++) {
+            // The first pair is always attempted so that a tiny maxResults cannot skip the window.
+            if (attempted > 0 && allJobs.size() >= context.maxResults()) {
                 break;
             }
+
+            int remaining = rateLimiter.getRemainingTokens(ToolCategory.SEARCH);
+            if (remaining <= searchReserve) {
+                log.info("LinkedIn MCP search stopped: SEARCH tokens remaining {} <= reserve {} (pairs attempted {})",
+                        remaining, searchReserve, attempted);
+                break;
+            }
+
+            SearchPair pair = pairs.get(Math.floorMod(startOffset + i, totalPairs));
+
+            if (!rateLimiter.acquire(ToolCategory.SEARCH)) {
+                log.warn("Rate limit hit during LinkedIn MCP fetch");
+                rateLimited = true;
+                break;
+            }
+            attempted++;
+
+            PairOutcome outcome = executePair(pair, datePosted, maxPages);
+            if (outcome.instantEmpty()) {
+                log.warn("LinkedIn MCP returned 0 jobs in {}ms for '{}' in '{}' - sidecar not ready, aborting run",
+                        outcome.elapsedMs(), pair.keyword(), pair.location());
+                break;
+            }
+            if (outcome.jobs() != null) {
+                allJobs.addAll(outcome.jobs());
+            } else {
+                log.error("LinkedIn MCP search failed for '{}' in '{}': {}",
+                        pair.keyword(), pair.location(), outcome.error());
+                lastError = outcome.error();
+                errorCount++;
+            }
+            // A definitive outcome (jobs returned or a permanently failed pair) moves the rotation on.
+            cursorAdvance++;
         }
 
+        searchCursor.advance(cursorAdvance, totalPairs);
+
         Duration elapsed = Duration.between(start, Instant.now());
+        log.info("LinkedIn MCP search run finished: pairs attempted={}, jobs collected={}, SEARCH tokens remaining={}",
+                attempted, allJobs.size(), rateLimiter.getRemainingTokens(ToolCategory.SEARCH));
+
         if (allJobs.isEmpty()) {
             if (errorCount > 0) {
                 return FetchResult.error("All searches failed (" + errorCount + "): " + lastError, elapsed);
             }
+            if (rateLimited) {
+                return FetchResult.rateLimited(elapsed);
+            }
             return FetchResult.empty(elapsed);
         }
         return FetchResult.success(allJobs, elapsed);
+    }
+
+    /**
+     * Build the keyword x location pairs so the keyword index varies fastest. Any window of
+     * {@code keywords.size()} consecutive pairs therefore touches every keyword.
+     */
+    static List<SearchPair> buildRoundRobinPairs(List<String> keywords, List<String> locations) {
+        int total = keywords.size() * locations.size();
+        List<SearchPair> pairs = new ArrayList<>(total);
+        for (int i = 0; i < total; i++) {
+            pairs.add(new SearchPair(keywords.get(i % keywords.size()), locations.get(i / keywords.size())));
+        }
+        return pairs;
+    }
+
+    /**
+     * Run one pair, refreshing the MCP session and retrying exactly once on failure.
+     */
+    private PairOutcome executePair(SearchPair pair, String datePosted, int maxPages) {
+        try {
+            return callSearch(pair, datePosted, maxPages);
+        } catch (Exception e) {
+            log.warn("LinkedIn MCP search failed for '{}' in '{}': {} - refreshing session and retrying once",
+                    pair.keyword(), pair.location(), e.getMessage());
+            try {
+                httpMcpClient.isSessionValid();
+                return callSearch(pair, datePosted, maxPages);
+            } catch (Exception retryError) {
+                log.error("LinkedIn MCP search retry failed for '{}' in '{}': {}",
+                        pair.keyword(), pair.location(), retryError.getMessage());
+                return PairOutcome.failure(retryError.getMessage());
+            }
+        }
+    }
+
+    private PairOutcome callSearch(SearchPair pair, String datePosted, int maxPages) {
+        long callStart = System.currentTimeMillis();
+        Map<String, Object> params = Map.of(
+                "keywords", pair.keyword(),
+                "location", pair.location(),
+                "date_posted", datePosted,
+                "max_pages", maxPages
+        );
+        JsonNode result = httpMcpClient.callTool("search_jobs", params);
+        long elapsedMs = System.currentTimeMillis() - callStart;
+        List<RawAggregatorJob> jobs = parseSearchResponse(result);
+        if (jobs.isEmpty() && elapsedMs < INSTANT_EMPTY_THRESHOLD_MS) {
+            return PairOutcome.instantEmpty(elapsedMs);
+        }
+        return PairOutcome.success(jobs);
+    }
+
+    private static int configInt(Map<String, Object> config, String key, int defaultValue) {
+        if (config == null) {
+            return defaultValue;
+        }
+        Object value = config.get(key);
+        return value instanceof Number number ? number.intValue() : defaultValue;
+    }
+
+    private static String configString(Map<String, Object> config, String key, String defaultValue) {
+        if (config == null) {
+            return defaultValue;
+        }
+        Object value = config.get(key);
+        return value instanceof String s && !s.isBlank() ? s : defaultValue;
     }
 
     /**
@@ -340,4 +440,19 @@ public class McpStrategy implements FetchStrategy {
 
     record ParsedLinkedInJob(String title, String company, String location, LocalDate postedDate) {}
     record ReferenceJob(String jobId, String title) {}
+    record SearchPair(String keyword, String location) {}
+
+    record PairOutcome(List<RawAggregatorJob> jobs, String error, boolean instantEmpty, long elapsedMs) {
+        static PairOutcome success(List<RawAggregatorJob> jobs) {
+            return new PairOutcome(jobs, null, false, 0);
+        }
+
+        static PairOutcome failure(String error) {
+            return new PairOutcome(null, error, false, 0);
+        }
+
+        static PairOutcome instantEmpty(long elapsedMs) {
+            return new PairOutcome(null, null, true, elapsedMs);
+        }
+    }
 }

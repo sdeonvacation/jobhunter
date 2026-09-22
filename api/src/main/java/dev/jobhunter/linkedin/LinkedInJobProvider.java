@@ -25,6 +25,8 @@ import java.util.concurrent.atomic.AtomicReference;
 @ConditionalOnProperty(prefix = "linkedin-mcp", name = "enabled", havingValue = "true")
 public class LinkedInJobProvider implements DiscoveryProvider {
 
+    private static final int DEFAULT_SEARCH_RESERVE = 5;
+
     private final HttpMcpClient httpMcpClient;
     private final DiscoveryProperties properties;
     private final LinkedInRateLimiter rateLimiter;
@@ -72,12 +74,20 @@ public class LinkedInJobProvider implements DiscoveryProvider {
         totalCalls.incrementAndGet();
         lastCallAt.set(LocalDateTime.now());
         Instant start = Instant.now();
+        int searchReserve = config.searchReserve() != null ? config.searchReserve() : DEFAULT_SEARCH_RESERVE;
 
         try {
             List<DiscoveredCompany> results = new ArrayList<>();
 
             for (String keyword : query.keywords()) {
                 for (String location : query.locations()) {
+                    int remaining = rateLimiter.getRemainingTokens(ToolCategory.SEARCH);
+                    if (remaining <= searchReserve) {
+                        log.info("LinkedIn discovery stopping: SEARCH tokens remaining {} <= reserve {}",
+                                remaining, searchReserve);
+                        return results;
+                    }
+
                     if (!rateLimiter.acquire(ToolCategory.SEARCH)) {
                         log.warn("LinkedIn rate limit reached for SEARCH, stopping discovery");
                         return results;

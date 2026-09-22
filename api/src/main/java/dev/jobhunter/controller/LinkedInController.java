@@ -6,7 +6,9 @@ import dev.jobhunter.linkedin.LinkedInNetworkingService.MessageResult;
 import dev.jobhunter.linkedin.LinkedInProfileService.ProfileData;
 import dev.jobhunter.model.Company;
 import dev.jobhunter.repository.CompanyRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/linkedin")
 @ConditionalOnProperty(prefix = "linkedin-mcp", name = "enabled", havingValue = "true")
@@ -150,17 +153,26 @@ public class LinkedInController {
     }
 
     @PostMapping("/recruiter-post-check")
-    public ResponseEntity<RecruiterPostDetectionService.RecruiterPostCheckResult> checkRecruiterPost(
+    public ResponseEntity<?> checkRecruiterPost(
             @RequestBody RecruiterPostCheckRequest request) {
         if (request.url() == null || request.url().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        if (!httpMcpClient.isSessionValid()) {
-            return ResponseEntity.status(429).build();
+        // No pre-flight isSessionValid() probe: it costs a full LinkedIn browser
+        // round-trip and reports transient sidecar timeouts as "invalid", which then
+        // surfaced as a misleading 429. The service degrades to UNRESOLVED on its own.
+        try {
+            RecruiterPostDetectionService.RecruiterPostCheckResult result =
+                    recruiterPostDetectionService.checkRecruiterPost(request.url(), request.force() != null && request.force());
+            return ResponseEntity.ok(result);
+        } catch (McpClientException e) {
+            // Genuine MCP/session failure. 503 (not 429) so callers never confuse an
+            // unreachable sidecar or an expired LinkedIn session with a rate limit.
+            log.warn("Recruiter post check unavailable for {}: {}", request.url(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("error", "linkedin_mcp_unavailable",
+                            "detail", e.getMessage() == null ? "" : e.getMessage()));
         }
-        RecruiterPostDetectionService.RecruiterPostCheckResult result =
-                recruiterPostDetectionService.checkRecruiterPost(request.url(), request.force() != null && request.force());
-        return ResponseEntity.ok(result);
     }
 
     @PostMapping("/recruiter-post-check/batch-read")

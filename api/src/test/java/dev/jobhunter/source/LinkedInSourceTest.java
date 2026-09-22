@@ -27,7 +27,8 @@ class LinkedInSourceTest {
     private DiscoveryProperties buildProperties(List<String> keywords, List<String> locations,
                                                  Integer maxResults, Integer frequencyHours, String datePosted) {
         var config = new DiscoveryProperties.ProviderConfig(
-                true, keywords, locations, null, maxResults, frequencyHours, null, null, datePosted);
+                true, keywords, locations, null, maxResults, frequencyHours, null, null, datePosted,
+                null, null, null);
         return new DiscoveryProperties(null, Map.of("linkedin", config));
     }
 
@@ -84,7 +85,7 @@ class LinkedInSourceTest {
         assertThat(context.keywords()).containsExactly("backend engineer", "Java developer");
         assertThat(context.locations()).containsExactly("Germany", "Netherlands");
         assertThat(context.maxResults()).isEqualTo(200);
-        assertThat(context.maxPages()).isEqualTo(10);
+        assertThat(context.maxPages()).isEqualTo(2);
         assertThat(context.config()).containsEntry("date-posted", "week");
     }
 

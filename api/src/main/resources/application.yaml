@@ -70,6 +70,10 @@ discovery:
       enabled: ${LINKEDIN_MCP_ENABLED:true}
       keywords: ["backend engineer", "java", "AI Engineer", "Software Developer"]
       locations: ["Germany", "Netherlands", "Italy", "Sweden", "Finland", "Poland", "Switzerland", "Estonia", "remote", "Austria", "Denmark", "Spain", "France", "Belgium", "Portugal", "Czechia", "Hungary", "Romania", "Greece", "Luxembourg", "Malta", "Croatia", "Slovenia", "Slovakia", "Bulgaria", "Lithuania", "Latvia", "Cyprus", "Ireland"]
+      max-results: 200
+      max-pages: 2
+      pairs-per-run: 12
+      search-reserve: 5
 
 linkedin-mcp:
   enabled: ${LINKEDIN_MCP_ENABLED:true}
