@@ -6,6 +6,6 @@ if [[ -d "$HOME/.gradle/jdks" ]]; then
 fi
 JAVA_HOME="${JAVA_HOME:-$(/usr/libexec/java_home -v 21 2>/dev/null)}"
 API_JAR="$PROJECT_ROOT/api/build/libs/jobhunter-api-0.0.1-SNAPSHOT.jar"
-exec "$JAVA_HOME/bin/java" -jar "$API_JAR" \
+exec "$JAVA_HOME/bin/java" -Xmx6g -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/jobhunter -jar "$API_JAR" \
   --spring.liquibase.enabled=false \
   "--profile.path=file:$PROJECT_ROOT/profile.yaml"

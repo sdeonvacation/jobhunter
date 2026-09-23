@@ -188,7 +188,21 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
     Page<JobPosting> findByIsActiveTrueAndAppliedFalseAndHiddenFalseAndLanguageFilterAndSourceNotInAndCompanyName(
             FilterDecision languageFilter, List<JobSource> source, String companyName, Pageable pageable);
 
-    List<JobPosting> findByDiscoveredDateBeforeAndAppliedFalse(LocalDate cutoff);
+    /**
+     * Returns ids (not managed entities) of unapplied jobs older than the cutoff, bounded by {@code limit}.
+     * The {@code NOT EXISTS application} guard is deliberate: {@code application} is a NO ACTION FK holding
+     * user pipeline data, so jobs that were applied to must never be purged.
+     */
+    @Query(value = "SELECT j.id FROM job_posting j WHERE j.applied = false " +
+                   "AND j.discovered_date < :cutoff " +
+                   "AND NOT EXISTS (SELECT 1 FROM application a WHERE a.job_id = j.id) " +
+                   "LIMIT :limit", nativeQuery = true)
+    List<UUID> findPurgeableJobIds(@Param("cutoff") LocalDate cutoff, @Param("limit") int limit);
+
+    @Modifying
+    @Transactional
+    @Query(value = "DELETE FROM job_posting WHERE id IN (:ids)", nativeQuery = true)
+    int deleteByIds(@Param("ids") Collection<UUID> ids);
 
     @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.applied = false AND j.hidden = false AND j.languageFilter = :filter " +
            "AND j.source NOT IN :excludedSources " +

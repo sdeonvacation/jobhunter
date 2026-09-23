@@ -1,7 +1,7 @@
 package dev.jobhunter.scheduler;
 
-import dev.jobhunter.model.JobPosting;
 import dev.jobhunter.repository.JobPostingRepository;
+import dev.jobhunter.repository.OutreachContactRepository;
 import dev.jobhunter.service.RecruiterDataService;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.DisallowConcurrentExecution;
@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Nightly purge job (2:00 AM). Removes expired recruiter PII and old unapplied jobs.
@@ -24,14 +25,18 @@ import java.util.List;
 public class GdprPurgeScheduler implements Job {
 
     private static final int JOB_RETENTION_DAYS = 30;
+    private static final int PURGE_BATCH_SIZE = 2000;
 
     private final RecruiterDataService recruiterDataService;
     private final JobPostingRepository jobPostingRepository;
+    private final OutreachContactRepository outreachContactRepository;
 
     public GdprPurgeScheduler(RecruiterDataService recruiterDataService,
-                              JobPostingRepository jobPostingRepository) {
+                              JobPostingRepository jobPostingRepository,
+                              OutreachContactRepository outreachContactRepository) {
         this.recruiterDataService = recruiterDataService;
         this.jobPostingRepository = jobPostingRepository;
+        this.outreachContactRepository = outreachContactRepository;
     }
 
     @Override
@@ -51,15 +56,31 @@ public class GdprPurgeScheduler implements Job {
         }
     }
 
+    /**
+     * Deletes stale unapplied jobs in bounded batches of ids. Entities are never loaded, so the purge
+     * cannot materialise the multi-hundred-MB stale set into the JVM heap.
+     */
     private int purgeOldJobs() {
         LocalDate cutoff = LocalDate.now().minusDays(JOB_RETENTION_DAYS);
-        List<JobPosting> staleJobs = jobPostingRepository.findByDiscoveredDateBeforeAndAppliedFalse(cutoff);
-        if (staleJobs.isEmpty()) {
-            return 0;
+        int totalPurged = 0;
+
+        while (true) {
+            List<UUID> ids = jobPostingRepository.findPurgeableJobIds(cutoff, PURGE_BATCH_SIZE);
+            if (ids.isEmpty()) {
+                break;
+            }
+            // job_contact is a NO ACTION FK link table: clear the links before deleting the job rows.
+            outreachContactRepository.deleteJobContactsByJobIds(ids);
+            totalPurged += jobPostingRepository.deleteByIds(ids);
+            if (ids.size() < PURGE_BATCH_SIZE) {
+                break;
+            }
         }
-        jobPostingRepository.deleteAll(staleJobs);
-        log.info("Purged {} unapplied jobs older than {} days (before {})",
-                staleJobs.size(), JOB_RETENTION_DAYS, cutoff);
-        return staleJobs.size();
+
+        if (totalPurged > 0) {
+            log.info("Purged {} unapplied jobs older than {} days (before {})",
+                    totalPurged, JOB_RETENTION_DAYS, cutoff);
+        }
+        return totalPurged;
     }
 }

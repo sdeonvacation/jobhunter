@@ -4,11 +4,14 @@ import dev.jobhunter.linkedin.OutreachContact;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -47,4 +50,13 @@ public interface OutreachContactRepository extends JpaRepository<OutreachContact
     @Query(value = "INSERT INTO job_contact (job_id, contact_id) VALUES (:jobId, :contactId) ON CONFLICT DO NOTHING", nativeQuery = true)
     @org.springframework.data.jpa.repository.Modifying
     void linkContactToJob(@Param("jobId") UUID jobId, @Param("contactId") UUID contactId);
+
+    /**
+     * Clears the {@code job_contact} link rows for the given jobs. {@code job_contact} is a NO ACTION FK
+     * link table (no JPA entity), so it must be emptied before the referenced job rows are deleted.
+     */
+    @Modifying
+    @Transactional
+    @Query(value = "DELETE FROM job_contact WHERE job_id IN (:ids)", nativeQuery = true)
+    int deleteJobContactsByJobIds(@Param("ids") Collection<UUID> ids);
 }
