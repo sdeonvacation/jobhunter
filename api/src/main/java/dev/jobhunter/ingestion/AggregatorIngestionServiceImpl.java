@@ -118,6 +118,9 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
         Set<String> knownDedupHashes = new HashSet<>(jobPostingRepository.findAllDedupHashes());
 
         List<AcceptedJob> acceptedJobs = new ArrayList<>();
+        // External IDs that are already known for this source (still listed on the board): refreshed with a
+        // last-seen timestamp after Pass B so the purge cannot age them out and the next run re-insert them.
+        Set<String> seenExistingExternalIds = new HashSet<>();
 
         // Pass A: dedup / URL validation / ATS enrichment / filtering. No persistence yet, so title
         // translation can run as one batched call after filtering and before saving.
@@ -126,6 +129,7 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                 // Skip if exact source+externalId already known (in-memory check)
                 if (knownExternalIds.contains(job.externalId())) {
                     duplicates++;
+                    seenExistingExternalIds.add(job.externalId());
                     continue;
                 }
 
@@ -256,6 +260,7 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                         .dedupHash(accepted.dedupHash())
                         .postedDate(job.postedDate())
                         .discoveredDate(LocalDate.now())
+                        .lastCrawledAt(LocalDateTime.now())
                         .salaryMin(job.salaryMin())
                         .salaryMax(job.salaryMax())
                         .salaryCurrency(job.salaryCurrency())
@@ -272,6 +277,11 @@ public class AggregatorIngestionServiceImpl implements AggregatorIngestionServic
                         accepted.job().externalId(), source.name(), e.getMessage());
                 errors++;
             }
+        }
+
+        // Refresh last-seen for still-listed aggregator jobs that were skipped as duplicates.
+        if (!seenExistingExternalIds.isEmpty()) {
+            jobPostingRepository.touchLastCrawled(jobSource, seenExistingExternalIds, LocalDateTime.now());
         }
 
         // Run post-ingestion enrichers

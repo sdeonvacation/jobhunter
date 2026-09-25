@@ -31,6 +31,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -766,5 +769,54 @@ class AggregatorIngestionServiceImplTest {
         JobPosting saved = captor.getValue();
         assertThat(saved.getTitle()).isEqualTo("Softwareentwickler");
         assertThat(saved.getRawContent()).isNull();
+    }
+
+    @Test
+    void ingest_knownJob_refreshesLastSeenForStillListedExternalId() {
+        var sourceConfig = createSourceConfig(JobSource.ARBEITNOW, DiscoverySource.ARBEITNOW);
+        var job = createJob("ext-known", "Backend Engineer", "Acme Corp");
+        var fetchResult = FetchResult.success(List.of(job), Duration.ofMillis(100));
+
+        when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
+        when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.ARBEITNOW))
+                .thenReturn(new HashSet<>(Set.of("ext-known")));
+        when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
+        when(aggregatorRunRepository.save(any(AggregatorRun.class))).thenAnswer(i -> i.getArgument(0));
+
+        IngestionStats stats = service.ingest(sourceConfig);
+
+        assertThat(stats.duplicates()).isEqualTo(1);
+        assertThat(stats.created()).isZero();
+        verify(jobPostingRepository).touchLastCrawled(
+                eq(JobSource.ARBEITNOW),
+                argThat((Collection<String> ids) -> ids.contains("ext-known")),
+                any(LocalDateTime.class));
+    }
+
+    @Test
+    void ingest_newJob_setsLastCrawledAt() {
+        var sourceConfig = createSourceConfig(JobSource.BERLIN_STARTUP_JOBS, DiscoverySource.BERLIN_STARTUP_JOBS);
+        var job = createJob("ext-1", "Backend Engineer", "Acme Corp");
+        var fetchResult = FetchResult.success(List.of(job), Duration.ofMillis(100));
+
+        when(fetchStrategy.fetch(any())).thenReturn(fetchResult);
+        when(jobPostingRepository.findExternalIdsBySourceAsSet(JobSource.BERLIN_STARTUP_JOBS))
+                .thenReturn(new HashSet<>());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString())).thenReturn("fp");
+        when(jobFilterChain.apply(any(), anyBoolean(), anyBoolean(), any()))
+                .thenReturn(FilterChainResult.keep(null, null));
+        Company company = Company.builder().id(UUID.randomUUID()).name("Acme Corp")
+                .normalizedName("acme corp").status(CompanyStatus.DISCOVERED).isActive(true).build();
+        when(companyRepository.findByNormalizedName("acme corp")).thenReturn(Optional.of(company));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+        when(aggregatorRunRepository.findBySourceName("test-source")).thenReturn(Optional.empty());
+        when(aggregatorRunRepository.save(any(AggregatorRun.class))).thenAnswer(i -> i.getArgument(0));
+
+        IngestionStats stats = service.ingest(sourceConfig);
+
+        assertThat(stats.created()).isEqualTo(1);
+        ArgumentCaptor<JobPosting> captor = ArgumentCaptor.forClass(JobPosting.class);
+        verify(jobPostingRepository).save(captor.capture());
+        assertThat(captor.getValue().getLastCrawledAt()).isNotNull();
     }
 }

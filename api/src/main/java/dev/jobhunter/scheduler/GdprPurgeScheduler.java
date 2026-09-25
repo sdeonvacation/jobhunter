@@ -57,8 +57,11 @@ public class GdprPurgeScheduler implements Job {
     }
 
     /**
-     * Deletes stale unapplied jobs in bounded batches of ids. Entities are never loaded, so the purge
-     * cannot materialise the multi-hundred-MB stale set into the JVM heap.
+     * Deletes stale unapplied jobs in bounded batches of ids. A job is only purged when it is BOTH older
+     * than {@link #JOB_RETENTION_DAYS} (by discovery) AND has not been seen (by {@code last_crawled_at})
+     * within that window, so jobs still listed on a source are retained instead of being re-imported.
+     * Entities are never loaded, so the purge cannot materialise the multi-hundred-MB stale set into the
+     * JVM heap.
      */
     private int purgeOldJobs() {
         LocalDate cutoff = LocalDate.now().minusDays(JOB_RETENTION_DAYS);

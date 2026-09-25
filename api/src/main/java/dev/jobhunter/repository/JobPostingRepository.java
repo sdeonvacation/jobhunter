@@ -189,12 +189,21 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
             FilterDecision languageFilter, List<JobSource> source, String companyName, Pageable pageable);
 
     /**
-     * Returns ids (not managed entities) of unapplied jobs older than the cutoff, bounded by {@code limit}.
-     * The {@code NOT EXISTS application} guard is deliberate: {@code application} is a NO ACTION FK holding
-     * user pipeline data, so jobs that were applied to must never be purged.
+     * Returns ids (not managed entities) of unapplied and unseen jobs older than the cutoff, bounded by
+     * {@code limit}.
+     * <p>
+     * The {@code last_crawled_at} guard prevents churn: a still-listed job is refreshed by every crawl, so
+     * age-since-discovery alone would delete live jobs that the next crawl re-inserts as "new" (each crawl
+     * stamps a fresh discovered_date). A job is purgeable only when it is BOTH older than the window AND
+     * unseen during the window (or never seen at all). The same {@code cutoff} LocalDate is bound for both
+     * the date and timestamp comparisons, which is safe because LocalDate is coerced to midnight.
+     * <p>
+     * The {@code NOT EXISTS application} guard is unchanged and deliberate: {@code application} is a NO
+     * ACTION FK holding user pipeline data, so jobs that were applied to must never be purged.
      */
     @Query(value = "SELECT j.id FROM job_posting j WHERE j.applied = false " +
                    "AND j.discovered_date < :cutoff " +
+                   "AND (j.last_crawled_at IS NULL OR j.last_crawled_at < :cutoff) " +
                    "AND NOT EXISTS (SELECT 1 FROM application a WHERE a.job_id = j.id) " +
                    "LIMIT :limit", nativeQuery = true)
     List<UUID> findPurgeableJobIds(@Param("cutoff") LocalDate cutoff, @Param("limit") int limit);
@@ -203,6 +212,19 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
     @Transactional
     @Query(value = "DELETE FROM job_posting WHERE id IN (:ids)", nativeQuery = true)
     int deleteByIds(@Param("ids") Collection<UUID> ids);
+
+    /**
+     * Refreshes the last-seen timestamp for a source's already-known external IDs. Aggregator ingestion is
+     * insert-only (duplicates are skipped), so without this refresh a still-listed aggregator job would age
+     * out of the retention window, be purged, and be re-inserted as "new" by the next run.
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE JobPosting j SET j.lastCrawledAt = :seenAt " +
+           "WHERE j.source = :source AND j.externalId IN :externalIds")
+    int touchLastCrawled(@Param("source") JobSource source,
+                         @Param("externalIds") Collection<String> externalIds,
+                         @Param("seenAt") LocalDateTime seenAt);
 
     @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.applied = false AND j.hidden = false AND j.languageFilter = :filter " +
            "AND j.source NOT IN :excludedSources " +
