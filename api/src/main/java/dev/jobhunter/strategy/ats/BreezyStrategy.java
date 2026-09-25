@@ -14,6 +14,8 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZonedDateTime;
 import java.util.*;
 
 @Slf4j
@@ -113,12 +115,27 @@ public class BreezyStrategy extends AbstractAtsStrategy {
             String applyUrl = node.path("url").asText(null);
             String rawJson = node.toString();
 
+            // Breezy's /json listing supplies published_date (ISO instant); without it every
+            // job stores a null posted_date and the digest/purge cannot date them.
+            LocalDate postedDate = parseDate(node.path("published_date").asText(null));
+
             return new RawAggregatorJob(
                     externalId, title, null, location, null, applyUrl,
-                    null, null, null, null, rawJson
+                    postedDate, null, null, null, rawJson
             );
         } catch (Exception e) {
             log.warn("Breezy: failed to map job node: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private LocalDate parseDate(String dateStr) {
+        if (dateStr == null || dateStr.isBlank()) {
+            return null;
+        }
+        try {
+            return ZonedDateTime.parse(dateStr).toLocalDate();
+        } catch (Exception e) {
             return null;
         }
     }

@@ -13,6 +13,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.LocalDate;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -107,6 +109,33 @@ class BreezyStrategyTest {
         assertThat(result.jobs()).hasSize(2);
         assertThat(result.jobs().get(0).title()).isEqualTo("Job A");
         assertThat(result.jobs().get(1).title()).isEqualTo("Job B");
+    }
+
+    @Test
+    void extract_publishedDate_parsedToPostedDate() {
+        // Exact shape returned by Breezy's /json listing.
+        String json = """
+                [
+                  {
+                    "_id": "pd1",
+                    "name": "GTM Engineer",
+                    "location": { "city": "Munich", "country": "Germany" },
+                    "url": "https://alasco.breezy.hr/p/pd1",
+                    "published_date": "2026-09-18T10:02:39.855Z"
+                  }
+                ]
+                """;
+        stubFor(get(urlPathMatching("/pdco/json"))
+                .willReturn(okJson(json)));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.BREEZY)
+                .atsSlug("pdco")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs().get(0).postedDate()).isEqualTo(LocalDate.of(2026, 9, 18));
     }
 
     @Test
