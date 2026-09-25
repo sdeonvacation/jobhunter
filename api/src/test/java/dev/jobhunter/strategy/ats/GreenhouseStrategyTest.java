@@ -7,8 +7,6 @@ import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.model.enums.ExtractionStatus;
 import dev.jobhunter.strategy.FetchContext;
-import dev.jobhunter.strategy.FetchResult;
-import dev.jobhunter.strategy.RawAggregatorJob;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -26,7 +24,7 @@ class GreenhouseStrategyTest {
         WebClient webClient = WebClient.builder()
                 .baseUrl(wmInfo.getHttpBaseUrl())
                 .build();
-        extractor = new TestableGreenhouseStrategy(webClient, new ObjectMapper(), wmInfo.getHttpBaseUrl());
+        extractor = new GreenhouseStrategy(webClient, new ObjectMapper(), wmInfo.getHttpBaseUrl());
     }
 
     @Test
@@ -55,7 +53,7 @@ class GreenhouseStrategyTest {
                       "location": {"name": "Berlin, Germany"},
                       "content": "<p>We build <strong>cool</strong> stuff</p>",
                       "absolute_url": "https://boards.greenhouse.io/co/jobs/12345",
-                      "updated_at": "2024-01-15T10:30:00Z"
+                      "first_published": "2024-01-15T10:30:00Z"
                     }
                   ]
                 }
@@ -82,6 +80,7 @@ class GreenhouseStrategyTest {
         assertThat(job.description()).doesNotContain("<p>");
         assertThat(job.description()).doesNotContain("<strong>");
         assertThat(job.applyUrl()).isEqualTo("https://boards.greenhouse.io/co/jobs/12345");
+        assertThat(job.postedDate()).isEqualTo(java.time.LocalDate.of(2024, 1, 15));
     }
 
     @Test
@@ -149,7 +148,7 @@ class GreenhouseStrategyTest {
                       "location": {"name": "Berlin"},
                       "content": "<p>We use Java &amp; Spring &lt;3&gt;</p>",
                       "absolute_url": "url",
-                      "updated_at": "2024-01-01T00:00:00Z"
+                      "first_published": "2024-01-01T00:00:00Z"
                     }
                   ]
                 }
@@ -167,73 +166,35 @@ class GreenhouseStrategyTest {
         assertThat(job.description()).contains("Java & Spring <3>");
     }
 
-    /**
-     * Subclass that redirects API calls to the WireMock server.
-     */
-    private static class TestableGreenhouseStrategy extends GreenhouseStrategy {
-        private final String baseUrl;
-
-        TestableGreenhouseStrategy(WebClient webClient, ObjectMapper objectMapper, String baseUrl) {
-            super(webClient, objectMapper);
-            this.baseUrl = baseUrl;
-        }
-
-        @Override
-        public FetchResult fetch(FetchContext context) {
-            CareerEndpoint endpoint = context.endpoint();
-            var start = java.time.Instant.now();
-            try {
-                String url = baseUrl + "/v1/boards/" + endpoint.getAtsSlug() + "/jobs?content=true";
-                WebClient client = WebClient.builder().build();
-                String responseBody = client.get()
-                        .uri(url)
-                        .retrieve()
-                        .bodyToMono(String.class)
-                        .block();
-
-                if (responseBody == null || responseBody.isBlank()) {
-                    return FetchResult.empty(elapsed(start));
-                }
-
-                var objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                var root = objectMapper.readTree(responseBody);
-                var jobsNode = root.path("jobs");
-
-                if (!jobsNode.isArray() || jobsNode.isEmpty()) {
-                    return FetchResult.empty(elapsed(start));
-                }
-
-                var jobs = new java.util.ArrayList<RawAggregatorJob>();
-                for (var jobNode : jobsNode) {
-                    String externalId = String.valueOf(jobNode.path("id").asLong());
-                    String title = jobNode.path("title").asText(null);
-                    String location = jobNode.path("location").path("name").asText(null);
-                    String contentHtml = jobNode.path("content").asText("");
-                    String description = contentHtml.replaceAll("<[^>]*>", "").trim();
-                    // Decode HTML entities
-                    description = description.replace("&amp;", "&")
-                            .replace("&lt;", "<").replace("&gt;", ">")
-                            .replace("&nbsp;", " ");
-                    String applyUrl = jobNode.path("absolute_url").asText(null);
-                    java.time.LocalDate postedDate = null;
-                    String dateStr = jobNode.path("updated_at").asText(null);
-                    if (dateStr != null) {
-                        try { postedDate = java.time.ZonedDateTime.parse(dateStr).toLocalDate(); }
-                        catch (Exception ignored) {}
+    @Test
+    void extract_usesFirstPublished_notUpdatedAt() {
+        // Regression: updated_at is Greenhouse's last-modified stamp, so using it made long-open
+        // roles look freshly posted (59% of rows disagree). first_published is the real post date.
+        String json = """
+                {
+                  "jobs": [
+                    {
+                      "id": 777,
+                      "title": "Long-open Role",
+                      "location": {"name": "Berlin"},
+                      "content": "<p>x</p>",
+                      "absolute_url": "https://boards.greenhouse.io/co/jobs/777",
+                      "first_published": "2024-01-15T10:30:00-04:00",
+                      "updated_at": "2026-09-25T08:00:00-04:00"
                     }
-                    jobs.add(new RawAggregatorJob(externalId, title, null, location, description,
-                            applyUrl, postedDate, null, null, null, jobNode.toString()));
+                  ]
                 }
+                """;
+        stubFor(get(urlPathMatching("/v1/boards/.*/jobs"))
+                .willReturn(okJson(json)));
 
-                return jobs.isEmpty()
-                        ? FetchResult.empty(elapsed(start))
-                        : FetchResult.success(jobs, elapsed(start));
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.GREENHOUSE)
+                .atsSlug("regressco")
+                .build();
 
-            } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
-                return FetchResult.error("HTTP " + e.getStatusCode(), elapsed(start));
-            } catch (Exception e) {
-                return FetchResult.error(e.getMessage(), elapsed(start));
-            }
-        }
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs().get(0).postedDate()).isEqualTo(java.time.LocalDate.of(2024, 1, 15));
     }
 }

@@ -22,14 +22,23 @@ import java.util.*;
 @Component
 public class GreenhouseStrategy extends AbstractAtsStrategy {
 
-    private static final String API_URL = "https://boards-api.greenhouse.io/v1/boards/%s/jobs?content=true";
+    private static final String DEFAULT_BASE_URL = "https://boards-api.greenhouse.io";
+    private static final String JOBS_PATH = "/v1/boards/%s/jobs?content=true";
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
+    private final String baseUrl;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public GreenhouseStrategy(WebClient webClient, ObjectMapper objectMapper) {
+        this(webClient, objectMapper, DEFAULT_BASE_URL);
+    }
+
+    // Visible for testing
+    GreenhouseStrategy(WebClient webClient, ObjectMapper objectMapper, String baseUrl) {
         this.webClient = webClient;
         this.objectMapper = objectMapper;
+        this.baseUrl = baseUrl;
     }
 
     @Override
@@ -49,7 +58,7 @@ public class GreenhouseStrategy extends AbstractAtsStrategy {
         String slug = endpoint.getAtsSlug();
 
         try {
-            String url = String.format(API_URL, slug);
+            String url = baseUrl + String.format(JOBS_PATH, slug);
             String responseBody = webClient.get()
                     .uri(url)
                     .retrieve()
@@ -119,7 +128,9 @@ public class GreenhouseStrategy extends AbstractAtsStrategy {
             String applyUrl = node.path("absolute_url").asText(null);
             String rawJson = node.toString();
 
-            LocalDate postedDate = parseDate(node.path("updated_at").asText(null));
+            // first_published is the real post date; updated_at is last-modified and makes
+            // long-open roles look freshly posted (59% of rows disagree).
+            LocalDate postedDate = parseDate(node.path("first_published").asText(null));
 
             return new RawAggregatorJob(
                     externalId, title, null, location, description, applyUrl,
