@@ -48,7 +48,7 @@ class AshbyStrategyTest {
                       "location": "San Francisco, CA",
                       "descriptionPlain": "Build distributed systems at scale.",
                       "applyUrl": "https://jobs.ashbyhq.com/coolco/job-001",
-                      "publishedDate": "2024-01-15",
+                      "publishedAt": "2024-01-15",
                       "compensation": {
                         "currency": "USD",
                         "compensationTierSummary": "$150,000 - $200,000"
@@ -94,7 +94,7 @@ class AshbyStrategyTest {
                       "location": "Remote",
                       "descriptionPlain": "Lead product strategy.",
                       "applyUrl": "https://jobs.ashbyhq.com/co/job-002",
-                      "publishedDate": "2024-02-01",
+                      "publishedAt": "2024-02-01",
                       "compensation": null
                     }
                   ]
@@ -132,7 +132,7 @@ class AshbyStrategyTest {
                       "location": "Berlin",
                       "descriptionPlain": "Desc A",
                       "applyUrl": "https://jobs.ashbyhq.com/co/a1",
-                      "publishedDate": "2024-01-01"
+                      "publishedAt": "2024-01-01"
                     },
                     {
                       "id": "b2",
@@ -140,7 +140,7 @@ class AshbyStrategyTest {
                       "location": "London",
                       "descriptionPlain": "Desc B",
                       "applyUrl": "https://jobs.ashbyhq.com/co/b2",
-                      "publishedDate": "2024-01-02",
+                      "publishedAt": "2024-01-02",
                       "compensation": {
                         "currency": "GBP",
                         "compensationTierSummary": "£80,000 - £120,000"
@@ -224,7 +224,7 @@ class AshbyStrategyTest {
                       "location": "NYC",
                       "descriptionPlain": "Design things.",
                       "applyUrl": "https://jobs.ashbyhq.com/co/job-x",
-                      "publishedDate": "2024-03-01",
+                      "publishedAt": "2024-03-01",
                       "compensation": {
                         "currency": "USD",
                         "compensationTierSummary": "Competitive"
@@ -279,7 +279,7 @@ class AshbyStrategyTest {
                       "descriptionPlain": "",
                       "descriptionHtml": "<p>We are looking for a <strong>great</strong> engineer.</p>",
                       "applyUrl": "https://jobs.ashbyhq.com/co/html-job",
-                      "publishedDate": "2024-05-01"
+                      "publishedAt": "2024-05-01"
                     }
                   ]
                 }
@@ -309,7 +309,7 @@ class AshbyStrategyTest {
                       "location": "Anywhere",
                       "descriptionPlain": "Short desc.",
                       "applyUrl": "https://jobs.ashbyhq.com/co/trunc-job",
-                      "publishedDate": "2024-04-01"
+                      "publishedAt": "2024-04-01"
                     }
                   ]
                 }
@@ -338,7 +338,7 @@ class AshbyStrategyTest {
                       "location": "Berlin",
                       "descriptionPlain": "Code.",
                       "applyUrl": "https://jobs.ashbyhq.com/co/zdt-job",
-                      "publishedDate": "2024-06-15T12:00:00Z"
+                      "publishedAt": "2024-06-15T12:00:00Z"
                     }
                   ]
                 }
@@ -357,6 +357,36 @@ class AshbyStrategyTest {
     }
 
     @Test
+    void extract_realApiPublishedAtFormat_parsesCorrectly() {
+        // Exact shape returned by the live posting-api (offset + fractional seconds), not the Z form above.
+        String json = """
+                {
+                  "jobs": [
+                    {
+                      "id": "real-format-job",
+                      "title": "Backend Engineer",
+                      "location": "London",
+                      "descriptionPlain": "Ship.",
+                      "applyUrl": "https://jobs.ashbyhq.com/thought-machine/real-format-job",
+                      "publishedAt": "2026-09-23T17:56:46.069+00:00"
+                    }
+                  ]
+                }
+                """;
+        stubFor(get(urlPathMatching("/posting-api/job-board/.*"))
+                .willReturn(okJson(json)));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.ASHBY)
+                .atsSlug("thought-machine")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs().get(0).postedDate()).isEqualTo(LocalDate.of(2026, 9, 23));
+    }
+
+    @Test
     void extract_secondaryLocations_concatenatedWithPrimary() {
         String json = """
                 {
@@ -371,7 +401,7 @@ class AshbyStrategyTest {
                       ],
                       "descriptionPlain": "Build APIs.",
                       "applyUrl": "https://jobs.ashbyhq.com/co/loc-job",
-                      "publishedDate": "2024-07-01"
+                      "publishedAt": "2024-07-01"
                     }
                   ]
                 }
@@ -402,7 +432,7 @@ class AshbyStrategyTest {
                       "secondaryLocations": [],
                       "descriptionPlain": "Build UIs.",
                       "applyUrl": "https://jobs.ashbyhq.com/co/single-loc",
-                      "publishedDate": "2024-07-02"
+                      "publishedAt": "2024-07-02"
                     }
                   ]
                 }
@@ -431,7 +461,7 @@ class AshbyStrategyTest {
                       "location": "Hamburg",
                       "descriptionPlain": "Infra work.",
                       "applyUrl": "https://jobs.ashbyhq.com/co/no-sec",
-                      "publishedDate": "2024-07-03"
+                      "publishedAt": "2024-07-03"
                     }
                   ]
                 }
@@ -464,7 +494,7 @@ class AshbyStrategyTest {
                       ],
                       "descriptionPlain": "Reliability.",
                       "applyUrl": "https://jobs.ashbyhq.com/co/null-primary",
-                      "publishedDate": "2024-07-04"
+                      "publishedAt": "2024-07-04"
                     }
                   ]
                 }

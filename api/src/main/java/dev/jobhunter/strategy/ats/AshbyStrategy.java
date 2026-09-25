@@ -120,7 +120,7 @@ public class AshbyStrategy extends AbstractAtsStrategy {
 
             String applyUrl = node.path("applyUrl").asText(null);
             String rawJson = node.toString();
-            LocalDate postedDate = parseDate(node.path("publishedDate").asText(null));
+            LocalDate postedDate = parseDate(node.path("publishedAt").asText(null));
 
             BigDecimal salaryMin = null;
             BigDecimal salaryMax = null;
