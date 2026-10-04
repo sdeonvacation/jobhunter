@@ -96,7 +96,7 @@ public class LinkedInJobProvider implements DiscoveryProvider {
                     Map<String, Object> params = Map.of(
                             "keywords", keyword,
                             "location", location,
-                            "date_posted", "week"
+                            "date_posted", "past_24_hours"
                     );
 
                     JsonNode response = httpMcpClient.callTool("search_jobs", params);

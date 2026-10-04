@@ -74,6 +74,7 @@ discovery:
       max-pages: 2
       pairs-per-run: 12
       search-reserve: 5
+      date-posted: past_24_hours
 
 linkedin-mcp:
   enabled: ${LINKEDIN_MCP_ENABLED:true}

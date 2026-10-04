@@ -75,7 +75,7 @@ public class McpStrategy implements FetchStrategy {
         }
 
         Map<String, Object> config = context.config();
-        String datePosted = configString(config, "date-posted", "week");
+        String datePosted = configString(config, "date-posted", "past_24_hours");
         int maxPages = configInt(config, "max-pages", DEFAULT_MAX_PAGES);
         int pairsPerRun = configInt(config, "pairs-per-run", DEFAULT_PAIRS_PER_RUN);
         int searchReserve = configInt(config, "search-reserve", DEFAULT_SEARCH_RESERVE);

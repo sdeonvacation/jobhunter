@@ -21,7 +21,7 @@ public class LinkedInSource implements SourceConfig {
 
     private static final int DEFAULT_MAX_RESULTS = 200;
     private static final int DEFAULT_FREQUENCY_HOURS = 6;
-    private static final String DEFAULT_DATE_POSTED = "week";
+    private static final String DEFAULT_DATE_POSTED = "past_24_hours";
     private static final int DEFAULT_MAX_PAGES = 2;
     private static final int DEFAULT_PAIRS_PER_RUN = 12;
     private static final int DEFAULT_SEARCH_RESERVE = 5;

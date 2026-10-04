@@ -86,7 +86,7 @@ class LinkedInSourceTest {
         assertThat(context.locations()).containsExactly("Germany", "Netherlands");
         assertThat(context.maxResults()).isEqualTo(200);
         assertThat(context.maxPages()).isEqualTo(2);
-        assertThat(context.config()).containsEntry("date-posted", "week");
+        assertThat(context.config()).containsEntry("date-posted", "past_24_hours");
     }
 
     @Test
@@ -115,6 +115,6 @@ class LinkedInSourceTest {
         assertThat(context.keywords()).isEmpty();
         assertThat(context.locations()).isEmpty();
         assertThat(context.maxResults()).isEqualTo(200);
-        assertThat(context.config()).containsEntry("date-posted", "week");
+        assertThat(context.config()).containsEntry("date-posted", "past_24_hours");
     }
 }

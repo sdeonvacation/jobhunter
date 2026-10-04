@@ -231,7 +231,7 @@ class McpStrategyTest {
             strategy.fetch(context);
 
             verify(httpMcpClient).callTool(eq("search_jobs"), argThat(params ->
-                    "week".equals(params.get("date_posted"))));
+                    "past_24_hours".equals(params.get("date_posted"))));
         }
 
         @Test
