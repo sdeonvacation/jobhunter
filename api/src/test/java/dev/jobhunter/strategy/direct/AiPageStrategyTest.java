@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -20,10 +21,13 @@ import org.springframework.web.reactive.function.client.WebClientRequestExceptio
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import reactor.core.publisher.Mono;
 
 import java.io.IOException;
 import java.net.URI;
 import java.nio.channels.UnresolvedAddressException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -736,8 +740,383 @@ class AiPageStrategyTest {
     }
 
     // -------------------------------------------------------------------------
+    // next_data_positions — deterministic Next.js __NEXT_DATA__ fast-path
+    // -------------------------------------------------------------------------
+
+    /** Fixture mirroring the Revolut careers {@code __NEXT_DATA__} payload (positions[]). */
+    private static final String NEXT_DATA_HTML = """
+            <html><body><script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"positions":[{"id":"11111111-2222-3333-4444-555555555555","text":"Test Role","team":"Engineering","locations":[{"name":"Berlin, Germany","type":"office","country":"Germany"}]},{"id":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","text":"No Loc Role","team":"Data","locations":[]}]}}}</script></body></html>
+            """;
+
+    @Test
+    void extract_nextDataPositions_skipsAiAndExtractsJobs() {
+        extractor.setHtmlResponse(NEXT_DATA_HTML);
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://www.revolut.com/careers/")
+                .atsSlug("{\"next_data_positions\":true,\"apply_base\":\"https://www.revolut.com/careers/position/\"}")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs()).hasSize(2);
+        assertThat(result.jobs()).extracting(RawAggregatorJob::title)
+                .containsExactly("Test Role", "No Loc Role");
+        assertThat(result.jobs()).extracting(RawAggregatorJob::location)
+                .containsExactly("Berlin, Germany", null);
+        assertThat(result.jobs().get(0).applyUrl())
+                .isEqualTo("https://www.revolut.com/careers/position/11111111-2222-3333-4444-555555555555/");
+        assertThat(result.jobs().get(1).applyUrl())
+                .isEqualTo("https://www.revolut.com/careers/position/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/");
+        // External id mirrors the json_api mapping: generateExternalId(title, applyUrl).
+        assertThat(result.jobs().get(0).externalId()).isEqualTo(
+                extractor.generateExternalId("Test Role",
+                        "https://www.revolut.com/careers/position/11111111-2222-3333-4444-555555555555/"));
+        assertThat(extractor.htmlFetchCount).isEqualTo(1);
+        verify(aiProvider, never()).isAvailable();
+        verify(aiProvider, never()).extract(anyString(), anyString(), any());
+    }
+
+    @Test
+    void extract_nextDataPositions_blankContent_returnsEmptyWithoutAi() {
+        extractor.setHtmlResponse("");
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://www.revolut.com/careers/")
+                .atsSlug("{\"next_data_positions\":true}")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.EMPTY);
+        verify(aiProvider, never()).isAvailable();
+        verify(aiProvider, never()).extract(anyString(), anyString(), any());
+    }
+
+    @Test
+    void extract_nextDataPositions_missingScript_returnsEmptyWithoutAi() {
+        extractor.setHtmlResponse("<html><body><p>plain page without next data</p></body></html>");
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://www.revolut.com/careers/")
+                .atsSlug("{\"next_data_positions\":true,\"apply_base\":\"https://www.revolut.com/careers/position/\"}")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.EMPTY);
+        verify(aiProvider, never()).isAvailable();
+        verify(aiProvider, never()).extract(anyString(), anyString(), any());
+    }
+
+    @Nested
+    class ExtractCandidatesFromNextData {
+
+        @Test
+        void happyPath_extractsPositionsIncludingMissingLocation() {
+            var candidates = extractor.extractCandidatesFromNextData(
+                    NEXT_DATA_HTML, "https://www.revolut.com/careers/position/");
+
+            assertThat(candidates).hasSize(2);
+            assertThat(candidates.get(0).title()).isEqualTo("Test Role");
+            assertThat(candidates.get(0).location()).isEqualTo("Berlin, Germany");
+            assertThat(candidates.get(0).applyUrl())
+                    .isEqualTo("https://www.revolut.com/careers/position/11111111-2222-3333-4444-555555555555/");
+            assertThat(candidates.get(1).title()).isEqualTo("No Loc Role");
+            assertThat(candidates.get(1).location()).isNull();
+            assertThat(candidates.get(1).applyUrl())
+                    .isEqualTo("https://www.revolut.com/careers/position/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/");
+        }
+
+        @Test
+        void multiLocation_allLocationsJoinedCommaSeparated() {
+            // Remote multi-country postings must keep every country: LocationFilter
+            // segment-resolves the comma-separated string (ANY target wins) and
+            // JobFilterChain's containsVisaExemptCountry scans it for Germany.
+            String html = """
+                    <html><body><script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"positions":[{"id":"22222222-3333-4444-5555-666666666666","text":"AI Role","locations":[{"name":"Austria - Remote","type":"remote","country":"Austria"},{"name":"Germany - Remote","type":"remote","country":"Germany"},{"name":"Austria - Remote","type":"remote","country":"Austria"}]}]}}}</script></body></html>
+                    """;
+
+            var candidates = extractor.extractCandidatesFromNextData(
+                    html, "https://www.revolut.com/careers/position/");
+
+            assertThat(candidates).hasSize(1);
+            assertThat(candidates.get(0).location())
+                    .isEqualTo("Austria - Remote, Germany - Remote");
+        }
+
+        @Test
+        void applyBase_withoutTrailingSlash_isNormalized() {
+            var candidates = extractor.extractCandidatesFromNextData(
+                    NEXT_DATA_HTML, "https://www.revolut.com/careers/position");
+
+            assertThat(candidates.get(0).applyUrl())
+                    .isEqualTo("https://www.revolut.com/careers/position/11111111-2222-3333-4444-555555555555/");
+        }
+
+        @Test
+        void absentScript_returnsEmpty() {
+            assertThat(extractor.extractCandidatesFromNextData(
+                    "<html><body><p>plain page</p></body></html>", "https://example.com/")).isEmpty();
+        }
+
+        @Test
+        void blankOrNullHtml_returnsEmpty() {
+            assertThat(extractor.extractCandidatesFromNextData("", "https://example.com/")).isEmpty();
+            assertThat(extractor.extractCandidatesFromNextData(null, "https://example.com/")).isEmpty();
+        }
+
+        @Test
+        void malformedJson_returnsEmpty() {
+            String html = """
+                    <html><body><script id="__NEXT_DATA__" type="application/json">{not valid json</script></body></html>
+                    """;
+
+            assertThat(extractor.extractCandidatesFromNextData(html, "https://example.com/")).isEmpty();
+        }
+
+        @Test
+        void missingPositions_returnsEmpty() {
+            String html = """
+                    <html><body><script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{}}}</script></body></html>
+                    """;
+
+            assertThat(extractor.extractCandidatesFromNextData(html, "https://example.com/")).isEmpty();
+        }
+
+        @Test
+        void blankIdOrTitle_entriesSkipped() {
+            String html = """
+                    <html><body><script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"positions":[{"id":"","text":"No Id"},{"id":"no-title","text":" "},{"id":"valid-1","text":"Valid Role","locations":[]}]}}}</script></body></html>
+                    """;
+
+            var candidates = extractor.extractCandidatesFromNextData(html, "https://example.com/jobs/");
+
+            assertThat(candidates).hasSize(1);
+            assertThat(candidates.get(0).title()).isEqualTo("Valid Role");
+            assertThat(candidates.get(0).applyUrl()).isEqualTo("https://example.com/jobs/valid-1/");
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // firstNonNull — array-of-objects handling
     // -------------------------------------------------------------------------
+
+    // -------------------------------------------------------------------------
+    // flaresolverr — Cloudflare-challenged listing fetch
+    // -------------------------------------------------------------------------
+
+    /** Response spec of the last flaresolverrStrategy() POST, for request-shape assertions. */
+    private WebClient.RequestBodyUriSpec flarePostSpec;
+    private WebClient.RequestBodySpec flareBodySpec;
+
+    /** Wraps HTML in a FlareSolverr {@code {"status":"ok","solution":{"response":...}}} body. */
+    private static String flareOkJson(String html) throws com.fasterxml.jackson.core.JsonProcessingException {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var root = mapper.createObjectNode();
+        root.put("status", "ok");
+        root.putObject("solution").put("response", html);
+        return root.toString();
+    }
+
+    private TestableAiPageStrategy flaresolverrStrategy(String flareResponseJson) {
+        return flaresolverrStrategy(flareResponseJson, null);
+    }
+
+    /**
+     * Builds a strategy whose WebClient FlareSolverr POST returns
+     * {@code flareResponseJson} (or throws {@code postFailure} at request time).
+     * Direct fetchHtml/fetchJson still route through the Testable double, so any
+     * direct-fetch attempt is counted in htmlFetchCount.
+     */
+    private TestableAiPageStrategy flaresolverrStrategy(String flareResponseJson, RuntimeException postFailure) {
+        WebClient flareClient = mock(WebClient.class);
+        WebClient.RequestBodyUriSpec postSpec = mock(WebClient.RequestBodyUriSpec.class);
+        WebClient.RequestBodySpec bodySpec = mock(WebClient.RequestBodySpec.class);
+        // Raw type: bodyValue() returns RequestHeadersSpec<?> whose capture can't be named.
+        WebClient.RequestHeadersSpec headersSpec = mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = mock(WebClient.ResponseSpec.class);
+        Mono<String> mono = mock(Mono.class);
+
+        when(flareClient.post()).thenReturn(postSpec);
+        if (postFailure != null) {
+            when(postSpec.uri(anyString())).thenThrow(postFailure);
+        } else {
+            when(postSpec.uri(anyString())).thenReturn(bodySpec);
+            when(bodySpec.header(anyString(), anyString())).thenReturn(bodySpec);
+            when(bodySpec.contentType(any(MediaType.class))).thenReturn(bodySpec);
+            doReturn(headersSpec).when(bodySpec).bodyValue(any());
+            when(headersSpec.retrieve()).thenReturn(responseSpec);
+            when(responseSpec.bodyToMono(String.class)).thenReturn(mono);
+            when(mono.block(any(Duration.class))).thenReturn(flareResponseJson);
+        }
+        flarePostSpec = postSpec;
+        flareBodySpec = bodySpec;
+        return new TestableAiPageStrategy(flareClient, aiProvider, 8000);
+    }
+
+    @Test
+    void extract_flaresolverrNextData_fetchesViaProxyAndSkipsAi() throws Exception {
+        var strategy = flaresolverrStrategy(flareOkJson(NEXT_DATA_HTML));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://www.revolut.com/careers/")
+                .atsSlug("{\"flaresolverr\":true,\"next_data_positions\":true,\"apply_base\":\"https://www.revolut.com/careers/position/\"}")
+                .build();
+
+        var result = strategy.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs()).hasSize(2);
+        assertThat(result.jobs()).extracting(RawAggregatorJob::title)
+                .containsExactly("Test Role", "No Loc Role");
+        assertThat(result.jobs().get(0).applyUrl())
+                .isEqualTo("https://www.revolut.com/careers/position/11111111-2222-3333-4444-555555555555/");
+        // Direct HTML fetch never attempted — content came from FlareSolverr.
+        assertThat(strategy.htmlFetchCount).isZero();
+        // Request shape: POST {base-url} with cmd/request.get + target url + maxTimeout.
+        verify(flarePostSpec).uri("http://localhost:8191/v1");
+        ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(flareBodySpec).bodyValue(bodyCaptor.capture());
+        assertThat(bodyCaptor.getValue().toString())
+                .contains("\"cmd\":\"request.get\"")
+                .contains("\"url\":\"https://www.revolut.com/careers/\"")
+                .contains("\"maxTimeout\":60000");
+        verify(aiProvider, never()).isAvailable();
+        verify(aiProvider, never()).extract(anyString(), anyString(), any());
+    }
+
+    @Test
+    void extract_flaresolverrErrorStatus_returnsError() {
+        var strategy = flaresolverrStrategy(
+                "{\"status\":\"error\",\"message\":\"ErrorTimeout: Cloudflare challenge\"}");
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://www.revolut.com/careers/")
+                .atsSlug("{\"flaresolverr\":true,\"next_data_positions\":true}")
+                .build();
+
+        var result = strategy.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
+        assertThat(result.errorMessage())
+                .contains("flaresolverr status=error")
+                .contains("ErrorTimeout: Cloudflare challenge");
+        assertThat(strategy.htmlFetchCount).isZero();
+        verify(aiProvider, never()).isAvailable();
+        verify(aiProvider, never()).extract(anyString(), anyString(), any());
+    }
+
+    @Test
+    void extract_flaresolverrBlankSolution_returnsError() {
+        var strategy = flaresolverrStrategy("{\"status\":\"ok\",\"solution\":{\"response\":\"   \"}}");
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://www.revolut.com/careers/")
+                .atsSlug("{\"flaresolverr\":true,\"next_data_positions\":true}")
+                .build();
+
+        var result = strategy.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
+        assertThat(result.errorMessage()).contains("blank solution.response");
+        verify(aiProvider, never()).extract(anyString(), anyString(), any());
+    }
+
+    @Test
+    void extract_flaresolverrMalformedResponse_returnsError() {
+        var strategy = flaresolverrStrategy("this is not json");
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://www.revolut.com/careers/")
+                .atsSlug("{\"flaresolverr\":true,\"next_data_positions\":true}")
+                .build();
+
+        var result = strategy.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
+        assertThat(result.errorMessage()).contains("malformed response");
+        verify(aiProvider, never()).extract(anyString(), anyString(), any());
+    }
+
+    @Test
+    void extract_flaresolverrEmptyBody_returnsError() {
+        var strategy = flaresolverrStrategy("");
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://www.revolut.com/careers/")
+                .atsSlug("{\"flaresolverr\":true,\"next_data_positions\":true}")
+                .build();
+
+        var result = strategy.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
+        assertThat(result.errorMessage()).contains("empty response");
+        verify(aiProvider, never()).extract(anyString(), anyString(), any());
+    }
+
+    @Test
+    void extract_flaresolverrTransportFailure_returnsErrorNotSilentEmpty() {
+        var strategy = flaresolverrStrategy(null, new WebClientRequestException(
+                new IOException("Connection refused"), HttpMethod.POST,
+                URI.create("http://localhost:8191/v1"), new HttpHeaders()));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://www.revolut.com/careers/")
+                .atsSlug("{\"flaresolverr\":true,\"next_data_positions\":true}")
+                .build();
+
+        var result = strategy.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
+        assertThat(result.errorMessage()).contains("WebClientRequestException").contains("Connection refused");
+        assertThat(strategy.htmlFetchCount).isZero();
+        verify(aiProvider, never()).extract(anyString(), anyString(), any());
+    }
+
+    @Test
+    void extract_flaresolverrWithoutNextData_fallsThroughToAiPath() throws Exception {
+        when(aiProvider.isAvailable()).thenReturn(true);
+
+        String html = """
+                <html><body><main>
+                    <div class="jobs">
+                        <a href="https://example.com/jobs/backend-engineer">Backend Engineer</a>
+                        <span>Berlin, Germany</span>
+                    </div>
+                </main></body></html>
+                """;
+        var strategy = flaresolverrStrategy(flareOkJson(html));
+        when(aiProvider.extract(anyString(), anyString(), eq(AiExtractionResponse.class)))
+                .thenReturn(new AiExtractionResponse(List.of(
+                        new AiExtractionResponse.AiJobEntry("Backend Engineer", "Berlin, Germany",
+                                "https://example.com/jobs/backend-engineer"))));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://example.com/careers")
+                .atsSlug("{\"flaresolverr\":true}")
+                .build();
+
+        var result = strategy.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs()).hasSize(1);
+        assertThat(result.jobs().get(0).title()).isEqualTo("Backend Engineer");
+        // Content source was FlareSolverr, not the direct HTML fetch.
+        assertThat(strategy.htmlFetchCount).isZero();
+        verify(aiProvider).extract(anyString(), contains("Backend Engineer"), eq(AiExtractionResponse.class));
+    }
 
     @Nested
     class FirstNonNull {
@@ -1069,7 +1448,7 @@ class AiPageStrategyTest {
         int jsonFetchCount = 0;
 
         TestableAiPageStrategy(WebClient webClient, AiProvider aiProvider, int maxContentChars) {
-            super(webClient, aiProvider, maxContentChars);
+            super(webClient, aiProvider, maxContentChars, "http://localhost:8191/v1");
         }
 
         void setHtmlResponse(String html) { this.htmlResponse = html; }
@@ -1078,6 +1457,11 @@ class AiPageStrategyTest {
 
         @Override
         String fetchHtml(String url) {
+            return fetchHtml(url, Map.of());
+        }
+
+        @Override
+        String fetchHtml(String url, Map<String, String> extraHeaders) {
             htmlFetchCount++;
             if (fetchException != null) throw fetchException;
             return htmlResponse;

@@ -72,7 +72,7 @@ class AggregatorDescriptionEnricherTest {
 
         enricher = new AggregatorDescriptionEnricher(
                 webClient, jobPostingRepository, matchScoreRepository,
-                descriptionFilterChain, 5, 0, 50);
+                descriptionFilterChain, 5, 0, 50, baseUrl + "/v1");
     }
 
     private ExchangeFilterFunction rewriteExternalHostsToWireMock() {
@@ -324,7 +324,7 @@ class AggregatorDescriptionEnricherTest {
                 languageFilter, yoeFilter, visaSponsorshipFilter, cityCountryResolver);
         enricher = new AggregatorDescriptionEnricher(
                 webClient, jobPostingRepository, matchScoreRepository,
-                descriptionFilterChain, 2, 0, 50);
+                descriptionFilterChain, 2, 0, 50, baseUrl + "/v1");
 
         String html = "<html><body><p>A reasonable job description for a developer position.</p></body></html>";
         stubFor(get(urlPathMatching("/jobs/.*")).willReturn(ok(html).withHeader("Content-Type", "text/html")));
@@ -658,6 +658,128 @@ class AggregatorDescriptionEnricherTest {
         assertThat(savedDesc).doesNotContain("<p>");
 
         wireMockClient.verify(getRequestedFor(urlEqualTo("/en/job/example-1")));
+    }
+
+    @Test
+    void fetchDescription_revolutHost_usesFlaresolverrFirst() throws Exception {
+        // www.revolut.com is Cloudflare-challenged for direct fetches, so the host
+        // must go through the local FlareSolverr proxy first. Its solution.response
+        // carries the rendered HTML; neither the jina reader path nor a direct fetch
+        // may run when FlareSolverr succeeds.
+        String positionPath = "/careers/position/11111111-2222-3333-4444-555555555555/";
+        String html = "<html><body><p>REAL REVOLUT FLARESOLVERR DESCRIPTION long enough to exceed five hundred " +
+                "characters and contain useful job detail content for scoring purposes. We are hiring a software " +
+                "engineer in London to build card issuing infrastructure with Java, Kafka and Spring Boot across " +
+                "multiple regions in a modern engineering culture.</p></body></html>";
+        stubFor(post("/v1").willReturn(okJson(
+                "{\"status\":\"ok\",\"solution\":{\"response\":\"" + html + "\"}}")));
+
+        JobPosting job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.WORK_IN_FINLAND)
+                .externalId("revolut-11111111")
+                .title("Software Engineer")
+                .applyUrl("https://www.revolut.com" + positionPath)
+                .description(null)
+                .languageFilter(FilterDecision.KEEP)
+                .isActive(true)
+                .build();
+
+        when(jobPostingRepository.findAggregatorJobsNeedingDescription(any(), anyInt()))
+                .thenReturn(List.of(job));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+
+        enricher.enrichDescriptions();
+
+        ArgumentCaptor<JobPosting> captor = ArgumentCaptor.forClass(JobPosting.class);
+        verify(jobPostingRepository).save(captor.capture());
+        assertThat(captor.getValue().getDescription()).contains("REAL REVOLUT FLARESOLVERR DESCRIPTION");
+
+        // FlareSolverr was used; neither jina nor the direct (challenge-blocked) fetch ran.
+        wireMockClient.verify(1, postRequestedFor(urlEqualTo("/v1")));
+        wireMockClient.verify(0, getRequestedFor(urlEqualTo(positionPath)));
+        wireMockClient.verify(0, getRequestedFor(urlPathMatching("/https://www\\.revolut\\.com/careers/position/.*")));
+    }
+
+    @Test
+    void fetchDescription_revolutHost_flaresolverrFails_fallsBackToReaderProxy() throws Exception {
+        // FlareSolverr returns an error status → the existing jina reader-proxy path
+        // runs as the fallback; the direct (challenge-blocked) fetch must not.
+        stubFor(post("/v1").willReturn(okJson(
+                "{\"status\":\"error\",\"message\":\"ErrorTimeout: browser start\"}")));
+        String readerText = "REAL REVOLUT JINA DESCRIPTION long enough to exceed five hundred characters " +
+                "and contain useful job detail content for scoring purposes. We are hiring a software " +
+                "engineer in London to build card issuing infrastructure with Java and Kafka across " +
+                "multiple regions in a modern engineering culture.";
+        String positionPath = "/careers/position/bbbbbbbb-cccc-dddd-eeee-ffffffffffff/";
+        stubFor(get(urlPathMatching("/https://www\\.revolut\\.com/careers/position/.*"))
+                .willReturn(ok(readerText).withHeader("Content-Type", "text/plain")));
+
+        JobPosting job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.WORK_IN_FINLAND)
+                .externalId("revolut-bbbbbbbb")
+                .title("Software Engineer")
+                .applyUrl("https://www.revolut.com" + positionPath)
+                .description(null)
+                .languageFilter(FilterDecision.KEEP)
+                .isActive(true)
+                .build();
+
+        when(jobPostingRepository.findAggregatorJobsNeedingDescription(any(), anyInt()))
+                .thenReturn(List.of(job));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+
+        enricher.enrichDescriptions();
+
+        ArgumentCaptor<JobPosting> captor = ArgumentCaptor.forClass(JobPosting.class);
+        verify(jobPostingRepository).save(captor.capture());
+        assertThat(captor.getValue().getDescription()).contains("REAL REVOLUT JINA DESCRIPTION");
+
+        wireMockClient.verify(1, postRequestedFor(urlEqualTo("/v1")));
+        wireMockClient.verify(getRequestedFor(urlPathMatching("/https://www\\.revolut\\.com/careers/position/.*")));
+        wireMockClient.verify(0, getRequestedFor(urlEqualTo(positionPath)));
+    }
+
+    @Test
+    void fetchDescription_revolutHost_proxiesFail_fallsBackToJsonLd() throws Exception {
+        // FlareSolverr returns an error status and the reader-proxy path is left
+        // unstubbed → 404 → fetchReaderProxy returns null; the shared jina-first
+        // helper must fall back to direct fetch + JSON-LD.
+        stubFor(post("/v1").willReturn(okJson(
+                "{\"status\":\"error\",\"message\":\"ErrorTimeout: browser start\"}")));
+        String innerJson = "{\"@type\":\"JobPosting\",\"description\":\"<p>REAL REVOLUT DIRECT DESCRIPTION TEXT here long enough to exceed five hundred characters and contain useful job detail content for scoring purposes. Backend engineer in London working on payments infrastructure with Java and Kafka.</p>\"}";
+        String html = "<html><head>" +
+                "<script type=\"application/ld+json\">" + innerJson + "</script>" +
+                "</head><body></body></html>";
+        String positionPath = "/careers/position/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/";
+        stubFor(get(positionPath).willReturn(ok(html).withHeader("Content-Type", "text/html")));
+
+        JobPosting job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.WORK_IN_FINLAND)
+                .externalId("revolut-aaaaaaaa")
+                .title("Backend Engineer")
+                .applyUrl("https://www.revolut.com" + positionPath)
+                .description(null)
+                .languageFilter(FilterDecision.KEEP)
+                .isActive(true)
+                .build();
+
+        when(jobPostingRepository.findAggregatorJobsNeedingDescription(any(), anyInt()))
+                .thenReturn(List.of(job));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+
+        enricher.enrichDescriptions();
+
+        ArgumentCaptor<JobPosting> captor = ArgumentCaptor.forClass(JobPosting.class);
+        verify(jobPostingRepository).save(captor.capture());
+        assertThat(captor.getValue().getDescription()).contains("REAL REVOLUT DIRECT DESCRIPTION TEXT");
+
+        // FlareSolverr attempted first, then the reader proxy, then the direct fetch.
+        wireMockClient.verify(postRequestedFor(urlEqualTo("/v1")));
+        wireMockClient.verify(getRequestedFor(urlPathMatching("/https://www\\.revolut\\.com/careers/position/.*")));
+        wireMockClient.verify(getRequestedFor(urlEqualTo(positionPath)));
     }
 
     @Test

@@ -52,19 +52,25 @@ public class AiPageStrategy implements FetchStrategy {
             "noscript", "meta", "link"
     );
 
+    /** FlareSolverr may take up to its own maxTimeout (60s) plus transport overhead. */
+    private static final Duration FLARESOLVERR_TIMEOUT = Duration.ofSeconds(70);
+
     private final WebClient webClient;
     private final AiProvider aiProvider;
     private final int maxContentChars;
     private final ObjectMapper objectMapper;
+    private final String flaresolverrBaseUrl;
 
     public AiPageStrategy(
             WebClient webClient,
             AiProvider aiProvider,
-            @Value("${ai-crawl.max-content-chars:8000}") int maxContentChars
+            @Value("${ai-crawl.max-content-chars:8000}") int maxContentChars,
+            @Value("${jobhunter.flaresolverr.base-url:http://localhost:8191/v1}") String flaresolverrBaseUrl
     ) {
         this.webClient = webClient;
         this.aiProvider = aiProvider;
         this.maxContentChars = maxContentChars;
+        this.flaresolverrBaseUrl = flaresolverrBaseUrl;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -90,6 +96,8 @@ public class AiPageStrategy implements FetchStrategy {
             String postBody = null;
             String applyBase = null;
             boolean jsonApi = false;
+            boolean nextDataPositions = false;
+            boolean flaresolverr = false;
             String jobsPath = null;
             String linkSelector = null;
             Map<String, String> extraHeaders = new HashMap<>();
@@ -102,6 +110,14 @@ public class AiPageStrategy implements FetchStrategy {
                     if (!ab.isMissingNode() && !ab.isNull()) applyBase = ab.asText();
                     JsonNode ja = cfg.path("json_api");
                     if (!ja.isMissingNode() && ja.asBoolean()) jsonApi = true;
+                    JsonNode nd = cfg.path("next_data_positions");
+                    if (!nd.isMissingNode() && nd.asBoolean()) nextDataPositions = true;
+                    // flaresolverr=true only swaps the HTML content source: the listing is
+                    // fetched through the local FlareSolverr proxy (Cloudflare solver) instead
+                    // of a direct GET. json_api keeps working as today (its branch runs before
+                    // this matters); post_body combos with flaresolverr are out of scope.
+                    JsonNode fs = cfg.path("flaresolverr");
+                    if (!fs.isMissingNode() && fs.asBoolean()) flaresolverr = true;
                     JsonNode jp = cfg.path("jobs_path");
                     if (!jp.isMissingNode() && !jp.isNull()) jobsPath = jp.asText();
                     JsonNode hn = cfg.path("headers");
@@ -134,12 +150,37 @@ public class AiPageStrategy implements FetchStrategy {
                 return FetchResult.success(jobs, elapsed(start));
             }
 
+            // Next.js listings that publish the full job list in __NEXT_DATA__ —
+            // deterministic extraction, no AI call (mirrors the json_api fast-path).
+            if (nextDataPositions) {
+                String content = flaresolverr
+                        ? fetchViaFlaresolverr(endpoint.getUrl())
+                        : fetchContent(endpoint.getUrl(), postBody, false, extraHeaders);
+                if (content == null || content.isBlank()) return FetchResult.empty(elapsed(start));
+                List<CandidateJob> candidates = extractCandidatesFromNextData(
+                        content, applyBase != null ? applyBase : endpoint.getUrl());
+                if (candidates.isEmpty()) return FetchResult.empty(elapsed(start));
+                List<RawAggregatorJob> jobs = candidates.stream()
+                        .filter(c -> c.title() != null && !c.title().isBlank())
+                        .map(c -> new RawAggregatorJob(
+                                generateExternalId(c.title(), c.applyUrl()),
+                                c.title(), null, c.location(), null, c.applyUrl(), null, null, null, null, null))
+                        .toList();
+                if (jobs.isEmpty()) return FetchResult.empty(elapsed(start));
+                log.info("NextDataPositions [{}]: extracted {} jobs", endpoint.getUrl(), jobs.size());
+                return FetchResult.success(jobs, elapsed(start));
+            }
+
             if (!aiProvider.isAvailable()) {
                 log.debug("AI provider not available, skipping CUSTOM endpoint [{}]", endpoint.getId());
                 return FetchResult.error("AI provider not available", elapsed(start));
             }
 
-            String content = fetchContent(endpoint.getUrl(), postBody, false, extraHeaders);
+            // flaresolverr swaps the content source only — the JSON/link_selector
+            // candidate extraction + AI pass below runs unchanged on that HTML.
+            String content = flaresolverr
+                    ? fetchViaFlaresolverr(endpoint.getUrl())
+                    : fetchContent(endpoint.getUrl(), postBody, false, extraHeaders);
             if (content == null || content.isBlank()) {
                 return FetchResult.empty(elapsed(start));
             }
@@ -223,6 +264,9 @@ public class AiPageStrategy implements FetchStrategy {
             log.info("GenericAI [{}]: extracted {} jobs", endpoint.getUrl(), jobs.size());
             return FetchResult.success(jobs, elapsed(start));
 
+        } catch (FlareSolverrException e) {
+            log.error("FlareSolverr [{}]: {}", endpoint.getUrl(), e.getMessage());
+            return FetchResult.error(e.getMessage(), elapsed(start));
         } catch (WebClientResponseException e) {
             log.error("GenericAI [{}]: HTTP {} - {}", endpoint.getUrl(), e.getStatusCode(), e.getMessage());
             return FetchResult.error("HTTP " + e.getStatusCode(), elapsed(start));
@@ -290,7 +334,7 @@ public class AiPageStrategy implements FetchStrategy {
         if (jsonApi) {
             return fetchJson(url, extraHeaders);
         }
-        return fetchHtml(url);
+        return fetchHtml(url, extraHeaders);
     }
 
     /** Kept for tests that call the two-arg form directly. */
@@ -384,6 +428,58 @@ public class AiPageStrategy implements FetchStrategy {
     }
 
     /**
+     * Extract CandidateJobs from a Next.js page's {@code <script id="__NEXT_DATA__">} payload.
+     * Reads {@code props.pageProps.positions[]} entries shaped as
+     * {@code {id, text, team, locations:[{name,...}]}} and builds apply URLs as
+     * {@code applyBase + id + "/"} (applyBase normalized to a trailing slash).
+     * Missing script/positions array, malformed JSON, or entries with blank id/title
+     * are tolerated: they are logged at debug and yield an empty/partial list.
+     */
+    List<CandidateJob> extractCandidatesFromNextData(String html, String applyBase) {
+        List<CandidateJob> candidates = new ArrayList<>();
+        if (html == null || html.isBlank()) return candidates;
+        try {
+            Document doc = Jsoup.parse(html);
+            Element script = doc.selectFirst("script#__NEXT_DATA__");
+            if (script == null) {
+                log.debug("AiPageStrategy: no __NEXT_DATA__ script found in page");
+                return candidates;
+            }
+            JsonNode positions = objectMapper.readTree(script.data())
+                    .path("props").path("pageProps").path("positions");
+            if (!positions.isArray()) {
+                log.debug("AiPageStrategy: props.pageProps.positions missing or not an array");
+                return candidates;
+            }
+            String base = (applyBase != null && !applyBase.isBlank())
+                    ? (applyBase.endsWith("/") ? applyBase : applyBase + "/")
+                    : null;
+            for (JsonNode pos : positions) {
+                String id = pos.path("id").asText(null);
+                String title = pos.path("text").asText(null);
+                if (id == null || id.isBlank() || title == null || title.isBlank()) continue;
+                // Keep ALL locations, joined as a comma-separated multi-location string:
+                // LocationFilter resolves each segment (keep if ANY is a target country) and
+                // JobFilterChain's containsVisaExemptCountry checks the full string, so a
+                // remote posting listing Germany among its countries must not lose it.
+                java.util.Set<String> locNames = new java.util.LinkedHashSet<>();
+                for (JsonNode loc : pos.path("locations")) {
+                    String name = loc.path("name").asText(null);
+                    if (name != null && !name.isBlank()) {
+                        locNames.add(name.trim());
+                    }
+                }
+                String location = locNames.isEmpty() ? null : String.join(", ", locNames);
+                String applyUrl = (base != null ? base : "") + id + "/";
+                candidates.add(new CandidateJob(title, location, applyUrl));
+            }
+        } catch (Exception e) {
+            log.debug("AiPageStrategy: __NEXT_DATA__ extraction failed: {}", e.getMessage());
+        }
+        return candidates;
+    }
+
+    /**
      * Navigates a dot-notation path (e.g. "refineSearch.data.jobs") through a JsonNode tree.
      * Returns the node at the end of the path, or null if any segment is missing.
      */
@@ -425,12 +521,22 @@ public class AiPageStrategy implements FetchStrategy {
     }
 
     String fetchHtml(String url) {
-        return webClient.get()
+        return fetchHtml(url, Map.of());
+    }
+
+    /** HTML GET with the default browser-like headers plus any endpoint-configured extras. */
+    String fetchHtml(String url, Map<String, String> extraHeaders) {
+        var req = webClient.get()
                 .uri(url)
                 .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
                 .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                .header("Accept-Language", "en-US,en;q=0.9")
-                .retrieve()
+                .header("Accept-Language", "en-US,en;q=0.9");
+        if (extraHeaders != null) {
+            for (var entry : extraHeaders.entrySet()) {
+                req = req.header(entry.getKey(), entry.getValue());
+            }
+        }
+        return req.retrieve()
                 .bodyToMono(String.class)
                 .block(Duration.ofSeconds(30));
     }
@@ -449,6 +555,77 @@ public class AiPageStrategy implements FetchStrategy {
         return req.retrieve()
                 .bodyToMono(String.class)
                 .block(Duration.ofSeconds(30));
+    }
+
+    /**
+     * Fetches listing HTML through the local FlareSolverr service (Cloudflare
+     * challenge solver) instead of a direct GET — used when the endpoint config
+     * sets {@code "flaresolverr": true}.
+     *
+     * @throws FlareSolverrException with a short message when the proxy reports
+     *         status != ok, a blank {@code solution.response}, an empty body, or
+     *         unparseable JSON — so the endpoint surfaces ERROR, not silent EMPTY.
+     *         Transport/HTTP errors propagate to fetch()'s existing handling.
+     */
+    String fetchViaFlaresolverr(String url) {
+        String requestBody;
+        try {
+            Map<String, Object> payload = Map.of(
+                    "cmd", "request.get",
+                    "url", url,
+                    "maxTimeout", 60000);
+            requestBody = objectMapper.writeValueAsString(payload);
+        } catch (Exception e) {
+            throw new FlareSolverrException("request build failed: " + e.getMessage());
+        }
+        return parseFlareSolverrHtml(postFlareSolverr(requestBody));
+    }
+
+    /** POSTs the FlareSolverr request; returns the raw response JSON body. */
+    String postFlareSolverr(String requestBody) {
+        return webClient.post()
+                .uri(flaresolverrBaseUrl)
+                .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(requestBody)
+                .retrieve()
+                .bodyToMono(String.class)
+                .block(FLARESOLVERR_TIMEOUT);
+    }
+
+    /** Extracts the {@code solution.response} HTML from a FlareSolverr response body. */
+    String parseFlareSolverrHtml(String body) {
+        if (body == null || body.isBlank()) {
+            throw new FlareSolverrException("empty response");
+        }
+        JsonNode root;
+        try {
+            root = objectMapper.readTree(body);
+        } catch (Exception e) {
+            throw new FlareSolverrException("malformed response: " + e.getMessage());
+        }
+        String status = root.path("status").asText("");
+        if (!"ok".equals(status)) {
+            String message = root.path("message").asText("");
+            throw new FlareSolverrException("flaresolverr status=" + (status.isBlank() ? "missing" : status)
+                    + (message.isBlank() ? "" : " - " + abbreviate(message, 160)));
+        }
+        String html = root.path("solution").path("response").asText(null);
+        if (html == null || html.isBlank()) {
+            throw new FlareSolverrException("flaresolverr blank solution.response");
+        }
+        return html;
+    }
+
+    private static String abbreviate(String value, int max) {
+        return value.length() <= max ? value : value.substring(0, max) + "...";
+    }
+
+    /** FlareSolverr proxy failure; message kept short for the endpoint error state. */
+    static class FlareSolverrException extends RuntimeException {
+        FlareSolverrException(String message) {
+            super(message);
+        }
     }
 
     void removeNonContentElements(Document doc) {

@@ -14,6 +14,7 @@ import org.jsoup.nodes.Document;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -23,6 +24,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Enriches aggregator-sourced jobs (excluding LinkedIn) that have short/stub descriptions
@@ -36,6 +38,8 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
 
     private static final int MAX_DESCRIPTION_LENGTH = 10_000;
     private static final Duration FETCH_TIMEOUT = Duration.ofSeconds(15);
+    /** FlareSolverr may take up to its own maxTimeout (60s) plus transport overhead. */
+    private static final Duration FLARESOLVERR_TIMEOUT = Duration.ofSeconds(70);
     /** After this many consecutive short/empty enrichment attempts, deactivate the job
      *  as `url-dead-stuck` so it stops blocking the queue. Counter encoded in filter_reason. */
     private static final int STUCK_THRESHOLD = 3;
@@ -54,6 +58,7 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
     private final int batchSize;
     private final int delayBetweenMs;
     private final int minDescriptionLength;
+    private final String flaresolverrBaseUrl;
 
     public AggregatorDescriptionEnricher(
             WebClient webClient,
@@ -62,7 +67,8 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
             DescriptionFilterChain descriptionFilterChain,
             @Value("${aggregator.enrichment.batch-size:5}") int batchSize,
             @Value("${aggregator.enrichment.delay-between-ms:2000}") int delayBetweenMs,
-            @Value("${aggregator.enrichment.min-description-length:500}") int minDescriptionLength) {
+            @Value("${aggregator.enrichment.min-description-length:500}") int minDescriptionLength,
+            @Value("${jobhunter.flaresolverr.base-url:http://localhost:8191/v1}") String flaresolverrBaseUrl) {
         this.webClient = webClient;
         this.jobPostingRepository = jobPostingRepository;
         this.matchScoreRepository = matchScoreRepository;
@@ -70,6 +76,7 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
         this.batchSize = batchSize;
         this.delayBetweenMs = delayBetweenMs;
         this.minDescriptionLength = minDescriptionLength;
+        this.flaresolverrBaseUrl = flaresolverrBaseUrl;
     }
 
     @Override
@@ -272,7 +279,8 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
         if (host == null) return defaultFetch(applyUrl);
         try {
             if (host.contains("thehub.fi") || host.contains("thehub.io")) return fetchTheHubDescription(applyUrl);
-            if (host.contains("jobly.fi")) return fetchJoblyDescription(applyUrl);
+            if (host.contains("jobly.fi")) return fetchViaReaderProxyFirst(applyUrl);
+            if (host.contains("revolut.com")) return fetchViaFlaresolverrFirst(applyUrl);
             if (host.contains("tyomarkkinatori.fi")) return fetchTyomarkkinatoriDescription(applyUrl);
         } catch (Exception e) {
             log.warn("Host-specific fetch failed for {} ({}), falling back to default", applyUrl, e.getMessage());
@@ -346,11 +354,73 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
         return (html == null || html.isBlank()) ? null : htmlToText(html);
     }
 
-    private String fetchJoblyDescription(String applyUrl) throws Exception {
-        // jobly.fi bot-blocks generic fetches with 403 (Cloudflare/Akamai).
-        // Try r.jina.ai reader proxy first — it renders the SPA server-side and
-        // returns clean markdown/text for the page, including the JD. This is the
-        // only reliable path for jobly.fi right now.
+    /**
+     * FlareSolverr-first fetch for hosts behind Cloudflare challenges
+     * (revolut.com — direct fetch returns 403 with {@code cf-mitigated: challenge}):
+     * POST the local FlareSolverr proxy and parse {@code solution.response} with the
+     * shared JSON-LD/body-text helpers. Accepts only results of at least
+     * {@code minDescriptionLength} chars; on FlareSolverr failure or a short page,
+     * falls back to the jina reader-proxy path (which itself falls back to a direct
+     * fetch), then to defaultFetch via fetchDescription's catch.
+     */
+    private String fetchViaFlaresolverrFirst(String applyUrl) throws Exception {
+        String html = fetchViaFlaresolverr(applyUrl);
+        if (html != null && !html.isBlank()) {
+            String ldText = tryExtractJsonLdDescription(html);
+            if (ldText != null && !ldText.isBlank() && ldText.length() >= minDescriptionLength) {
+                return ldText;
+            }
+            String bodyText = extractText(html);
+            if (bodyText != null && bodyText.length() >= minDescriptionLength) {
+                return bodyText;
+            }
+        }
+        return fetchViaReaderProxyFirst(applyUrl);
+    }
+
+    /**
+     * POSTs {@code {cmd:"request.get", url, maxTimeout:60000}} to the local
+     * FlareSolverr service and returns the {@code solution.response} HTML.
+     * Returns null on any failure (unreachable, status != ok, blank/malformed
+     * response) so callers can fall back to other fetch paths.
+     */
+    private String fetchViaFlaresolverr(String applyUrl) {
+        try {
+            Map<String, Object> payload = Map.of(
+                    "cmd", "request.get",
+                    "url", applyUrl,
+                    "maxTimeout", 60000);
+            String body = webClient.post()
+                    .uri(flaresolverrBaseUrl)
+                    .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(objectMapper.writeValueAsString(payload))
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block(FLARESOLVERR_TIMEOUT);
+            if (body == null || body.isBlank()) return null;
+            JsonNode root = objectMapper.readTree(body);
+            if (!"ok".equals(root.path("status").asText(""))) {
+                log.debug("FlareSolverr status for {}: {}", applyUrl, root.path("status").asText(""));
+                return null;
+            }
+            String html = root.path("solution").path("response").asText(null);
+            return (html == null || html.isBlank()) ? null : html;
+        } catch (Exception e) {
+            log.debug("FlareSolverr fetch failed for {}: {}", applyUrl, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Jina-reader-first fetch for hosts that bot-block generic fetches with 403:
+     * jobly.fi (Cloudflare/Akamai), and revolut.com (Cloudflare challenge) as the
+     * fallback when FlareSolverr is unavailable or returns a short page.
+     * Try r.jina.ai first — it renders the page server-side. Fall back to a
+     * direct fetch + JSON-LD/body-text parse when the proxy result is short or
+     * unavailable (works when the bot-block is off).
+     */
+    private String fetchViaReaderProxyFirst(String applyUrl) throws Exception {
         String readerText = fetchReaderProxy(applyUrl);
         if (readerText != null && !readerText.isBlank()
                 && readerText.length() >= minDescriptionLength) {
@@ -433,7 +503,7 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
     /**
      * Fetches a URL via the r.jina.ai reader proxy, which renders JS-rendered pages
      * server-side and returns clean markdown/text. Used as a fallback for sites that
-     * bot-block generic fetchers (e.g. jobly.fi → 403).
+     * bot-block generic fetchers (e.g. jobly.fi, revolut.com → 403).
      * Returns null on any failure (timeout, non-2xx, blank body, or Cloudflare
      * challenge page detected by signature phrases).
      */

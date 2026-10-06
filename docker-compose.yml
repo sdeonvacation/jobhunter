@@ -37,6 +37,22 @@ services:
       retries: 3
       start_period: 30s
 
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    ports:
+      - "8191:8191"
+    environment:
+      - LOG_LEVEL=info
+      - TZ=Europe/Berlin
+    mem_limit: 2g
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8191/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
   api:
     build: ./api
     ports:
