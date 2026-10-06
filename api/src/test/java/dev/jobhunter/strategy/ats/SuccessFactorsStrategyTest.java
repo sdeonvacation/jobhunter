@@ -731,4 +731,275 @@ class SuccessFactorsStrategyTest {
         assertEquals("Berlin", result.jobs().get(0).location());
         assertTrue(result.jobs().get(0).applyUrl().startsWith("https://jobs.fraunhofer.de/job/"));
     }
+
+    // --- Next.js site support (jobs.sap.com migrated to a Vercel-hosted Next SPA) ---
+
+    private static String nextShell(String countText) {
+        return "<html><head><title>Jobs | SAP Careers</title></head>"
+                + "<body><div id=\"__next\">SPA shell</div><div>" + countText + "</div></body></html>";
+    }
+
+    private static String nextListing(String id, String slug, String title) {
+        return "<article><h2><a href=\"/en/jobs/" + id + "/" + slug + "/\">" + title + "</a></h2></article>";
+    }
+
+    private static final String NEXT_LISTINGS_PAGE = "<html><body>"
+            + nextListing("744000153766639", "machine-learning-engineering-manager", "Machine Learning Engineering Manager")
+            + nextListing("744000153766640", "senior-backend-engineer", "Senior Backend Engineer")
+            + "<nav><a href=\"/en/jobs/overview/\">Overview</a></nav>"
+            + "</body></html>";
+
+    private static final String NEXT_DETAIL_HTML = """
+            <html><head><title>Machine Learning Engineering Manager</title></head><body>
+            <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"SAP Careers"}</script>
+            <script type="application/ld+json">
+            {"@context":"https://schema.org","@type":"JobPosting","title":"Machine Learning Engineering Manager","description":"<p>Build <b>ML</b> platforms for enterprise customers.</p>","identifier":{"@type":"PropertyValue","name":"SAP Careers","value":"REF2091S"},"url":"https://jobs.sap.com/en/jobs/744000153766639/machine-learning-engineering-manager/","datePosted":"2026-09-15","employmentType":"FULL_TIME","hiringOrganization":{"@type":"Organization","name":"SAP"},"jobLocation":{"@type":"Place","name":"Paris, , France","address":{"@type":"PostalAddress","addressLocality":"Paris","addressCountry":"France"}}}
+            </script>
+            </body></html>
+            """;
+
+    private static final String NEXT_DETAIL_NO_LD = "<html><body><p>Detail without JSON-LD</p></body></html>";
+
+    @Test
+    void parseNextTotalCount_extractsJobsFoundText() {
+        assertEquals(84, extractor.parseNextTotalCount("<div>84 jobs found</div>"));
+        assertEquals(1, extractor.parseNextTotalCount("<div>1 job found</div>"));
+        assertEquals(1234, extractor.parseNextTotalCount("<div>1,234 jobs found</div>"));
+        assertEquals(0, extractor.parseNextTotalCount("<div>No results</div>"));
+        assertEquals(0, extractor.parseNextTotalCount(null));
+        assertEquals(0, extractor.parseNextTotalCount("   "));
+    }
+
+    @Test
+    void parseNextTotalCount_returnsZeroForLegacyPagination() {
+        String html = "<div>Showing 1 to 25 of 303</div>";
+        assertEquals(303, extractor.parseTotalCount(html));
+        assertEquals(0, extractor.parseNextTotalCount(html));
+    }
+
+    @Test
+    void parseNextListings_extractsJobsAndSkipsNonJobAnchors() {
+        String html = "<html><body>"
+                + nextListing("744000153766639", "machine-learning-engineering-manager", "Machine Learning Engineering Manager")
+                + nextListing("744000153766640", "senior-backend-engineer", "Senior Backend Engineer")
+                + nextListing("744000153766639", "machine-learning-engineering-manager", "Machine Learning Engineering Manager")
+                + "<nav><a href=\"/en/jobs/overview/\">Overview</a></nav>"
+                + "<a href=\"/en/companies/sap/\">SAP</a>"
+                + "</body></html>";
+
+        List<SuccessFactorsStrategy.JobListing> listings =
+                extractor.parseNextListings(html, "https://jobs.sap.com");
+
+        assertEquals(2, listings.size());
+        assertEquals("744000153766639", listings.get(0).externalId());
+        assertEquals("Machine Learning Engineering Manager", listings.get(0).title());
+        assertEquals("https://jobs.sap.com/en/jobs/744000153766639/machine-learning-engineering-manager/",
+                listings.get(0).url());
+        assertNull(listings.get(0).location());
+        assertEquals("744000153766640", listings.get(1).externalId());
+        assertEquals("Senior Backend Engineer", listings.get(1).title());
+    }
+
+    @Test
+    void parseNextListings_returnsEmptyWhenNoJobAnchors() {
+        List<SuccessFactorsStrategy.JobListing> listings =
+                extractor.parseNextListings("<html><body><p>SPA shell</p></body></html>", "https://jobs.sap.com");
+        assertTrue(listings.isEmpty());
+    }
+
+    @Test
+    void parseNextJsonLd_extractsDescriptionDateAndLocation() {
+        SuccessFactorsStrategy.JsonLdDetail detail = extractor.parseNextJsonLd(NEXT_DETAIL_HTML);
+
+        assertEquals("Build ML platforms for enterprise customers.", detail.description());
+        assertEquals(LocalDate.of(2026, 9, 15), detail.postedDate());
+        assertEquals("Paris, , France", detail.location());
+    }
+
+    @Test
+    void parseNextJsonLd_missingOrMalformed_returnsEmptyDetail() {
+        SuccessFactorsStrategy.JsonLdDetail noScript =
+                extractor.parseNextJsonLd("<html><body><p>No structured data</p></body></html>");
+        assertNull(noScript.description());
+        assertNull(noScript.postedDate());
+        assertNull(noScript.location());
+
+        SuccessFactorsStrategy.JsonLdDetail malformed = extractor.parseNextJsonLd(
+                "<html><body><script type=\"application/ld+json\">{not-json</script></body></html>");
+        assertNull(malformed.description());
+        assertNull(malformed.postedDate());
+        assertNull(malformed.location());
+
+        SuccessFactorsStrategy.JsonLdDetail blank = extractor.parseNextJsonLd("");
+        assertNull(blank.description());
+    }
+
+    @Test
+    void parseNextJsonLd_truncatesLongDescription() {
+        String longText = "x".repeat(12_000);
+        String html = "<html><body><script type=\"application/ld+json\">"
+                + "{\"@type\":\"JobPosting\",\"description\":\"<p>" + longText + "</p>\",\"datePosted\":\"2026-09-15\"}"
+                + "</script></body></html>";
+
+        SuccessFactorsStrategy.JsonLdDetail detail = extractor.parseNextJsonLd(html);
+        assertNotNull(detail.description());
+        assertEquals(10_000, detail.description().length());
+    }
+
+    @Test
+    void fetch_nextStyleBranch_endToEnd() {
+        when(responseSpec.bodyToMono(String.class))
+                .thenReturn(Mono.just(nextShell("2 jobs found")))
+                .thenReturn(Mono.just(NEXT_LISTINGS_PAGE))
+                .thenReturn(Mono.just(NEXT_DETAIL_HTML));
+
+        CareerEndpoint endpoint = CareerEndpoint.builder()
+                .url("https://jobs.sap.com")
+                .atsType(AtsType.SUCCESSFACTORS)
+                .build();
+
+        FetchResult result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertEquals(ExtractionStatus.SUCCESS, result.status());
+        assertEquals(2, result.totalFound());
+
+        RawAggregatorJob first = result.jobs().get(0);
+        assertEquals("744000153766639", first.externalId());
+        assertEquals("Machine Learning Engineering Manager", first.title());
+        assertEquals("https://jobs.sap.com/en/jobs/744000153766639/machine-learning-engineering-manager/",
+                first.applyUrl());
+        assertEquals("Build ML platforms for enterprise customers.", first.description());
+        assertEquals(LocalDate.of(2026, 9, 15), first.postedDate());
+        assertEquals("Paris, , France", first.location());
+
+        RawAggregatorJob second = result.jobs().get(1);
+        assertEquals("744000153766640", second.externalId());
+        assertEquals("Senior Backend Engineer", second.title());
+        assertEquals("https://jobs.sap.com/en/jobs/744000153766640/senior-backend-engineer/", second.applyUrl());
+
+        // First page still fetched via the legacy search URL; listing pages use /en/jobs/?page=N
+        verify(requestHeadersUriSpec).uri(argThat((String url) -> url != null
+                && url.startsWith("https://jobs.sap.com/search/") && url.endsWith("startrow=0")));
+        verify(requestHeadersUriSpec).uri("https://jobs.sap.com/en/jobs/?page=1");
+    }
+
+    @Test
+    void fetch_nextStyleBranch_paginatesAcrossPages() {
+        when(responseSpec.bodyToMono(String.class))
+                .thenReturn(Mono.just(nextShell("13 jobs found")))
+                .thenReturn(Mono.just("<html><body>"
+                        + nextListing("744000000000001", "page-one-job", "Page One Job")
+                        + "</body></html>"))
+                .thenReturn(Mono.just("<html><body>"
+                        + nextListing("744000000000002", "page-two-job", "Page Two Job")
+                        + "</body></html>"))
+                .thenReturn(Mono.just(NEXT_DETAIL_NO_LD))
+                .thenReturn(Mono.just(NEXT_DETAIL_NO_LD));
+
+        CareerEndpoint endpoint = CareerEndpoint.builder()
+                .url("https://jobs.sap.com")
+                .atsType(AtsType.SUCCESSFACTORS)
+                .build();
+
+        FetchResult result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertEquals(ExtractionStatus.SUCCESS, result.status());
+        assertEquals(2, result.totalFound());
+        assertEquals("744000000000001", result.jobs().get(0).externalId());
+        assertEquals("744000000000002", result.jobs().get(1).externalId());
+
+        verify(requestHeadersUriSpec).uri("https://jobs.sap.com/en/jobs/?page=1");
+        verify(requestHeadersUriSpec).uri("https://jobs.sap.com/en/jobs/?page=2");
+        // ceil(13/12) = 2 pages: page 3 must never be requested
+        verify(requestHeadersUriSpec, never()).uri(argThat((String url) -> url != null && url.contains("page=3")));
+    }
+
+    @Test
+    void fetch_nextStyleBranch_stopsWhenPageYieldsNoListings() {
+        when(responseSpec.bodyToMono(String.class))
+                .thenReturn(Mono.just(nextShell("25 jobs found")))
+                .thenReturn(Mono.just("<html><body>"
+                        + nextListing("744000000000003", "only-job", "Only Job")
+                        + "</body></html>"))
+                .thenReturn(Mono.just("<html><body></body></html>"))
+                .thenReturn(Mono.just(NEXT_DETAIL_NO_LD));
+
+        CareerEndpoint endpoint = CareerEndpoint.builder()
+                .url("https://jobs.sap.com")
+                .atsType(AtsType.SUCCESSFACTORS)
+                .build();
+
+        FetchResult result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertEquals(ExtractionStatus.SUCCESS, result.status());
+        assertEquals(1, result.totalFound());
+        assertEquals("744000000000003", result.jobs().get(0).externalId());
+
+        verify(requestHeadersUriSpec).uri("https://jobs.sap.com/en/jobs/?page=2");
+        // ceil(25/12) = 3 pages planned, but the empty page 2 stops the crawl before page 3
+        verify(requestHeadersUriSpec, never()).uri(argThat((String url) -> url != null && url.contains("page=3")));
+    }
+
+    @Test
+    void fetch_nextStyleBranch_missingJsonLd_keepsJobWithNullDescription() {
+        when(responseSpec.bodyToMono(String.class))
+                .thenReturn(Mono.just(nextShell("1 job found")))
+                .thenReturn(Mono.just("<html><body>"
+                        + nextListing("744000000000004", "no-ld-job", "No LD Job")
+                        + "</body></html>"))
+                .thenReturn(Mono.just(NEXT_DETAIL_NO_LD));
+
+        CareerEndpoint endpoint = CareerEndpoint.builder()
+                .url("https://jobs.sap.com")
+                .atsType(AtsType.SUCCESSFACTORS)
+                .build();
+
+        FetchResult result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertEquals(ExtractionStatus.SUCCESS, result.status());
+        assertEquals(1, result.totalFound());
+        assertEquals("744000000000004", result.jobs().get(0).externalId());
+        assertNull(result.jobs().get(0).description());
+        assertNull(result.jobs().get(0).postedDate());
+        assertEquals("https://jobs.sap.com/en/jobs/744000000000004/no-ld-job/", result.jobs().get(0).applyUrl());
+    }
+
+    @Test
+    void fetch_legacyShowingPattern_stillTakesLegacyPath() {
+        // Literal jobs2web pagination text: the Next branch must not engage (no /en/jobs/ requests)
+        // and pagination must stay on startrow offsets.
+        String legacyPage = """
+                <html><body>
+                <div>Showing 1 to 25 of 303</div>
+                <table>
+                  <tr><td><a href="/job/Berlin-Dev-10557/111/">Developer</a></td><td>Berlin</td></tr>
+                </table>
+                </body></html>
+                """;
+        String legacyBlank = "<html><body></body></html>";
+        String legacyDetail = "<html><body><div class=\"jobdescription\"><p>Legacy detail</p></div></body></html>";
+
+        // ceil(303/25) = 13 search pages: 1 real page + 12 blank pages + 1 detail fetch
+        var stub = when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(legacyPage));
+        for (int i = 0; i < 12; i++) {
+            stub.thenReturn(Mono.just(legacyBlank));
+        }
+        stub.thenReturn(Mono.just(legacyDetail));
+
+        CareerEndpoint endpoint = CareerEndpoint.builder()
+                .url("https://jobs.example.com")
+                .atsType(AtsType.SUCCESSFACTORS)
+                .build();
+
+        FetchResult result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertEquals(ExtractionStatus.SUCCESS, result.status());
+        assertEquals(1, result.totalFound());
+        assertEquals("111", result.jobs().get(0).externalId());
+        assertTrue(result.jobs().get(0).applyUrl().startsWith("https://jobs.example.com/job/"));
+        assertTrue(result.jobs().get(0).description().contains("Legacy detail"));
+
+        verify(requestHeadersUriSpec, never()).uri(argThat((String url) -> url != null && url.contains("/en/jobs/")));
+        verify(requestHeadersUriSpec).uri(argThat((String url) -> url != null && url.endsWith("&startrow=25")));
+    }
 }

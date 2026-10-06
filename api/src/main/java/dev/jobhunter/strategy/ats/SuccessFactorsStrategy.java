@@ -1,5 +1,7 @@
 package dev.jobhunter.strategy.ats;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.jobhunter.model.CareerEndpoint;
 import dev.jobhunter.model.enums.AtsType;
 import dev.jobhunter.strategy.FetchContext;
@@ -41,6 +43,12 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
     private static final Pattern ARIA_TOTAL_PATTERN = Pattern.compile("Results\\s+\\d+\\s+to\\s+\\d+\\s+of\\s+(\\d+)");
     private static final Pattern SHOWING_TOTAL_PATTERN = Pattern.compile("Showing\\s+\\d+\\s+to\\s+\\d+\\s+of\\s+(\\d+)");
 
+    // jobs.sap.com migrated to a Vercel-hosted Next.js SPA (2026-10): /search/?startrow=N is ignored,
+    // the count text is "84 jobs found" and listings paginate at {origin}/en/jobs/?page=N.
+    private static final int NEXT_PAGE_SIZE = 12;
+    private static final Pattern NEXT_TOTAL_PATTERN = Pattern.compile("(\\d[\\d,]*)\\s*jobs? found");
+    private static final Pattern NEXT_JOB_HREF_PATTERN = Pattern.compile("/en/jobs/(\\d+)/([^/?#\"]+)/");
+
     // Classic SuccessFactors boards expose an XML listing API (e.g. career5.successfactors.eu)
     private static final Pattern CLASSIC_BOARD_PATTERN = Pattern.compile("career\\d*\\.successfactors\\.(eu|com)", Pattern.CASE_INSENSITIVE);
     private static final Pattern COMPANY_PARAM_PATTERN = Pattern.compile("[?&]company=([^&#]*)", Pattern.CASE_INSENSITIVE);
@@ -67,6 +75,7 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
     private static final Set<String> LOCATION_FIRST_WORDS = locationFirstWords();
 
     private final WebClient webClient;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public SuccessFactorsStrategy(WebClient webClient) {
         this.webClient = webClient;
@@ -103,6 +112,13 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
 
             int totalCount = parseTotalCount(firstPageHtml);
             if (totalCount == 0) {
+                // Legacy jobs2web patterns missed: check for the Next.js "84 jobs found" count text
+                int nextCount = parseNextTotalCount(firstPageHtml);
+                if (nextCount > 0) {
+                    log.info("SuccessFactors [{}]: Next.js site detected ({} jobs found), paginating /en/jobs/ pages",
+                            endpointUrl, nextCount);
+                    return fetchNextStyle(endpointUrl, nextCount, start);
+                }
                 log.info("SuccessFactors [{}]: no jobs found", endpointUrl);
                 return FetchResult.empty(elapsed(start));
             }
@@ -180,6 +196,86 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
             log.error("SuccessFactors [{}]: extraction failed: {}", endpointUrl, e.getMessage());
             return FetchResult.error(e.getMessage(), elapsed(start));
         }
+    }
+
+    /**
+     * Next.js-style listing (jobs.sap.com): pagination lives at {origin}/en/jobs/?page=N with
+     * 12 jobs per page, and each detail page server-renders a schema.org JobPosting JSON-LD
+     * block that is the only description source.
+     */
+    FetchResult fetchNextStyle(String endpointUrl, int totalCount, Instant start) {
+        String origin = extractOrigin(endpointUrl);
+        if (origin == null) {
+            log.warn("SuccessFactors [{}]: invalid endpoint url for Next-style listing", endpointUrl);
+            return FetchResult.error("invalid endpoint url", elapsed(start));
+        }
+
+        int totalPages = (int) Math.ceil((double) totalCount / NEXT_PAGE_SIZE);
+        List<JobListing> allListings = new ArrayList<>();
+        Set<String> seenIds = new HashSet<>();
+        for (int page = 1; page <= totalPages; page++) {
+            String pageUrl = origin + "/en/jobs/?page=" + page;
+            try {
+                String pageHtml = webClient.get()
+                        .uri(pageUrl)
+                        .retrieve()
+                        .bodyToMono(String.class)
+                        .block(REQUEST_TIMEOUT);
+                List<JobListing> pageListings = (pageHtml == null || pageHtml.isBlank())
+                        ? List.of()
+                        : parseNextListings(pageHtml, origin);
+                if (pageListings.isEmpty()) {
+                    log.info("SuccessFactors [{}]: Next-style page {} has no listings, stopping",
+                            endpointUrl, page);
+                    break;
+                }
+                for (JobListing listing : pageListings) {
+                    if (seenIds.add(listing.externalId())) {
+                        allListings.add(listing);
+                    }
+                }
+                log.info("SuccessFactors [{}]: Next-style page {}/{}, accumulated {} listings",
+                        endpointUrl, page, totalPages, allListings.size());
+            } catch (Exception e) {
+                log.warn("SuccessFactors [{}]: failed to fetch Next-style page {}: {}",
+                        endpointUrl, page, e.getMessage());
+            }
+        }
+
+        if (allListings.isEmpty()) {
+            return FetchResult.empty(elapsed(start));
+        }
+
+        // Fetch detail pages for JSON-LD description, posted date, and location
+        List<RawAggregatorJob> jobs = new ArrayList<>();
+        for (int i = 0; i < allListings.size(); i++) {
+            JobListing listing = allListings.get(i);
+            JsonLdDetail detail = fetchNextDetail(listing.url());
+
+            String location = (listing.location() == null || listing.location().isBlank())
+                    ? detail.location()
+                    : listing.location();
+            jobs.add(new RawAggregatorJob(
+                    listing.externalId(),
+                    listing.title(),
+                    null,
+                    location,
+                    detail.description(),
+                    listing.url(),
+                    detail.postedDate(),
+                    null,
+                    null,
+                    null,
+                    null
+            ));
+
+            if (i < allListings.size() - 1) {
+                sleep(DETAIL_FETCH_DELAY_MS);
+            }
+        }
+
+        log.info("SuccessFactors [{}]: Next-style extracted {} jobs", endpointUrl, jobs.size());
+        return FetchResult.success(jobs, elapsed(start));
     }
 
     /**
@@ -505,6 +601,25 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
         return 0;
     }
 
+    /**
+     * Next.js listing count text, e.g. "84 jobs found". Returns 0 when absent so callers can
+     * fall back to the existing empty path.
+     */
+    int parseNextTotalCount(String html) {
+        if (html == null || html.isBlank()) {
+            return 0;
+        }
+        Matcher matcher = NEXT_TOTAL_PATTERN.matcher(html);
+        if (!matcher.find()) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(matcher.group(1).replace(",", ""));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
     List<JobListing> parseListings(String html, String baseUrl) {
         Document doc = Jsoup.parse(html);
         List<JobListing> listings = new ArrayList<>();
@@ -572,6 +687,97 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
         }
 
         return listings;
+    }
+
+    /**
+     * Next.js listing anchors: {@code <a href="/en/jobs/{id}/{slug}/">Title</a>}. The numeric id
+     * is the externalId, the anchor text is the title, and the listing markup carries no location
+     * (the detail page's JSON-LD jobLocation supplies it).
+     */
+    List<JobListing> parseNextListings(String html, String origin) {
+        Document doc = Jsoup.parse(html);
+        List<JobListing> listings = new ArrayList<>();
+        Set<String> seenIds = new HashSet<>();
+        for (Element anchor : doc.select("a[href]")) {
+            Matcher matcher = NEXT_JOB_HREF_PATTERN.matcher(anchor.attr("href"));
+            if (!matcher.find()) {
+                continue;
+            }
+            String externalId = matcher.group(1);
+            String title = anchor.text().trim();
+            if (title.isBlank() || !seenIds.add(externalId)) {
+                continue;
+            }
+            String url = origin + "/en/jobs/" + externalId + "/" + matcher.group(2) + "/";
+            listings.add(new JobListing(externalId, title, null, url));
+        }
+        return listings;
+    }
+
+    private JsonLdDetail fetchNextDetail(String url) {
+        try {
+            String html = fetchDetailPage(url);
+            return parseNextJsonLd(html);
+        } catch (Exception e) {
+            log.debug("SuccessFactors: failed to fetch Next-style detail page {}: {}", url, e.getMessage());
+            return new JsonLdDetail(null, null, null);
+        }
+    }
+
+    /**
+     * Parse the server-rendered schema.org JobPosting JSON-LD block. A missing or malformed
+     * block degrades to a detail with nulls: the job is still emitted, never dropped.
+     */
+    JsonLdDetail parseNextJsonLd(String html) {
+        if (html == null || html.isBlank()) {
+            return new JsonLdDetail(null, null, null);
+        }
+        try {
+            Document doc = Jsoup.parse(html);
+            for (Element script : doc.select("script[type=application/ld+json]")) {
+                JsonNode node = objectMapper.readTree(script.data());
+                if (node == null || !isJobPostingType(node)) {
+                    continue;
+                }
+                return new JsonLdDetail(
+                        stripJsonLdDescription(textOrNull(node, "description")),
+                        parseIsoDate(textOrNull(node, "datePosted")),
+                        jsonLdLocationName(node.path("jobLocation")));
+            }
+        } catch (Exception e) {
+            log.debug("SuccessFactors: failed to parse JSON-LD detail: {}", e.getMessage());
+        }
+        return new JsonLdDetail(null, null, null);
+    }
+
+    private static boolean isJobPostingType(JsonNode node) {
+        JsonNode type = node.path("@type");
+        if (type.isArray()) {
+            for (JsonNode entry : type) {
+                if ("JobPosting".equals(entry.asText())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return "JobPosting".equals(type.asText());
+    }
+
+    /** JSON-LD description is an HTML string; strip tags to text and cap at the shared limit. */
+    private String stripJsonLdDescription(String rawHtml) {
+        if (rawHtml == null || rawHtml.isBlank()) {
+            return null;
+        }
+        String text = Jsoup.parse(rawHtml).text().trim();
+        return text.isBlank() ? null : truncate(text, MAX_DESCRIPTION_LENGTH);
+    }
+
+    private String jsonLdLocationName(JsonNode jobLocation) {
+        if (jobLocation == null || jobLocation.isNull()) {
+            return null;
+        }
+        JsonNode place = jobLocation.isArray() && !jobLocation.isEmpty() ? jobLocation.get(0) : jobLocation;
+        return textOrNull(place, "name");
     }
 
     private JobDetail fetchDetail(String jobUrl) {
@@ -713,4 +919,7 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
 
     // Internal record for parsed detail-page data (single fetch, no second HTTP request)
     record JobDetail(String description, LocalDate postedDate, String streetAddress) {}
+
+    // Parsed schema.org JobPosting JSON-LD detail (Next-style listings)
+    record JsonLdDetail(String description, LocalDate postedDate, String location) {}
 }
