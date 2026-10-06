@@ -3,10 +3,13 @@ package dev.jobhunter.ai;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.github.tomakehurst.wiremock.stubbing.Scenario;
+import com.github.tomakehurst.wiremock.verification.LoggedRequest;
 import dev.jobhunter.strategy.direct.AiExtractionResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
+
+import java.util.List;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -290,6 +293,40 @@ class OpenAiProviderTest {
 
         // Only one request - no retry for non-parse errors
         verify(1, postRequestedFor(urlEqualTo("/v1/chat/completions")));
+    }
+
+    @Test
+    void extract_responseFormatRejected_retriesWithoutIt() {
+        // Upstream (opencode zen gateway + deepseek-v4-flash) rejects
+        // response_format=json_schema with a deterministic 400
+        String rejectedBody = """
+                {"error":{"param":null,"type":"invalid_request_error","code":"invalid_request_error","message":"Upstream request failed: [invalid_request_error] This response_format type is unavailable now (request_id: 48bd0d8d-03be-42b5-a74f-53a906f33c63)"}}""";
+        String validContent = """
+                {"skills":[{"name":"Java","category":"Language","required":true,"rawMention":"Java"}]}""";
+
+        stubFor(post("/v1/chat/completions")
+                .inScenario("response_format")
+                .whenScenarioStateIs(Scenario.STARTED)
+                .willReturn(aResponse().withStatus(400)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(rejectedBody))
+                .willSetStateTo("stripped"));
+
+        stubFor(post("/v1/chat/completions")
+                .inScenario("response_format")
+                .whenScenarioStateIs("stripped")
+                .willReturn(okJson(openAiResponse(validContent, "stop"))));
+
+        SkillExtractionResponse result = provider.extract(
+                "Extract skills", "Java 21 job", SkillExtractionResponse.class);
+
+        assertThat(result.skills()).hasSize(1);
+        assertThat(result.skills().get(0).name()).isEqualTo("Java");
+
+        List<LoggedRequest> requests = findAll(postRequestedFor(urlEqualTo("/v1/chat/completions")));
+        assertThat(requests).hasSize(2);
+        assertThat(requests.get(0).getBodyAsString()).contains("response_format");
+        assertThat(requests.get(1).getBodyAsString()).doesNotContain("response_format");
     }
 
     private String openAiResponse(String content, String finishReason) {

@@ -67,6 +67,15 @@ public class OpenAiProvider implements AiProvider {
                     log.warn("OpenAI extraction parse failed (attempt {}), retrying", attempt + 1);
                     continue;
                 }
+                // Some upstreams (e.g. the zen gateway with deepseek-v4-flash) reject
+                // response_format json_schema with a deterministic 400. Retry once without
+                // it instead of surfacing a provider error as an endpoint failure.
+                if (attempt == 0 && e.getMessage().contains("response_format type is unavailable")) {
+                    lastError = e;
+                    log.warn("Upstream rejected response_format json_schema, retrying extraction without it");
+                    requestBody.remove("response_format");
+                    continue;
+                }
                 throw e;
             }
         }
