@@ -195,6 +195,10 @@ public class CrawlService {
         if (result.status() == ExtractionStatus.EMPTY) {
             endpoint.setLastCrawlStatus(CrawlStatus.EMPTY);
             endpoint.setLastCrawledAt(LocalDateTime.now());
+            // Fetch succeeded with no jobs: the endpoint is reachable, so clear stale
+            // strikes/message or a later single error would re-deactivate a healthy endpoint
+            endpoint.setConsecutiveErrors(0);
+            endpoint.setLastErrorMessage(null);
             endpointRepository.save(endpoint);
             return 0;
         }
@@ -203,6 +207,8 @@ public class CrawlService {
         if (result.jobs().isEmpty()) {
             endpoint.setLastCrawlStatus(CrawlStatus.EMPTY);
             endpoint.setLastCrawledAt(LocalDateTime.now());
+            endpoint.setConsecutiveErrors(0);
+            endpoint.setLastErrorMessage(null);
             endpointRepository.save(endpoint);
             return 0;
         }
