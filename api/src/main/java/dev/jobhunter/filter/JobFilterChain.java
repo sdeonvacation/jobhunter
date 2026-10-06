@@ -98,7 +98,12 @@ public class JobFilterChain {
                     || cityCountryResolver.containsVisaExemptCountry(input.location())) {
                 visaStatus = VisaSponsorship.UNKNOWN;
             } else {
-                VisaFilterResult visaResult = visaSponsorshipFilter.filter(input.description(), isAggregator);
+                // Description-less jobs cannot yield a visa signal: defer them the same way
+                // aggregator jobs defer, so they stay KEEP/PENDING and get picked up by
+                // AggregatorDescriptionEnricher (which drains aggregators + DIRECT), then
+                // refiltered via DescriptionFilterChain once the description arrives.
+                VisaFilterResult visaResult = visaSponsorshipFilter.filter(input.description(),
+                        isAggregator || input.description() == null);
                 if (visaResult.decision() == FilterDecision.SKIP) {
                     return FilterChainResult.skip(visaResult.reason(), visaResult.visaSponsorship());
                 }

@@ -309,6 +309,32 @@ class JobFilterChainTest {
         verify(visaSponsorshipFilter).filter(anyString(), eq(true));
     }
 
+    @Test
+    void nullDescription_endpointJob_deferredToVisaEnrichment() {
+        // Endpoint crawl (e.g. next_data fast-path) has no description yet: the visa
+        // filter must receive defer=true (second arg) so the job stays KEEP/PENDING
+        // and AggregatorDescriptionEnricher can fetch + refilter it later.
+        when(languageFilter.filter(anyString(), any())).thenReturn(FilterResult.keep());
+        when(roleRelevanceFilter.filter(anyString(), any())).thenReturn(FilterResult.keep());
+        when(locationFilter.filter(anyString())).thenReturn(LocationFilterResult.keep("AT"));
+        when(visaSponsorshipFilter.filter(isNull(), eq(true)))
+                .thenReturn(VisaFilterResult.keep(VisaSponsorship.PENDING));
+        when(yoeFilter.extractYoe(isNull())).thenReturn(null);
+        when(yoeFilter.filter(null)).thenReturn(FilterResult.keep());
+        when(deduplicationFilter.generateFingerprint(anyString(), anyString(), anyString()))
+                .thenReturn("fp");
+        when(jobPostingRepository.findFirstByFingerprintAndLanguageFilterExcludingSources(
+                anyString(), any(), any()))
+                .thenReturn(Optional.empty());
+
+        FilterChainResult result = chain.apply(
+                input("Applied AI Engineer", null, "Austria - Remote", "Revolut"), false, false);
+
+        assertThat(result.decision()).isEqualTo(FilterDecision.KEEP);
+        assertThat(result.visaSponsorship()).isEqualTo(VisaSponsorship.PENDING);
+        verify(visaSponsorshipFilter).filter(isNull(), eq(true));
+    }
+
     // --- Null/blank input safety ---
 
     @Test
