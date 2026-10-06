@@ -184,7 +184,7 @@ class AshbyStrategyTest {
     }
 
     @Test
-    void extract_notFound404_returnsEmpty() {
+    void extract_notFound404_returnsError() {
         stubFor(get(urlPathMatching("/posting-api/job-board/.*"))
                 .willReturn(aResponse().withStatus(404)));
 
@@ -194,7 +194,8 @@ class AshbyStrategyTest {
                 .build();
 
         var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
-        assertThat(result.status()).isEqualTo(ExtractionStatus.EMPTY);
+        assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
+        assertThat(result.errorMessage()).contains("404");
         assertThat(result.jobs()).isEmpty();
     }
 

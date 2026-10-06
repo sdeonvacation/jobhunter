@@ -295,7 +295,7 @@ class JoinStrategyTest {
     }
 
     @Test
-    void extract_404_returnsEmpty() {
+    void extract_404_returnsError() {
         stubFor(get(urlPathMatching("/companies/.*"))
                 .willReturn(aResponse().withStatus(404)));
 
@@ -305,7 +305,8 @@ class JoinStrategyTest {
                 .build();
 
         var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
-        assertThat(result.status()).isEqualTo(ExtractionStatus.EMPTY);
+        assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
+        assertThat(result.errorMessage()).contains("404");
         assertThat(result.jobs()).isEmpty();
     }
 

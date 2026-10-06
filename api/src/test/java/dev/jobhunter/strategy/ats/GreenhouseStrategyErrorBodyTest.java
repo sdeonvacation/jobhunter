@@ -78,7 +78,8 @@ class GreenhouseStrategyErrorBodyTest {
                             : FetchResult.success(jobs, java.time.Duration.between(start, java.time.Instant.now()));
 
                 } catch (org.springframework.web.reactive.function.client.WebClientResponseException.NotFound e) {
-                    return FetchResult.empty(java.time.Duration.between(start, java.time.Instant.now()));
+                    return FetchResult.error("ATS board not found (404)",
+                            java.time.Duration.between(start, java.time.Instant.now()));
                 } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
                     return FetchResult.error("HTTP " + e.getStatusCode(), java.time.Duration.between(start, java.time.Instant.now()));
                 } catch (Exception e) {
@@ -148,7 +149,7 @@ class GreenhouseStrategyErrorBodyTest {
     }
 
     @Test
-    void extract_http404_returnsEmpty() {
+    void extract_http404_returnsError() {
         stubFor(get(urlPathMatching("/v1/boards/.*/jobs"))
                 .willReturn(aResponse().withStatus(404)));
 
@@ -159,7 +160,8 @@ class GreenhouseStrategyErrorBodyTest {
 
         var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
 
-        assertThat(result.status()).isEqualTo(ExtractionStatus.EMPTY);
+        assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
+        assertThat(result.errorMessage()).contains("404");
     }
 
     @Test

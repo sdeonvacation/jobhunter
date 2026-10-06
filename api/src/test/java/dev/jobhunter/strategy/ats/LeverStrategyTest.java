@@ -186,7 +186,7 @@ class LeverStrategyTest {
     }
 
     @Test
-    void extract_notFound404_returnsEmpty() {
+    void extract_notFound404_returnsError() {
         stubFor(get(urlPathMatching("/v0/postings/.*"))
                 .willReturn(aResponse().withStatus(404)));
 
@@ -196,7 +196,8 @@ class LeverStrategyTest {
                 .build();
 
         var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
-        assertThat(result.status()).isEqualTo(ExtractionStatus.EMPTY);
+        assertThat(result.status()).isEqualTo(ExtractionStatus.ERROR);
+        assertThat(result.errorMessage()).contains("404");
         assertThat(result.jobs()).isEmpty();
     }
 
@@ -293,7 +294,7 @@ class LeverStrategyTest {
                         : FetchResult.success(jobs, elapsed(start));
 
             } catch (WebClientResponseException.NotFound e) {
-                return FetchResult.empty(elapsed(start));
+                return FetchResult.error("ATS board not found (404)", elapsed(start));
             } catch (WebClientResponseException e) {
                 return FetchResult.error("HTTP " + e.getStatusCode(), elapsed(start));
             } catch (Exception e) {

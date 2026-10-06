@@ -83,7 +83,7 @@ public class LeverStrategy extends AbstractAtsStrategy {
 
         } catch (WebClientResponseException.NotFound e) {
             log.warn("Lever [{}]: not found (404)", slug);
-            return FetchResult.empty(elapsed(start));
+            return FetchResult.error("ATS board not found (404)", elapsed(start));
         } catch (WebClientResponseException e) {
             log.error("Lever [{}]: HTTP {} - {}", slug, e.getStatusCode(), e.getMessage());
             return FetchResult.error("HTTP " + e.getStatusCode(), elapsed(start));
