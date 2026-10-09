@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.channels.UnresolvedAddressException;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -899,6 +900,218 @@ class AiPageStrategyTest {
             assertThat(candidates).hasSize(1);
             assertThat(candidates.get(0).title()).isEqualTo("Valid Role");
             assertThat(candidates.get(0).applyUrl()).isEqualTo("https://example.com/jobs/valid-1/");
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // flight_positions — deterministic Next.js app-router __next_f fast-path
+    // -------------------------------------------------------------------------
+
+    /** Fixture mirroring the Deel careers __next_f flight jobs payload (Ashby-shaped). */
+    private static final String FLIGHT_JOBS_PAYLOAD = """
+            {"component":"product.career-job-listing","jobs":[{"id":0,"attributes":{"ashby_id":"11111111-2222-3333-4444-555555555555","title":"Backend Engineer","location_name":"South Africa","all_locations":["Spain","Portugal"],"ashby_published_date":"2026-09-07T08:11:40.247Z"}},{"id":1,"attributes":{"ashby_id":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","title":"Platform Engineer","location_name":"Germany","all_locations":[],"ashby_published_date":"2026-09-01T10:00:00Z"}}]}""";
+
+    /** Wraps a payload chunk in a JSON-encoded {@code self.__next_f.push([1,"..."])} frame. */
+    private static String flightFrame(String payloadChunk) throws com.fasterxml.jackson.core.JsonProcessingException {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var arr = mapper.createArrayNode().add(1).add(payloadChunk);
+        return "self.__next_f.push(" + arr + ");";
+    }
+
+    /** Builds an HTML page whose inline scripts carry the given chunks as separate flight frames. */
+    private static String flightHtml(String... payloadChunks) throws com.fasterxml.jackson.core.JsonProcessingException {
+        StringBuilder sb = new StringBuilder("<html><body>");
+        for (String chunk : payloadChunks) {
+            sb.append("<script>").append(flightFrame(chunk)).append("</script>");
+        }
+        return sb.append("</body></html>").toString();
+    }
+
+    @Test
+    void extract_flightPositions_skipsAiAndExtractsJobs() throws Exception {
+        extractor.setHtmlResponse(flightHtml(FLIGHT_JOBS_PAYLOAD));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://www.deel.com/careers/")
+                .atsSlug("{\"flight_positions\":true,\"apply_base\":\"https://www.deel.com/careers/job/\"}")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs()).hasSize(2);
+        assertThat(result.jobs()).extracting(RawAggregatorJob::title)
+                .containsExactly("Backend Engineer", "Platform Engineer");
+        assertThat(result.jobs()).extracting(RawAggregatorJob::location)
+                .containsExactly("Spain, Portugal", "Germany");
+        assertThat(result.jobs().get(0).externalId())
+                .isEqualTo("11111111-2222-3333-4444-555555555555");
+        assertThat(result.jobs().get(0).applyUrl())
+                .isEqualTo("https://www.deel.com/careers/job/11111111-2222-3333-4444-555555555555/");
+        assertThat(result.jobs().get(0).postedDate()).isEqualTo(LocalDate.of(2026, 9, 7));
+        assertThat(extractor.htmlFetchCount).isEqualTo(1);
+        verify(aiProvider, never()).isAvailable();
+        verify(aiProvider, never()).extract(anyString(), anyString(), any());
+    }
+
+    @Test
+    void extract_flightPositions_blankContent_returnsEmptyWithoutAi() {
+        extractor.setHtmlResponse("");
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://www.deel.com/careers/")
+                .atsSlug("{\"flight_positions\":true}")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.EMPTY);
+        verify(aiProvider, never()).isAvailable();
+        verify(aiProvider, never()).extract(anyString(), anyString(), any());
+    }
+
+    @Test
+    void extract_flightPositions_missingMarker_returnsEmptyWithoutAi() throws Exception {
+        extractor.setHtmlResponse(flightHtml("{\"component\":\"other\",\"jobs\":[]}"));
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.CUSTOM)
+                .url("https://www.deel.com/careers/")
+                .atsSlug("{\"flight_positions\":true,\"apply_base\":\"https://www.deel.com/careers/job/\"}")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.EMPTY);
+        verify(aiProvider, never()).isAvailable();
+        verify(aiProvider, never()).extract(anyString(), anyString(), any());
+    }
+
+    @Nested
+    class ExtractJobsFromFlight {
+
+        @Test
+        void happyPath_extractsJobsWithLocationsDatesAndUrls() throws Exception {
+            var jobs = extractor.extractJobsFromFlight(
+                    flightHtml(FLIGHT_JOBS_PAYLOAD), "https://www.deel.com/careers/job", null);
+
+            assertThat(jobs).hasSize(2);
+            assertThat(jobs.get(0).title()).isEqualTo("Backend Engineer");
+            assertThat(jobs.get(0).externalId()).isEqualTo("11111111-2222-3333-4444-555555555555");
+            assertThat(jobs.get(0).location()).isEqualTo("Spain, Portugal");
+            // applyBase without trailing slash is normalized — Deel detail pages 308 without it.
+            assertThat(jobs.get(0).applyUrl())
+                    .isEqualTo("https://www.deel.com/careers/job/11111111-2222-3333-4444-555555555555/");
+            assertThat(jobs.get(0).postedDate()).isEqualTo(LocalDate.of(2026, 9, 7));
+            assertThat(jobs.get(0).description()).isNull();
+            assertThat(jobs.get(0).rawJson()).contains("Backend Engineer");
+            assertThat(jobs.get(1).title()).isEqualTo("Platform Engineer");
+            // all_locations empty → fallback to location_name.
+            assertThat(jobs.get(1).location()).isEqualTo("Germany");
+            assertThat(jobs.get(1).postedDate()).isEqualTo(LocalDate.of(2026, 9, 1));
+        }
+
+        @Test
+        void markerSplitAcrossFrames_stillParses() throws Exception {
+            int splitAt = FLIGHT_JOBS_PAYLOAD.indexOf("career-job-listing")
+                    + "career-job-listing".length();
+            var jobs = extractor.extractJobsFromFlight(
+                    flightHtml(
+                            FLIGHT_JOBS_PAYLOAD.substring(0, splitAt),
+                            FLIGHT_JOBS_PAYLOAD.substring(splitAt)),
+                    "https://www.deel.com/careers/job/", null);
+
+            assertThat(jobs).hasSize(2);
+            assertThat(jobs.get(0).title()).isEqualTo("Backend Engineer");
+        }
+
+        @Test
+        void noMarker_returnsEmpty() throws Exception {
+            assertThat(extractor.extractJobsFromFlight(
+                    flightHtml("{\"component\":\"other\",\"jobs\":[]}"),
+                    "https://example.com/", null)).isEmpty();
+        }
+
+        @Test
+        void malformedFrame_skippedWithoutThrowing_remainingFramesParse() throws Exception {
+            String html = """
+                    <html><body><script>self.__next_f.push([broken]);%s</script></body></html>
+                    """.formatted(flightFrame(FLIGHT_JOBS_PAYLOAD));
+
+            var jobs = extractor.extractJobsFromFlight(html, "https://www.deel.com/careers/job/", null);
+
+            assertThat(jobs).hasSize(2);
+        }
+
+        @Test
+        void blankAshbyIdOrTitle_entriesSkipped() throws Exception {
+            String payload = """
+                    {"component":"product.career-job-listing","jobs":[{"id":0,"attributes":{"ashby_id":"","title":"No Id"}},{"id":1,"attributes":{"ashby_id":"valid-1","title":" "}},{"id":2,"attributes":{"ashby_id":"valid-2","title":"Valid Role"}}]}""";
+
+            var jobs = extractor.extractJobsFromFlight(
+                    flightHtml(payload), "https://example.com/jobs/", null);
+
+            assertThat(jobs).hasSize(1);
+            assertThat(jobs.get(0).title()).isEqualTo("Valid Role");
+            assertThat(jobs.get(0).externalId()).isEqualTo("valid-2");
+        }
+
+        @Test
+        void duplicateExternalId_deduped() throws Exception {
+            String payload = """
+                    {"component":"product.career-job-listing","jobs":[{"id":0,"attributes":{"ashby_id":"dup-1","title":"Role A"}},{"id":1,"attributes":{"ashby_id":"dup-1","title":"Role A again"}},{"id":2,"attributes":{"ashby_id":"dup-2","title":"Role B"}}]}""";
+
+            var jobs = extractor.extractJobsFromFlight(
+                    flightHtml(payload), "https://example.com/jobs/", null);
+
+            assertThat(jobs).hasSize(2);
+            assertThat(jobs).extracting(RawAggregatorJob::externalId)
+                    .containsExactly("dup-1", "dup-2");
+        }
+
+        @Test
+        void customJobsMarker_locatesAlternateComponent() throws Exception {
+            String payload = """
+                    {"component":"custom.listing","jobs":[{"id":0,"attributes":{"ashby_id":"custom-1","title":"Custom Role"}}]}""";
+
+            var jobs = extractor.extractJobsFromFlight(
+                    flightHtml(payload), "https://example.com/jobs/", "custom.listing\",\"jobs");
+
+            assertThat(jobs).hasSize(1);
+            assertThat(jobs.get(0).title()).isEqualTo("Custom Role");
+        }
+
+        @Test
+        void invalidPublishedDate_toleratedAsNull() throws Exception {
+            String payload = """
+                    {"component":"product.career-job-listing","jobs":[{"id":0,"attributes":{"ashby_id":"bad-date-1","title":"Role","ashby_published_date":"not-a-date"}}]}""";
+
+            var jobs = extractor.extractJobsFromFlight(
+                    flightHtml(payload), "https://example.com/jobs/", null);
+
+            assertThat(jobs).hasSize(1);
+            assertThat(jobs.get(0).postedDate()).isNull();
+        }
+
+        @Test
+        void blankApplyBase_applyUrlNull() throws Exception {
+            var jobs = extractor.extractJobsFromFlight(
+                    flightHtml(FLIGHT_JOBS_PAYLOAD), null, null);
+
+            assertThat(jobs).hasSize(2);
+            assertThat(jobs.get(0).applyUrl()).isNull();
+            assertThat(extractor.extractJobsFromFlight(
+                    flightHtml(FLIGHT_JOBS_PAYLOAD), " ", null))
+                    .extracting(RawAggregatorJob::applyUrl)
+                    .containsOnlyNulls();
+        }
+
+        @Test
+        void blankOrNullHtml_returnsEmpty() {
+            assertThat(extractor.extractJobsFromFlight("", "https://example.com/", null)).isEmpty();
+            assertThat(extractor.extractJobsFromFlight(null, "https://example.com/", null)).isEmpty();
         }
     }
 

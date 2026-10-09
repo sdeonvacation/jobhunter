@@ -26,6 +26,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -51,6 +53,9 @@ public class AiPageStrategy implements FetchStrategy {
             "script", "style", "nav", "header", "footer", "form", "iframe", "svg",
             "noscript", "meta", "link"
     );
+
+    /** Default substring locating the jobs array inside concatenated __next_f flight text. */
+    private static final String DEFAULT_FLIGHT_JOBS_MARKER = "product.career-job-listing\",\"jobs\"";
 
     /** FlareSolverr may take up to its own maxTimeout (60s) plus transport overhead. */
     private static final Duration FLARESOLVERR_TIMEOUT = Duration.ofSeconds(70);
@@ -97,8 +102,10 @@ public class AiPageStrategy implements FetchStrategy {
             String applyBase = null;
             boolean jsonApi = false;
             boolean nextDataPositions = false;
+            boolean flightPositions = false;
             boolean flaresolverr = false;
             String jobsPath = null;
+            String jobsMarker = null;
             String linkSelector = null;
             Map<String, String> extraHeaders = new HashMap<>();
             if (atsSlug != null && atsSlug.startsWith("{")) {
@@ -112,6 +119,15 @@ public class AiPageStrategy implements FetchStrategy {
                     if (!ja.isMissingNode() && ja.asBoolean()) jsonApi = true;
                     JsonNode nd = cfg.path("next_data_positions");
                     if (!nd.isMissingNode() && nd.asBoolean()) nextDataPositions = true;
+                    // flight_positions=true extracts jobs from the Next.js app-router
+                    // self.__next_f RSC flight payload deterministically (no AI), like
+                    // next_data_positions does for pages-server __NEXT_DATA__.
+                    JsonNode fp = cfg.path("flight_positions");
+                    if (!fp.isMissingNode() && fp.asBoolean()) flightPositions = true;
+                    // Optional override of the substring locating the jobs array inside
+                    // the concatenated flight text (default: career-job-listing component).
+                    JsonNode jm = cfg.path("jobs_marker");
+                    if (!jm.isMissingNode() && !jm.isNull()) jobsMarker = jm.asText();
                     // flaresolverr=true only swaps the HTML content source: the listing is
                     // fetched through the local FlareSolverr proxy (Cloudflare solver) instead
                     // of a direct GET. json_api keeps working as today (its branch runs before
@@ -168,6 +184,21 @@ public class AiPageStrategy implements FetchStrategy {
                         .toList();
                 if (jobs.isEmpty()) return FetchResult.empty(elapsed(start));
                 log.info("NextDataPositions [{}]: extracted {} jobs", endpoint.getUrl(), jobs.size());
+                return FetchResult.success(jobs, elapsed(start));
+            }
+
+            // Next.js app-router listings embedded in the self.__next_f RSC flight
+            // payload — deterministic extraction, no AI call (mirrors the
+            // next_data_positions fast-path, including the flaresolverr content swap).
+            if (flightPositions) {
+                String content = flaresolverr
+                        ? fetchViaFlaresolverr(endpoint.getUrl())
+                        : fetchContent(endpoint.getUrl(), postBody, false, extraHeaders);
+                if (content == null || content.isBlank()) return FetchResult.empty(elapsed(start));
+                List<RawAggregatorJob> jobs = extractJobsFromFlight(
+                        content, applyBase != null ? applyBase : endpoint.getUrl(), jobsMarker);
+                if (jobs.isEmpty()) return FetchResult.empty(elapsed(start));
+                log.info("FlightPositions [{}]: extracted {} jobs", endpoint.getUrl(), jobs.size());
                 return FetchResult.success(jobs, elapsed(start));
             }
 
@@ -477,6 +508,172 @@ public class AiPageStrategy implements FetchStrategy {
             log.debug("AiPageStrategy: __NEXT_DATA__ extraction failed: {}", e.getMessage());
         }
         return candidates;
+    }
+
+    /**
+     * Extract RawAggregatorJobs from a Next.js app-router page whose job list lives
+     * inside the {@code self.__next_f} RSC flight payload (not {@code __NEXT_DATA__},
+     * not anchor links). Inline scripts carry frames shaped as
+     * {@code self.__next_f.push([1,"<escaped chunk>"])}; each frame's chunk is a JSON
+     * string that is decoded and concatenated (a marker or the jobs array itself can
+     * straddle frame boundaries). The joined text contains
+     * {@code "component":"product.career-job-listing","jobs":[{...}]} whose array
+     * elements are Ashby-shaped job nodes
+     * ({@code attributes: {ashby_id, title, location_name, all_locations, ashby_published_date, ...}}).
+     * applyUrl is {@code applyBase + ashby_id + "/"} (applyBase normalized to a trailing
+     * slash — the Deel detail pages 308 without it); externalId is the stable
+     * {@code ashby_id} UUID directly (mirrors AshbyStrategy). Missing marker, malformed
+     * frames, or unparsable arrays are tolerated: they log at debug and yield an
+     * empty/partial list.
+     */
+    List<RawAggregatorJob> extractJobsFromFlight(String html, String applyBase, String jobsMarker) {
+        List<RawAggregatorJob> jobs = new ArrayList<>();
+        if (html == null || html.isBlank()) return jobs;
+        try {
+            Document doc = Jsoup.parse(html);
+            StringBuilder flight = new StringBuilder();
+            for (Element script : doc.select("script")) {
+                String data = script.data();
+                if (data != null && data.contains("__next_f.push")) {
+                    appendFlightFrames(data, flight);
+                }
+            }
+            String marker = (jobsMarker != null && !jobsMarker.isBlank())
+                    ? jobsMarker
+                    : DEFAULT_FLIGHT_JOBS_MARKER;
+            String flightText = flight.toString();
+            int markerIdx = flightText.indexOf(marker);
+            if (markerIdx < 0) {
+                log.debug("AiPageStrategy: flight jobs marker [{}] not found in __next_f payload", marker);
+                return jobs;
+            }
+            int open = flightText.indexOf('[', markerIdx);
+            String arrayText = open >= 0 ? extractBracketedArray(flightText, open) : null;
+            if (arrayText == null) {
+                log.debug("AiPageStrategy: could not bracket-match jobs array after flight marker");
+                return jobs;
+            }
+            JsonNode jobArray = objectMapper.readTree(arrayText);
+            if (!jobArray.isArray()) {
+                log.debug("AiPageStrategy: flight jobs node is not an array");
+                return jobs;
+            }
+            String base = (applyBase != null && !applyBase.isBlank())
+                    ? (applyBase.endsWith("/") ? applyBase : applyBase + "/")
+                    : null;
+            Set<String> seenIds = new LinkedHashSet<>();
+            for (JsonNode job : jobArray) {
+                JsonNode attrs = job.path("attributes");
+                String ashbyId = attrs.path("ashby_id").asText(null);
+                String title = attrs.path("title").asText(null);
+                if (ashbyId == null || ashbyId.isBlank() || title == null || title.isBlank()) continue;
+                if (!seenIds.add(ashbyId)) continue; // payload can repeat entries across frames
+                // Keep ALL locations, joined as a comma-separated multi-location string:
+                // LocationFilter resolves each segment (keep if ANY is a target country) and
+                // JobFilterChain's containsVisaExemptCountry checks the full string, so a
+                // remote posting listing Germany among its countries must not lose it.
+                LinkedHashSet<String> locNames = new LinkedHashSet<>();
+                for (JsonNode loc : attrs.path("all_locations")) {
+                    if (loc.isTextual() && !loc.asText().isBlank()) {
+                        locNames.add(loc.asText().trim());
+                    }
+                }
+                String location = locNames.isEmpty() ? null : String.join(", ", locNames);
+                if (location == null) {
+                    String locName = attrs.path("location_name").asText(null);
+                    if (locName != null && !locName.isBlank()) location = locName.trim();
+                }
+                LocalDate postedDate = null;
+                String published = attrs.path("ashby_published_date").asText(null);
+                if (published != null && !published.isBlank()) {
+                    try {
+                        postedDate = Instant.parse(published).atOffset(ZoneOffset.UTC).toLocalDate();
+                    } catch (Exception e) {
+                        log.debug("AiPageStrategy: unparseable ashby_published_date [{}]: {}", published, e.getMessage());
+                    }
+                }
+                String applyUrl = base != null ? base + ashbyId + "/" : null;
+                jobs.add(new RawAggregatorJob(
+                        ashbyId, title, null, location, null, applyUrl,
+                        postedDate, null, null, null, job.toString()));
+            }
+        } catch (Exception e) {
+            log.debug("AiPageStrategy: flight payload extraction failed: {}", e.getMessage());
+        }
+        return jobs;
+    }
+
+    /**
+     * Decodes every {@code self.__next_f.push(...)} frame in a script's text into
+     * {@code out}. Scans string-aware from each call's '(' to its matching ')' so
+     * chunk payloads containing parentheses survive; JSON-parses the
+     * {@code [1,"..."]} argument and appends element 1's decoded text. Malformed
+     * frames are skipped with a debug log.
+     */
+    private void appendFlightFrames(String scriptData, StringBuilder out) {
+        int from = 0;
+        while (true) {
+            int call = scriptData.indexOf("self.__next_f.push(", from);
+            if (call < 0) return;
+            int open = call + "self.__next_f.push(".length() - 1;
+            int close = findMatchingParen(scriptData, open);
+            if (close < 0) {
+                log.debug("AiPageStrategy: unbalanced __next_f.push frame, skipping rest of script");
+                return;
+            }
+            from = close + 1;
+            String arg = scriptData.substring(open + 1, close);
+            try {
+                JsonNode frame = objectMapper.readTree(arg);
+                if (frame.isArray() && frame.size() >= 2 && frame.get(1).isTextual()) {
+                    out.append(frame.get(1).asText());
+                }
+            } catch (Exception e) {
+                log.debug("AiPageStrategy: malformed __next_f.push frame skipped: {}", e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * From an opening '(' at {@code open}, scans forward tracking JSON string
+     * literals and backslash escapes to the matching ')'. Returns -1 when unbalanced.
+     */
+    private static int findMatchingParen(String text, int open) {
+        int depth = 0;
+        boolean inString = false;
+        for (int i = open; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (inString) {
+                if (c == '\\') i++; // skip the escaped character
+                else if (c == '"') inString = false;
+                continue;
+            }
+            if (c == '"') inString = true;
+            else if (c == '(') depth++;
+            else if (c == ')' && --depth == 0) return i;
+        }
+        return -1;
+    }
+
+    /**
+     * From an opening '[' at {@code open}, string-aware bracket-matches to the
+     * closing ']' and returns the inclusive substring, or null when unbalanced.
+     */
+    private static String extractBracketedArray(String text, int open) {
+        int depth = 0;
+        boolean inString = false;
+        for (int i = open; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (inString) {
+                if (c == '\\') i++;
+                else if (c == '"') inString = false;
+                continue;
+            }
+            if (c == '"') inString = true;
+            else if (c == '[') depth++;
+            else if (c == ']' && --depth == 0) return text.substring(open, i + 1);
+        }
+        return null;
     }
 
     /**
