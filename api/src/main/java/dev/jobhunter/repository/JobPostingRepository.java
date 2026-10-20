@@ -270,9 +270,12 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
     @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.languageFilter = 'SKIP' AND j.filterReason LIKE 'non-English JD%' AND j.description IS NOT NULL AND j.description <> ''")
     List<JobPosting> findActiveLanguageSkippedJobsWithDescription();
 
+    // visaSponsorship IS NULL is kept visible: those rows are not PENDING, and dropping
+    // them here would hide 123 legacy KEEP jobs whose visa state was never recorded.
     @Query("SELECT j FROM JobPosting j LEFT JOIN j.matchScore ms LEFT JOIN j.opportunityScore os " +
            "WHERE j.isActive = true AND j.applied = false AND j.hidden = false " +
            "AND j.languageFilter = :filter " +
+           "AND (j.visaSponsorship IS NULL OR j.visaSponsorship <> 'PENDING') " +
            "AND (" +
            "  (j.postedDate IS NOT NULL AND j.source NOT IN :aggregatorSources AND j.discoveredDate >= :since) " +
            "  OR (j.postedDate IS NOT NULL AND j.source IN :aggregatorSources AND j.postedDate >= :since) " +
@@ -292,10 +295,15 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
      * applied to re-surface in the digest). Unlike {@link #findRecentlyPostedJobs},
      * this is a true rolling 24h window keyed off {@code createdAt}, so jobs discovered late
      * in the day are not lost to a calendar-day boundary.
+     *
+     * <p>Undecided ({@code visaSponsorship = PENDING}) jobs are excluded: description-less
+     * jobs defer visa detection (see JobFilterChain) and cannot be resolved until the
+     * description backfill runs, so surfacing them would show jobs with no visa verdict.
      */
     @Query("SELECT j FROM JobPosting j LEFT JOIN j.matchScore ms LEFT JOIN j.opportunityScore os " +
            "WHERE j.isActive = true AND j.applied = false AND j.hidden = false " +
            "AND j.languageFilter = :filter " +
+           "AND (j.visaSponsorship IS NULL OR j.visaSponsorship <> 'PENDING') " +
            "AND (j.createdAt >= :since OR (j.postedDate IS NOT NULL AND j.postedDate >= :sinceDate))")
     Page<JobPosting> findDigestJobsSince(@Param("filter") FilterDecision filter,
                                          @Param("since") LocalDateTime since,
