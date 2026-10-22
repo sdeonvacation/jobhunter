@@ -150,6 +150,32 @@ describe('Health page', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 
+  it('renders PROTECTED aggregator row with error styling', async () => {
+    vi.mocked(fetchApi).mockResolvedValue(mockHealthReport({
+      aggregatorIssues: [
+        {
+          name: 'globalmove',
+          status: 'PROTECTED',
+          jobsFetched: 0,
+          errors: 0,
+          errorMessage: 'Protected endpoint - requires authentication',
+          lastRunAt: '2026-06-07T10:00:00',
+          elapsedMs: 1500,
+        },
+      ],
+    }));
+
+    render(<Health />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Aggregator Issues (1)')).toBeInTheDocument();
+    });
+    expect(screen.getByText('globalmove')).toBeInTheDocument();
+    const badge = screen.getByText('PROTECTED');
+    expect(badge.className).toMatch(/bg-danger\/20/);
+    expect(badge.className).toMatch(/text-danger/);
+  });
+
   it('shows loading state initially', () => {
     vi.mocked(fetchApi).mockReturnValue(new Promise(() => {}));
 

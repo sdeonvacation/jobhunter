@@ -154,7 +154,7 @@ function EndpointRow({ endpoint }: { endpoint: EndpointHealth }) {
 }
 
 function AggregatorRow({ aggregator }: { aggregator: AggregatorHealth }) {
-  const isError = aggregator.status === 'ERROR';
+  const isError = aggregator.status === 'ERROR' || aggregator.status === 'PROTECTED' || aggregator.status === 'RATE_LIMITED';
   const statusColor = isError ? 'text-danger' : 'text-warning';
   const badgeBg = isError ? 'bg-danger/20 text-danger' : 'bg-warning/20 text-warning';
 

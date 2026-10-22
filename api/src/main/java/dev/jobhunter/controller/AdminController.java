@@ -357,6 +357,8 @@ public class AdminController {
         List<AggregatorHealth> aggregatorIssues = aggregatorRunRepository.findAll().stream()
                 .filter(run -> "ERROR".equals(run.getLastStatus())
                         || "EMPTY".equals(run.getLastStatus())
+                        || "PROTECTED".equals(run.getLastStatus())
+                        || "RATE_LIMITED".equals(run.getLastStatus())
                         || ("SUCCESS".equals(run.getLastStatus()) && run.getJobsFetched() == 0))
                 .map(run -> new AggregatorHealth(
                         run.getSourceName(),

@@ -9,6 +9,7 @@ import dev.jobhunter.model.AggregatorRun;
 import dev.jobhunter.model.enums.CrawlStatus;
 import dev.jobhunter.repository.AggregatorRunRepository;
 import dev.jobhunter.repository.CareerEndpointRepository;
+import dev.jobhunter.scheduler.AiCrawlScheduler;
 import dev.jobhunter.scheduler.PipelineScheduler;
 import dev.jobhunter.scheduler.ScoringScheduler;
 import dev.jobhunter.service.CrawlService;
@@ -45,9 +46,9 @@ class AdminControllerHealthTest {
     @BeforeEach
     void setUp() {
         controller = new AdminController(crawlService, careerEndpointRepository, scoringScheduler,
-                discoveryService, pipelineScheduler, aggregatorIngestionService,
+                discoveryService, pipelineScheduler, mock(AiCrawlScheduler.class), aggregatorIngestionService,
                 aggregatorRunRepository, null, null, null, Optional.empty(), List.of(),
-                mock(LanguageFilter.class));
+                mock(LanguageFilter.class), List.of(), List.of());
     }
 
     @Test
@@ -172,6 +173,45 @@ class AdminControllerHealthTest {
         HealthReport report = response.getBody();
         assertThat(report).isNotNull();
         assertThat(report.aggregatorIssues()).isEmpty();
+    }
+
+    @Test
+    void getHealth_includesAggregatorIssues_whenProtectedStatus() {
+        when(careerEndpointRepository.findByIsActiveTrueAndLastCrawlStatus(CrawlStatus.ERROR)).thenReturn(List.of());
+        when(careerEndpointRepository.findByIsActiveTrueAndLastCrawlStatus(CrawlStatus.EMPTY)).thenReturn(List.of());
+        when(careerEndpointRepository.countByIsActiveTrue()).thenReturn(5L);
+        when(careerEndpointRepository.countByIsActiveTrueAndLastCrawlStatusIsNull()).thenReturn(0L);
+
+        AggregatorRun protectedRun = AggregatorRun.builder()
+                .id(UUID.randomUUID())
+                .sourceName("globalmove")
+                .lastStatus("PROTECTED")
+                .jobsFetched(0)
+                .errors(0)
+                .errorMessage("Protected endpoint - requires authentication")
+                .lastRunAt(LocalDateTime.now().minusMinutes(30))
+                .elapsedMs(800)
+                .build();
+
+        AggregatorRun rateLimitedRun = AggregatorRun.builder()
+                .id(UUID.randomUUID())
+                .sourceName("visajobs")
+                .lastStatus("RATE_LIMITED")
+                .jobsFetched(0)
+                .errors(0)
+                .lastRunAt(LocalDateTime.now().minusMinutes(15))
+                .elapsedMs(500)
+                .build();
+
+        when(aggregatorRunRepository.findAll()).thenReturn(List.of(protectedRun, rateLimitedRun));
+
+        ResponseEntity<HealthReport> response = controller.getHealth();
+
+        HealthReport report = response.getBody();
+        assertThat(report).isNotNull();
+        assertThat(report.aggregatorIssues()).hasSize(2);
+        assertThat(report.aggregatorIssues()).extracting(AggregatorHealth::name)
+                .containsExactlyInAnyOrder("globalmove", "visajobs");
     }
 
     @Test
