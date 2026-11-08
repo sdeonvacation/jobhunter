@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -260,6 +261,44 @@ class McpStrategyTest {
         void shouldReturnEmptyForBlankText() {
             JsonNode response = buildSearchResponse("", List.of("111"));
             assertThat(strategy.parseSearchResponse(response)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Should keep results when section_errors reports filters_dropped")
+        void shouldKeepResultsOnFiltersDropped() {
+            String text = "Backend Engineer\nAcme\nBerlin (Hybrid)\n";
+            ObjectNode root = mapper.createObjectNode();
+            ObjectNode sc = root.putObject("structuredContent");
+            ObjectNode sections = sc.putObject("sections");
+            sections.put("search_results", text);
+            ArrayNode ids = sc.putArray("job_ids");
+            ids.add("job1");
+            sc.putObject("references");
+            ObjectNode sectionErrors = sc.putObject("section_errors");
+            ObjectNode srError = sectionErrors.putObject("search_results");
+            srError.put("error_type", "filters_dropped");
+            srError.put("error_message", "LinkedIn did not keep location");
+
+            List<RawAggregatorJob> jobs = strategy.parseSearchResponse(root);
+
+            assertThat(jobs).hasSize(1);
+            assertThat(jobs.get(0).title()).isEqualTo("Backend Engineer");
+        }
+
+        @Test
+        @DisplayName("Should throw on non-filters_dropped section errors")
+        void shouldThrowOnOtherSectionErrors() {
+            ObjectNode root = mapper.createObjectNode();
+            ObjectNode sc = root.putObject("structuredContent");
+            sc.putObject("sections").put("search_results", "some text");
+            ObjectNode sectionErrors = sc.putObject("section_errors");
+            ObjectNode srError = sectionErrors.putObject("search_results");
+            srError.put("error_type", "search_replaced");
+            srError.put("error_message", "LinkedIn answered a different search");
+
+            assertThatThrownBy(() -> strategy.parseSearchResponse(root))
+                    .isInstanceOf(McpClientException.class)
+                    .hasMessageContaining("search_replaced");
         }
 
         @Test
@@ -607,9 +646,9 @@ class McpStrategyTest {
             rotating.fetch(context);
 
             verify(httpMcpClient).callTool(eq("search_jobs"),
-                    argThat(p -> "k1".equals(p.get("keywords")) && "l1".equals(p.get("location"))));
+                    argThat(p -> "k1 in l1".equals(p.get("keywords")) && !p.containsKey("location")));
             verify(httpMcpClient).callTool(eq("search_jobs"),
-                    argThat(p -> "k2".equals(p.get("keywords")) && "l1".equals(p.get("location"))));
+                    argThat(p -> "k2 in l1".equals(p.get("keywords")) && !p.containsKey("location")));
             assertThat(cursor.getOffset()).isEqualTo(2);
         }
 

@@ -188,9 +188,13 @@ public class McpStrategy implements FetchStrategy {
 
     private PairOutcome callSearch(SearchPair pair, String datePosted, int maxPages) {
         long callStart = System.currentTimeMillis();
+        // LinkedIn's redesigned /jobs/search-results route drops the location
+        // URL parameter and reads location from the query words instead, so
+        // fold it into the keywords ("java in Italy") and do not send a
+        // location param that would be discarded (mcp-server-linkedin
+        // reports the drop as filters_dropped and keeps the broader results).
         Map<String, Object> params = Map.of(
-                "keywords", pair.keyword(),
-                "location", pair.location(),
+                "keywords", pair.keyword() + " in " + pair.location(),
                 "date_posted", datePosted,
                 "max_pages", maxPages
         );
@@ -236,7 +240,15 @@ public class McpStrategy implements FetchStrategy {
             JsonNode srError = sectionErrors.path("search_results");
             String errorType = srError.path("error_type").asText("");
             String errorMessage = srError.path("error_message").asText("");
-            if (!errorType.isBlank()) {
+            if ("filters_dropped".equals(errorType)) {
+                // The MCP server reports dropped filters and keeps the
+                // results: they are broader than requested but still match
+                // the keywords, and the pipeline's location filter drops
+                // non-target jobs downstream. Discarding them here would
+                // fail the whole search over a relevance warning.
+                log.warn("LinkedIn dropped search filters (results kept, broader than requested): {}",
+                        errorMessage);
+            } else if (!errorType.isBlank()) {
                 throw new McpClientException("LinkedIn scrape error [" + errorType + "]: " + errorMessage, 0);
             }
         }
