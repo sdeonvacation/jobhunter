@@ -40,9 +40,12 @@ public class GlobalMoveKeepaliveJob implements Job {
         }
 
         if (sessionManager.isValid()) {
-            log.info("GlobalMove keepalive complete: session still valid");
+            log.info("GlobalMove keepalive complete: session valid (consecutive auth failures: {})",
+                    sessionManager.getConsecutiveAuthFailures());
         } else {
-            log.warn("GlobalMove keepalive complete: session is DEAD, operator re-capture required");
+            log.warn("GlobalMove keepalive complete: session DEAD (consecutive auth failures: {}); "
+                            + "re-run scripts/globalmove-login.sh and write the new cookie to the cookie file",
+                    sessionManager.getConsecutiveAuthFailures());
         }
     }
 }

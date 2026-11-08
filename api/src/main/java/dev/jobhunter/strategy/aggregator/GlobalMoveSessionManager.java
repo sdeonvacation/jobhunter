@@ -13,24 +13,40 @@ import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Holds the GlobalMove (the-global-move) Laravel session cookie captured once
  * by {@code scripts/globalmove-login.sh} and supplied via the
- * {@code GLOBALMOVE_SESSION_COOKIE} environment variable. The cookie is never
+ * {@code GLOBALMOVE_SESSION_COOKIE} environment variable or a cookie file
+ * (default {@code /tmp/jobhunter/globalmove-cookie}). The cookie is never
  * written to YAML or the database.
  *
  * <p>The session is sliding (~2h), so a Quartz keepalive calls {@link #ping()}
- * to replay the cookie against {@code GET /jobs/counts} and rotate the
- * in-memory value from any re-issued {@code Set-Cookie} header. A definitive
- * auth failure transitions the manager to {@link State#DEAD}, which surfaces
- * as {@code PROTECTED} at the strategy layer.
+ * to replay the cookie against {@code GET /jobs/counts}. A rotated value from
+ * any re-issued {@code Set-Cookie} header replaces the in-memory cookie and is
+ * persisted atomically to the cookie file, so a restart reloads the rotated
+ * value instead of the stale env capture. {@link #ping()} also reloads the file
+ * first, letting an operator drop a fresh cookie to recover without a restart.
+ *
+ * <p>Auth failures (login page, HTTP 401/403) are counted, not sticky: only
+ * {@link #AUTH_FAILURE_THRESHOLD} consecutive failures transition the manager
+ * to {@link State#DEAD}, which surfaces as {@code PROTECTED} at the strategy
+ * layer. A successful ping resets the counter; a newer cookie in the file
+ * self-heals a DEAD session.
  *
  * <p>Only {@code the-global-move-session} is ever sent; the captured
  * {@code XSRF-TOKEN} is retained for completeness but is not sent on GETs.
+ * Cookie values are never logged.
  */
 @Slf4j
 @Component
@@ -38,6 +54,13 @@ public class GlobalMoveSessionManager {
 
     static final String SESSION_COOKIE_NAME = "the-global-move-session";
     static final String XSRF_COOKIE_NAME = "XSRF-TOKEN";
+    /** Consecutive auth failures required before the session is declared DEAD. */
+    static final int AUTH_FAILURE_THRESHOLD = 3;
+    static final String DEFAULT_COOKIE_FILE = "/tmp/jobhunter/globalmove-cookie";
+    static final String COOKIE_SOURCE_FILE = "file";
+    static final String COOKIE_SOURCE_ENV = "env";
+    static final String COOKIE_SOURCE_NONE = "none";
+
     private static final String KEEPALIVE_PATH = "/jobs/counts";
     private static final String DEFAULT_BASE_URL = "https://globalmove.relocate.me";
     private static final Duration PING_TIMEOUT = Duration.ofSeconds(30);
@@ -64,33 +87,47 @@ public class GlobalMoveSessionManager {
     private final String envSessionCookie;
     private final String xsrfToken;
     private final String keepaliveUrl;
+    private final String cookieFilePath;
+    private final AtomicInteger consecutiveAuthFailures = new AtomicInteger();
 
     private volatile String currentSessionCookie;
     private volatile State state;
+    private volatile String cookieSource;
 
     public GlobalMoveSessionManager(WebClient webClient,
                                     @Value("${GLOBALMOVE_SESSION_COOKIE:}") String sessionCookie,
                                     @Value("${GLOBALMOVE_XSRF_TOKEN:}") String xsrfToken,
-                                    @Value("${globalmove.base-url:https://globalmove.relocate.me}") String baseUrl) {
+                                    @Value("${globalmove.base-url:https://globalmove.relocate.me}") String baseUrl,
+                                    @Value("${globalmove.cookie-file:" + DEFAULT_COOKIE_FILE + "}") String cookieFilePath) {
         this.webClient = webClient;
         this.envSessionCookie = sessionCookie;
         this.xsrfToken = xsrfToken;
         this.keepaliveUrl = normalizeBaseUrl(baseUrl) + KEEPALIVE_PATH;
+        this.cookieFilePath = isBlank(cookieFilePath) ? DEFAULT_COOKIE_FILE : cookieFilePath.trim();
 
-        if (isBlank(sessionCookie)) {
-            this.state = State.UNCONFIGURED;
-            this.currentSessionCookie = null;
-            log.info("GlobalMove session not configured (GLOBALMOVE_SESSION_COOKIE unset); keepalive disabled");
-        } else {
+        String fileCookie = readCookieFile();
+        if (!isBlank(fileCookie)) {
+            this.currentSessionCookie = fileCookie;
             this.state = State.VALID;
+            this.cookieSource = COOKIE_SOURCE_FILE;
+            log.info("GlobalMove session loaded from cookie file {} (xsrf token {})",
+                    this.cookieFilePath, isBlank(xsrfToken) ? "absent" : "present");
+        } else if (!isBlank(sessionCookie)) {
             this.currentSessionCookie = sessionCookie;
-            log.info("GlobalMove session configured (xsrf token {})",
+            this.state = State.VALID;
+            this.cookieSource = COOKIE_SOURCE_ENV;
+            log.info("GlobalMove session configured from env (xsrf token {})",
                     isBlank(xsrfToken) ? "absent" : "present");
+        } else {
+            this.currentSessionCookie = null;
+            this.state = State.UNCONFIGURED;
+            this.cookieSource = COOKIE_SOURCE_NONE;
+            log.info("GlobalMove session not configured (GLOBALMOVE_SESSION_COOKIE unset, no cookie file); keepalive disabled");
         }
     }
 
     public boolean isConfigured() {
-        return !isBlank(envSessionCookie);
+        return !isBlank(envSessionCookie) || !isBlank(currentSessionCookie);
     }
 
     public boolean isValid() {
@@ -101,9 +138,10 @@ public class GlobalMoveSessionManager {
         if (!isConfigured()) {
             throw new GlobalMoveSessionException("GLOBALMOVE_SESSION_COOKIE is not set");
         }
-        if (state == State.DEAD) {
+        if (state == State.DEAD && !reloadCookieFromFile()) {
             throw new GlobalMoveSessionException(
-                    "GlobalMove session is dead; re-run scripts/globalmove-login.sh and restart the API");
+                    "GlobalMove session is dead; re-run scripts/globalmove-login.sh and write the new cookie to "
+                            + cookieFilePath + " (no API restart needed)");
         }
         String cookie = currentSessionCookie;
         if (isBlank(cookie)) {
@@ -112,6 +150,7 @@ public class GlobalMoveSessionManager {
         return cookie;
     }
 
+    /** Force-declares the session dead regardless of the failure threshold. */
     public void markDead() {
         if (state != State.DEAD) {
             log.warn("GlobalMove session marked DEAD; operator re-capture required");
@@ -119,11 +158,36 @@ public class GlobalMoveSessionManager {
         state = State.DEAD;
     }
 
+    /**
+     * Records one definitive auth failure (login page, HTTP 401/403). The
+     * session only transitions to DEAD once {@link #AUTH_FAILURE_THRESHOLD}
+     * consecutive failures are observed; below that it stays usable so a
+     * transient rejection does not sticky-kill the session until restart.
+     */
+    public void recordAuthFailure(String reason) {
+        if (state == State.UNCONFIGURED) {
+            return;
+        }
+        int failures = consecutiveAuthFailures.incrementAndGet();
+        if (failures >= AUTH_FAILURE_THRESHOLD) {
+            if (state != State.DEAD) {
+                log.warn("GlobalMove session marked DEAD after {} consecutive auth failures ({}); "
+                        + "operator re-capture required", failures, reason);
+            }
+            state = State.DEAD;
+        } else {
+            log.warn("GlobalMove auth failure {}/{}: {}; session still usable",
+                    failures, AUTH_FAILURE_THRESHOLD, reason);
+        }
+    }
+
     public void ping() {
         if (!isConfigured()) {
             log.debug("GlobalMove keepalive skipped: session not configured");
             return;
         }
+
+        reloadCookieFromFile();
 
         String cookie = currentSessionCookie;
         if (isBlank(cookie)) {
@@ -152,8 +216,8 @@ public class GlobalMoveSessionManager {
 
         int status = outcome.statusCode();
         if (status == 401 || status == 403) {
-            log.warn("GlobalMove keepalive ping returned HTTP {}; session is dead", status);
-            markDead();
+            log.warn("GlobalMove keepalive ping returned HTTP {}", status);
+            recordAuthFailure("keepalive HTTP " + status);
             return;
         }
         if (status < 200 || status >= 300) {
@@ -161,16 +225,100 @@ public class GlobalMoveSessionManager {
             return;
         }
         if (looksLikeLoginPage(outcome.body())) {
-            log.warn("GlobalMove keepalive ping returned a login page; session is dead");
-            markDead();
+            log.warn("GlobalMove keepalive ping returned a login page");
+            recordAuthFailure("keepalive login page");
             return;
         }
 
         if (!isBlank(outcome.rotatedCookie()) && !outcome.rotatedCookie().equals(cookie)) {
             log.info("GlobalMove session cookie rotated by server");
             currentSessionCookie = outcome.rotatedCookie();
+            saveCookieToFile(outcome.rotatedCookie());
         }
+        consecutiveAuthFailures.set(0);
         state = State.VALID;
+    }
+
+    /** State name for health reporting (never carries the cookie value). */
+    public String getStateName() {
+        return state.name();
+    }
+
+    public int getConsecutiveAuthFailures() {
+        return consecutiveAuthFailures.get();
+    }
+
+    /** {@code "file"}, {@code "env"} or {@code "none"} — never the cookie value. */
+    public String getCookieSource() {
+        return cookieSource;
+    }
+
+    /**
+     * Adopts the cookie file's value when it differs from the in-memory one,
+     * clearing any DEAD state so an operator can drop a fresh capture without
+     * restarting the API.
+     *
+     * @return {@code true} when a newer file cookie was adopted
+     */
+    private boolean reloadCookieFromFile() {
+        String fileCookie = readCookieFile();
+        if (isBlank(fileCookie) || fileCookie.equals(currentSessionCookie)) {
+            return false;
+        }
+        currentSessionCookie = fileCookie;
+        consecutiveAuthFailures.set(0);
+        state = State.VALID;
+        cookieSource = COOKIE_SOURCE_FILE;
+        log.info("reloaded GlobalMove session cookie from file");
+        return true;
+    }
+
+    /** Never logs the cookie value. Returns {@code null} when absent/blank. */
+    private String readCookieFile() {
+        try {
+            Path path = Paths.get(cookieFilePath);
+            if (!Files.isRegularFile(path)) {
+                return null;
+            }
+            String value = Files.readString(path, StandardCharsets.UTF_8).trim();
+            return value.isEmpty() ? null : value;
+        } catch (Exception e) {
+            log.warn("Failed to read GlobalMove cookie file {}: {}", cookieFilePath, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Persists the rotated cookie atomically (temp file in the same directory
+     * + move). Disk failures never fail a ping: the in-memory value is kept.
+     */
+    private void saveCookieToFile(String value) {
+        Path target = Paths.get(cookieFilePath);
+        Path tmp = null;
+        try {
+            Path parent = target.toAbsolutePath().getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            tmp = Files.createTempFile(parent, "gm-cookie-", ".tmp");
+            Files.writeString(tmp, value, StandardCharsets.UTF_8);
+            try {
+                Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+            cookieSource = COOKIE_SOURCE_FILE;
+        } catch (Exception e) {
+            log.warn("Failed to persist GlobalMove session cookie to {}: {}",
+                    cookieFilePath, e.getMessage());
+            if (tmp != null) {
+                try {
+                    Files.deleteIfExists(tmp);
+                } catch (Exception ignored) {
+                    // best-effort cleanup of the temp file
+                }
+            }
+        }
     }
 
     /**

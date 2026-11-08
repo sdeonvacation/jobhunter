@@ -41,9 +41,11 @@ import java.util.regex.Pattern;
  * {@code props.jobs} (a Laravel paginator) and walks pages via
  * {@code next_page_url} until it is null or {@code maxResults} is reached.
  *
- * <p>A dead session (login payload, HTTP 401/403) surfaces as
- * {@link FetchResult#protectedEndpoint} and marks the session dead so the
- * operator re-runs {@code scripts/globalmove-login.sh}.
+ * <p>A rejected session (login payload, HTTP 401/403) records an auth failure
+ * on {@link GlobalMoveSessionManager} and surfaces as
+ * {@link FetchResult#protectedEndpoint}; only {@code threshold} consecutive
+ * failures declare the session dead, so the operator can drop a fresh cookie
+ * file without restarting the API.
  */
 @Slf4j
 @Component
@@ -135,13 +137,13 @@ public class GlobalMoveStrategy implements FetchStrategy {
             }
         } catch (GlobalMoveSessionException e) {
             log.warn("GlobalMove: session rejected for {}: {}", url, e.getMessage());
-            sessionManager.markDead();
+            sessionManager.recordAuthFailure("login page for " + url);
             return FetchResult.protectedEndpoint(elapsed(start));
         } catch (WebClientResponseException e) {
             int status = e.getStatusCode().value();
             if (status == 401 || status == 403) {
-                log.warn("GlobalMove: HTTP {} for {}; marking session dead", status, url);
-                sessionManager.markDead();
+                log.warn("GlobalMove: HTTP {} for {}; recording auth failure", status, url);
+                sessionManager.recordAuthFailure("HTTP " + status + " for " + url);
                 return FetchResult.protectedEndpoint(elapsed(start));
             }
             if (status == 429) {

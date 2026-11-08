@@ -13,8 +13,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -29,6 +31,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -37,7 +40,8 @@ import static org.mockito.Mockito.when;
 /**
  * Unit tests for {@link GlobalMoveStrategy}: WireMock serves the Inertia HTML
  * shell embedding {@code <script data-page="app">} JSON; the session manager is
- * a Mockito mock so cookie sourcing/mark-dead can be asserted in isolation.
+ * a Mockito mock so cookie sourcing/auth-failure recording can be asserted in
+ * isolation (one test uses a real manager to prove the failure threshold).
  */
 class GlobalMoveStrategyTest {
 
@@ -50,6 +54,9 @@ class GlobalMoveStrategyTest {
     private GlobalMoveSessionManager sessionManager;
     private GlobalMoveStrategy strategy;
     private String baseUrl;
+
+    @TempDir
+    Path tempDir;
 
     @BeforeEach
     void setUp() {
@@ -326,7 +333,7 @@ class GlobalMoveStrategyTest {
         }
 
         @Test
-        @DisplayName("login payload (dead session) → PROTECTED and markDead() called")
+        @DisplayName("login payload (rejected session) → PROTECTED and recordAuthFailure() called")
         void loginPageProtected() {
             stubPageOne(html("{\"component\":\"auth/login\",\"props\":{\"errors\":{}}}"));
 
@@ -334,11 +341,11 @@ class GlobalMoveStrategyTest {
 
             assertThat(result.status()).isEqualTo(ExtractionStatus.PROTECTED);
             assertThat(result.jobs()).isEmpty();
-            verify(sessionManager).markDead();
+            verify(sessionManager).recordAuthFailure(anyString());
         }
 
         @Test
-        @DisplayName("HTTP 401 → PROTECTED and markDead() called")
+        @DisplayName("HTTP 401 → PROTECTED and recordAuthFailure() called")
         void http401Protected() {
             wireMockServer.stubFor(get(urlPathEqualTo("/jobs"))
                     .withQueryParam("page", absent())
@@ -347,7 +354,7 @@ class GlobalMoveStrategyTest {
             FetchResult result = strategy.fetch(context(50, Map.of()));
 
             assertThat(result.status()).isEqualTo(ExtractionStatus.PROTECTED);
-            verify(sessionManager).markDead();
+            verify(sessionManager).recordAuthFailure(anyString());
         }
 
         @Test
@@ -360,7 +367,24 @@ class GlobalMoveStrategyTest {
             FetchResult result = strategy.fetch(context(50, Map.of()));
 
             assertThat(result.status()).isEqualTo(ExtractionStatus.PROTECTED);
-            verify(sessionManager).markDead();
+            verify(sessionManager).recordAuthFailure(anyString());
+        }
+
+        @Test
+        @DisplayName("single login-page response does not permanently kill a real session (threshold)")
+        void singleLoginPageDoesNotKillSession() {
+            WebClient managerClient = WebClient.builder().baseUrl(baseUrl).build();
+            GlobalMoveSessionManager realManager = new GlobalMoveSessionManager(
+                    managerClient, SESSION_COOKIE, "xsrf", baseUrl, tempDir.resolve("gm-cookie").toString());
+            GlobalMoveStrategy realStrategy = new GlobalMoveStrategy(managerClient, realManager);
+            stubPageOne(html("{\"component\":\"auth/login\",\"props\":{\"errors\":{}}}"));
+
+            FetchResult result = realStrategy.fetch(context(50, Map.of()));
+
+            assertThat(result.status()).isEqualTo(ExtractionStatus.PROTECTED);
+            assertThat(realManager.isValid()).isTrue();
+            assertThat(realManager.getConsecutiveAuthFailures()).isEqualTo(1);
+            assertThat(realManager.getStateName()).isEqualTo("VALID");
         }
 
         @Test

@@ -25,6 +25,7 @@ import dev.jobhunter.filter.LanguageFilter;
 import dev.jobhunter.service.CrawlService;
 import dev.jobhunter.service.JobTitleTranslator;
 import dev.jobhunter.source.SourceConfig;
+import dev.jobhunter.strategy.aggregator.GlobalMoveSessionManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
@@ -62,6 +63,7 @@ public class AdminController {
     private final List<DescriptionBackfiller> descriptionBackfillers;
     private final List<BackfillPostProcessor> backfillPostProcessors;
     private final JobTitleTranslator jobTitleTranslator;
+    private final GlobalMoveSessionManager globalMoveSessionManager;
 
     @Autowired
     public AdminController(CrawlService crawlService, CareerEndpointRepository careerEndpointRepository,
@@ -78,7 +80,8 @@ public class AdminController {
                            LanguageFilter languageFilter,
                            List<DescriptionBackfiller> descriptionBackfillers,
                            List<BackfillPostProcessor> backfillPostProcessors,
-                           JobTitleTranslator jobTitleTranslator) {
+                           JobTitleTranslator jobTitleTranslator,
+                           GlobalMoveSessionManager globalMoveSessionManager) {
         this.crawlService = crawlService;
         this.careerEndpointRepository = careerEndpointRepository;
         this.scoringScheduler = scoringScheduler;
@@ -96,6 +99,7 @@ public class AdminController {
         this.descriptionBackfillers = descriptionBackfillers;
         this.backfillPostProcessors = backfillPostProcessors;
         this.jobTitleTranslator = jobTitleTranslator;
+        this.globalMoveSessionManager = globalMoveSessionManager;
     }
 
     /** Backward-compatible constructor: no title translation (used by tests predating the feature). */
@@ -116,7 +120,7 @@ public class AdminController {
         this(crawlService, careerEndpointRepository, scoringScheduler, discoveryService, pipelineScheduler,
                 aiCrawlScheduler, aggregatorIngestionService, aggregatorRunRepository, matchScoreRepository,
                 opportunityScoreRepository, jobPostingRepository, httpMcpClient, sources, languageFilter,
-                descriptionBackfillers, backfillPostProcessors, null);
+                descriptionBackfillers, backfillPostProcessors, null, null);
     }
 
     @PostMapping("/pipeline")
@@ -371,8 +375,17 @@ public class AdminController {
                 ))
                 .toList();
 
+        GlobalMoveSessionHealth globalMoveSession = globalMoveSessionManager == null
+                ? null
+                : new GlobalMoveSessionHealth(
+                        globalMoveSessionManager.getStateName(),
+                        globalMoveSessionManager.isConfigured(),
+                        globalMoveSessionManager.getConsecutiveAuthFailures(),
+                        globalMoveSessionManager.getCookieSource());
+
         return ResponseEntity.ok(new HealthReport(totalEndpoints, activeEndpoints, inactiveEndpoints,
-                totalErrored, totalEmpty, neverCrawled, errors, empties, aggregatorIssues));
+                totalErrored, totalEmpty, neverCrawled, errors, empties, aggregatorIssues,
+                globalMoveSession));
     }
 
     private static final Pattern RELATIVE_TIME_PATTERN =
@@ -453,9 +466,15 @@ public class AdminController {
             String name, String status, int jobsFetched, int errors,
             String errorMessage, LocalDateTime lastRunAt, long elapsedMs) {}
 
+    /** GlobalMove session state for health reporting — never carries the cookie value. */
+    public record GlobalMoveSessionHealth(
+            String state, boolean configured,
+            int consecutiveAuthFailures, String cookieSource) {}
+
     public record HealthReport(
             long totalEndpoints, long activeEndpoints, long inactiveEndpoints,
             long errored, long empty, long neverCrawled,
             List<EndpointHealth> errors, List<EndpointHealth> empties,
-            List<AggregatorHealth> aggregatorIssues) {}
+            List<AggregatorHealth> aggregatorIssues,
+            GlobalMoveSessionHealth globalmoveSession) {}
 }

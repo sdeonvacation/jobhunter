@@ -314,6 +314,10 @@ aggregator:
 
 globalmove:
   keepalive-schedule: "0 0 * * * ?"
+  # Rotated session cookie is persisted here so it survives API restarts.
+  # Drop a fresh capture (from scripts/globalmove-login.sh) into this file to
+  # recover a DEAD session without restarting the API.
+  cookie-file: /tmp/jobhunter/globalmove-cookie
 
 server:
   port: 8089

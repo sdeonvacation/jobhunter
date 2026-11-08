@@ -23,6 +23,13 @@ interface AggregatorHealth {
   elapsedMs: number;
 }
 
+interface GlobalMoveSessionHealth {
+  state: string;
+  configured: boolean;
+  consecutiveAuthFailures: number;
+  cookieSource: string;
+}
+
 interface HealthReport {
   totalEndpoints: number;
   errored: number;
@@ -31,6 +38,7 @@ interface HealthReport {
   errors: EndpointHealth[];
   empties: EndpointHealth[];
   aggregatorIssues: AggregatorHealth[];
+  globalmoveSession?: GlobalMoveSessionHealth;
 }
 
 export default function Health() {
@@ -57,6 +65,19 @@ export default function Health() {
         <StatCard label="Empty" value={report.empty} color="text-warning" borderColor="border-t-warning" />
         <StatCard label="Never Crawled" value={report.neverCrawled} color="text-text-muted" borderColor="border-t-surface-500" />
       </div>
+
+      {report.globalmoveSession && (
+        <div className="mb-8 bg-surface-800 border border-surface-600 rounded-lg p-4 animate-fade-in text-sm">
+          <span className="text-text-muted">GlobalMove session: </span>
+          <span className={report.globalmoveSession.state === 'DEAD' ? 'text-danger font-mono' : 'text-success font-mono'}>
+            {report.globalmoveSession.state}
+          </span>
+          <span className="text-text-muted"> · auth failures </span>
+          <span className="text-text-primary font-mono">{report.globalmoveSession.consecutiveAuthFailures}</span>
+          <span className="text-text-muted"> · cookie source </span>
+          <span className="text-text-primary font-mono">{report.globalmoveSession.cookieSource}</span>
+        </div>
+      )}
 
       {report.errors.length > 0 && (
         <section className="mb-8 animate-fade-in">

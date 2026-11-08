@@ -6,7 +6,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.web.reactive.function.client.WebClient;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
@@ -21,6 +25,9 @@ class GlobalMoveSessionManagerTest {
 
     private WireMockServer wireMockServer;
 
+    @TempDir
+    Path tempDir;
+
     @BeforeEach
     void setUp() {
         wireMockServer = new WireMockServer(WireMockConfiguration.options().dynamicPort());
@@ -34,10 +41,15 @@ class GlobalMoveSessionManagerTest {
         }
     }
 
+    private Path cookieFile() {
+        return tempDir.resolve("globalmove-cookie");
+    }
+
     private GlobalMoveSessionManager newManager(String sessionCookie, String xsrfToken) {
         String baseUrl = "http://localhost:" + wireMockServer.port();
         WebClient webClient = WebClient.builder().baseUrl(baseUrl).build();
-        return new GlobalMoveSessionManager(webClient, sessionCookie, xsrfToken, baseUrl);
+        return new GlobalMoveSessionManager(webClient, sessionCookie, xsrfToken, baseUrl,
+                cookieFile().toString());
     }
 
     @Test
@@ -77,30 +89,44 @@ class GlobalMoveSessionManagerTest {
     }
 
     @Test
-    @DisplayName("ping() HTTP 401 marks session dead")
-    void ping_401_marksDead() {
+    @DisplayName("ping() 401 below threshold stays valid; third consecutive marks dead")
+    void ping_401_thresholdMarksDead() {
         wireMockServer.stubFor(get(urlPathEqualTo("/jobs/counts"))
                 .willReturn(aResponse().withStatus(401)));
         GlobalMoveSessionManager manager = newManager("original-cookie", "xsrf");
 
         manager.ping();
+        assertThat(manager.isValid()).isTrue();
+        assertThat(manager.getConsecutiveAuthFailures()).isEqualTo(1);
 
+        manager.ping();
+        assertThat(manager.isValid()).isTrue();
+        assertThat(manager.getConsecutiveAuthFailures()).isEqualTo(2);
+
+        manager.ping();
         assertThat(manager.isValid()).isFalse();
+        assertThat(manager.getStateName()).isEqualTo("DEAD");
         assertThatThrownBy(manager::getSessionCookie)
                 .isInstanceOf(GlobalMoveSessionException.class)
                 .hasMessageContaining("dead");
     }
 
     @Test
-    @DisplayName("ping() 200 login-page body marks session dead")
-    void ping_loginPageBody_marksDead() {
+    @DisplayName("ping() 200 login-page body below threshold stays valid; third marks dead")
+    void ping_loginPageBody_thresholdMarksDead() {
         wireMockServer.stubFor(get(urlPathEqualTo("/jobs/counts"))
                 .willReturn(aResponse().withStatus(200)
                         .withBody("<html><title>Subscriber sign-in</title></html>")));
         GlobalMoveSessionManager manager = newManager("original-cookie", "xsrf");
 
         manager.ping();
+        assertThat(manager.isValid()).isTrue();
+        assertThat(manager.getConsecutiveAuthFailures()).isEqualTo(1);
 
+        manager.ping();
+        assertThat(manager.isValid()).isTrue();
+
+        manager.ping();
         assertThat(manager.isValid()).isFalse();
         assertThatThrownBy(manager::getSessionCookie)
                 .isInstanceOf(GlobalMoveSessionException.class)
@@ -128,7 +154,8 @@ class GlobalMoveSessionManagerTest {
         wireMockServer = null;
         String baseUrl = "http://localhost:" + port;
         WebClient webClient = WebClient.builder().baseUrl(baseUrl).build();
-        GlobalMoveSessionManager manager = new GlobalMoveSessionManager(webClient, "original-cookie", "xsrf", baseUrl);
+        GlobalMoveSessionManager manager = new GlobalMoveSessionManager(webClient, "original-cookie", "xsrf",
+                baseUrl, cookieFile().toString());
 
         manager.ping();
 
@@ -161,8 +188,8 @@ class GlobalMoveSessionManagerTest {
     }
 
     @Test
-    @DisplayName("realistic Inertia login page (escaped component) marks session dead on ping")
-    void ping_realisticInertiaLoginPage_marksDead() {
+    @DisplayName("realistic Inertia login page (escaped component) needs threshold pings to kill session")
+    void ping_realisticInertiaLoginPage_thresholdMarksDead() {
         String loginPage = "<!DOCTYPE html><html lang=\"en\"><head><title>Global Move</title></head><body>"
                 + "<div id=\"app\" data-page=\"{&quot;component&quot;:&quot;auth\\/login&quot;}\"></div>"
                 + "<script data-page=\"app\" type=\"application/json\">"
@@ -175,11 +202,98 @@ class GlobalMoveSessionManagerTest {
         GlobalMoveSessionManager manager = newManager("dead-cookie", "xsrf");
 
         manager.ping();
+        assertThat(manager.isValid()).isTrue();
+        manager.ping();
+        assertThat(manager.isValid()).isTrue();
+        manager.ping();
 
         assertThat(manager.isValid()).isFalse();
         assertThatThrownBy(manager::getSessionCookie)
                 .isInstanceOf(GlobalMoveSessionException.class)
                 .hasMessageContaining("dead");
+    }
+
+    @Test
+    @DisplayName("rotation persists the rotated cookie to the file atomically")
+    void ping_rotation_writesCookieFile() throws Exception {
+        wireMockServer.stubFor(get(urlPathEqualTo("/jobs/counts"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Set-Cookie", SESSION_COOKIE + "=rotated-value; Path=/; HttpOnly")
+                        .withBody("{\"count\":5}")));
+        GlobalMoveSessionManager manager = newManager("original-cookie", "xsrf");
+
+        manager.ping();
+
+        assertThat(manager.getSessionCookie()).isEqualTo("rotated-value");
+        assertThat(Files.readString(cookieFile())).isEqualTo("rotated-value");
+        assertThat(manager.getCookieSource()).isEqualTo("file");
+        assertThat(manager.isValid()).isTrue();
+    }
+
+    @Test
+    @DisplayName("startup prefers cookie file over env when both present")
+    void startup_prefersFileOverEnv() throws Exception {
+        Files.writeString(cookieFile(), "file-cookie");
+        String baseUrl = "http://localhost:" + wireMockServer.port();
+        WebClient webClient = WebClient.builder().baseUrl(baseUrl).build();
+
+        GlobalMoveSessionManager manager = new GlobalMoveSessionManager(webClient, "env-cookie", "xsrf",
+                baseUrl, cookieFile().toString());
+
+        assertThat(manager.getSessionCookie()).isEqualTo("file-cookie");
+        assertThat(manager.getCookieSource()).isEqualTo("file");
+        assertThat(manager.isConfigured()).isTrue();
+    }
+
+    @Test
+    @DisplayName("while DEAD, a new cookie in the file is adopted by getSessionCookie() (self-heal)")
+    void deadSession_recoversFromCookieFile() throws Exception {
+        GlobalMoveSessionManager manager = newManager("original-cookie", "xsrf");
+        manager.markDead();
+        assertThat(manager.isValid()).isFalse();
+
+        Files.writeString(cookieFile(), "fresh-cookie");
+
+        assertThat(manager.getSessionCookie()).isEqualTo("fresh-cookie");
+        assertThat(manager.isValid()).isTrue();
+        assertThat(manager.getStateName()).isEqualTo("VALID");
+        assertThat(manager.getConsecutiveAuthFailures()).isZero();
+        assertThat(manager.getCookieSource()).isEqualTo("file");
+    }
+
+    @Test
+    @DisplayName("successful ping after an auth failure resets the failure counter")
+    void ping_success_afterFailure_resetsCounter() {
+        wireMockServer.stubFor(get(urlPathEqualTo("/jobs/counts"))
+                .willReturn(aResponse().withStatus(200)
+                        .withBody("<html><title>Subscriber sign-in</title></html>")));
+        GlobalMoveSessionManager manager = newManager("original-cookie", "xsrf");
+
+        manager.ping();
+        assertThat(manager.getConsecutiveAuthFailures()).isEqualTo(1);
+        assertThat(manager.isValid()).isTrue();
+
+        wireMockServer.resetAll();
+        wireMockServer.stubFor(get(urlPathEqualTo("/jobs/counts"))
+                .willReturn(aResponse().withStatus(200).withBody("{\"count\":5}")));
+
+        manager.ping();
+
+        assertThat(manager.getConsecutiveAuthFailures()).isZero();
+        assertThat(manager.isValid()).isTrue();
+        assertThat(manager.getStateName()).isEqualTo("VALID");
+    }
+
+    @Test
+    @DisplayName("DEAD session with no cookie file → getSessionCookie() throws with cookie-file hint")
+    void deadSession_withoutFile_throwsWithHint() {
+        GlobalMoveSessionManager manager = newManager("original-cookie", "xsrf");
+        manager.markDead();
+
+        assertThatThrownBy(manager::getSessionCookie)
+                .isInstanceOf(GlobalMoveSessionException.class)
+                .hasMessageContaining("dead")
+                .hasMessageContaining(cookieFile().toString());
     }
 
     @Test
