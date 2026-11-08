@@ -233,11 +233,14 @@ public class CityCountryResolver {
             }
         }
 
-        // Try leading word only (handles "Frankfurt am Main" → "frankfurt").
-        // Only first word is tried — prevents "New York City" → "york" → York, GB.
+        // Try each word as a city name (handles "Frankfurt am Main" → "frankfurt" and
+        // office-prefixed strings like "LiveEO GmbH Berlin Office (Hybrid)" → "berlin").
+        // Words are tried left to right, so the first resolvable city wins: "New York City"
+        // resolves on "new" and never reaches "york" (York, GB).
         String[] words = lower.split("\\s+");
-        if (words.length > 1 && words[0].length() >= 3) {
-            List<String> wordIsos = cityToIsos.getOrDefault(words[0], List.of());
+        for (String word : words) {
+            if (word.length() < 3) continue;
+            List<String> wordIsos = cityToIsos.getOrDefault(word, List.of());
             if (!wordIsos.isEmpty()) return Optional.of(pickBestIso(wordIsos));
         }
 

@@ -202,6 +202,29 @@ class CityCountryResolverTest {
     }
 
     // -------------------------------------------------------------------------
+    // City embedded mid-string (office-prefixed ATS location values)
+    // Regression: LiveEO/Personio postings store the whole office label as the
+    // location (e.g. "LiveEO GmbH Berlin Office (Hybrid)"); the city name sits in
+    // the middle, so it must be found by trying each word, not just the leading one.
+    // -------------------------------------------------------------------------
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "LiveEO GmbH Berlin Office (Hybrid)",
+            "LiveEO GmbH Berlin (Onsite)"
+    })
+    void cityEmbeddedMidString_resolvesDe(String location) {
+        assertThat(resolver.resolve(location)).contains("DE");
+    }
+
+    // Guard for the leading-word regression this change must not reintroduce:
+    // "New York City" must resolve on "new" (US) and never fall through to "york" (GB).
+    @Test
+    void newYorkCity_resolvesUs_notYorkGb() {
+        assertThat(resolver.resolve("New York City")).contains("US");
+    }
+
+    // -------------------------------------------------------------------------
     // ISO 2-letter codes (word boundary matched)
     // -------------------------------------------------------------------------
 
