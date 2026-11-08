@@ -29,7 +29,7 @@ class IndeedSourceTest {
         var config = new DiscoveryProperties.ProviderConfig(
                 true, keywords, locations, null, null, frequencyHours, resultsWanted, hoursOld, null,
                 null, null, null);
-        return new DiscoveryProperties(null, Map.of("jobspy", config));
+        return new DiscoveryProperties(null, Map.of("jobspy", config), List.of());
     }
 
     @BeforeEach
@@ -109,7 +109,7 @@ class IndeedSourceTest {
     @Test
     @DisplayName("buildContext() returns empty lists when provider config missing")
     void buildContextWithMissingProviderConfig() {
-        DiscoveryProperties emptyProps = new DiscoveryProperties(null, Map.of());
+        DiscoveryProperties emptyProps = new DiscoveryProperties(null, Map.of(), List.of());
         IndeedSource emptySource = new IndeedSource(cliStrategy, emptyProps);
 
         FetchContext context = emptySource.buildContext();

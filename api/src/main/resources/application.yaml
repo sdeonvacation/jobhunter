@@ -55,6 +55,18 @@ discovery:
   auto-endpoint:
     enabled: true
   schedule: "0 40 */6 * * ?"
+  academic-blocklist:
+    - "(?i)universit"
+    - "(?i)hochschule"
+    - "(?i)fachhochschule"
+    - "(?i)fraunhofer"
+    - "(?i)max[- ]?planck"
+    - "(?i)helmholtz"
+    - "(?i)leibniz"
+    - "(?i)\\brwth\\b"
+    - "(?i)\\binstitut"
+    - "(?i)\\bacadem"
+    - "(?i)\\bcollege\\b"
   resolve-limit: 50
   providers:
     jobspy:
@@ -276,6 +288,7 @@ aggregator:
       config:
         delay-between-pages-ms: "800"
     - name: wissenschaftsstellen
+      enabled: false
       strategy: wissenschaftsstellen
       job-source: WISSENSCHAFTSSTELLEN
       discovery-source: WISSENSCHAFTSSTELLEN

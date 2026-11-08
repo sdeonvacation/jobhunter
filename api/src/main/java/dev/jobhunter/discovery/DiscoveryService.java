@@ -21,6 +21,8 @@ import org.springframework.data.domain.Pageable;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
 /**
@@ -40,6 +42,8 @@ public class DiscoveryService {
     private final CompositeEndpointResolver endpointResolver;
     private final AtsDetector atsDetector;
     private final DiscoveryProperties properties;
+    /** Compiled once at construction; malformed patterns are dropped with a single warning each. */
+    private final List<Pattern> academicPatterns;
 
     public DiscoveryService(
             List<DiscoveryProvider> providers,
@@ -61,6 +65,37 @@ public class DiscoveryService {
         this.endpointResolver = endpointResolver;
         this.atsDetector = atsDetector;
         this.properties = properties;
+        this.academicPatterns = compileAcademicPatterns(properties == null ? null : properties.academicBlocklist());
+    }
+
+    private static List<Pattern> compileAcademicPatterns(List<String> blocklist) {
+        if (blocklist == null || blocklist.isEmpty()) {
+            return List.of();
+        }
+        List<Pattern> compiled = new ArrayList<>(blocklist.size());
+        for (String raw : blocklist) {
+            if (raw == null || raw.isBlank()) {
+                continue;
+            }
+            try {
+                compiled.add(Pattern.compile(raw));
+            } catch (PatternSyntaxException e) {
+                log.warn("Ignoring malformed academic blocklist regex '{}': {}", raw, e.getMessage());
+            }
+        }
+        return List.copyOf(compiled);
+    }
+
+    private boolean isAcademic(String name) {
+        if (name == null || name.isBlank()) {
+            return false;
+        }
+        for (Pattern pattern : academicPatterns) {
+            if (pattern.matcher(name).find()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -116,7 +151,7 @@ public class DiscoveryService {
                 DiscoveryOutcome outcome = processDiscoveredCompany(normalizedName, discovered);
                 switch (outcome) {
                     case REGISTERED -> registered++;
-                    case ALREADY_EXISTS -> alreadyExists++;
+                    case ALREADY_EXISTS, SKIPPED_ACADEMIC -> alreadyExists++;
                     case NEW_ENDPOINT_ADDED -> newEndpoints++;
                     case DETECTION_FAILED, UNSUPPORTED_ATS -> failed++;
                 }
@@ -178,6 +213,14 @@ public class DiscoveryService {
     }
 
     DiscoveryOutcome processDiscoveredCompany(String normalizedName, DiscoveredCompany discovered) {
+        // Academic institutions are blocked before any registry lookup or registration
+        if (isAcademic(discovered.companyName()) || isAcademic(normalizedName)) {
+            log.info("Skipping academic institution '{}' (matched discovery blocklist)",
+                    discovered.companyName());
+            logDiscoveryEvent(null, discovered, DiscoveryOutcome.SKIPPED_ACADEMIC);
+            return DiscoveryOutcome.SKIPPED_ACADEMIC;
+        }
+
         // Check if company already exists in registry
         Optional<Company> existing = companyRepository.findByNormalizedName(normalizedName);
 

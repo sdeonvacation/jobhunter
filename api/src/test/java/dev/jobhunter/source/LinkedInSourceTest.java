@@ -29,7 +29,7 @@ class LinkedInSourceTest {
         var config = new DiscoveryProperties.ProviderConfig(
                 true, keywords, locations, null, maxResults, frequencyHours, null, null, datePosted,
                 null, null, null);
-        return new DiscoveryProperties(null, Map.of("linkedin", config));
+        return new DiscoveryProperties(null, Map.of("linkedin", config), List.of());
     }
 
     @BeforeEach
@@ -108,7 +108,7 @@ class LinkedInSourceTest {
     @Test
     @DisplayName("buildContext() returns empty lists when provider config missing")
     void buildContextWithMissingProviderConfig() {
-        DiscoveryProperties emptyProps = new DiscoveryProperties(null, Map.of());
+        DiscoveryProperties emptyProps = new DiscoveryProperties(null, Map.of(), List.of());
         LinkedInSource emptySource = new LinkedInSource(mcpStrategy, emptyProps);
 
         FetchContext context = emptySource.buildContext();

@@ -8,8 +8,13 @@ import java.util.Map;
 @ConfigurationProperties(prefix = "discovery")
 public record DiscoveryProperties(
         String schedule,
-        Map<String, ProviderConfig> providers
+        Map<String, ProviderConfig> providers,
+        List<String> academicBlocklist
 ) {
+
+    public DiscoveryProperties {
+        if (academicBlocklist == null) academicBlocklist = List.of();
+    }
 
     public record ProviderConfig(
             boolean enabled,
