@@ -288,6 +288,16 @@ aggregator:
         maxScrapePerRun: "120"
         maxPages: "20"
         maxConsecutiveDetailFailures: "5"
+    - name: jobleads
+      strategy: jobleads
+      job-source: JOBLEADS
+      discovery-source: JOBLEADS
+      url: "https://www.jobleads.com/de/jobs/q/{query}?minSalary=80000"
+      frequency-hours: 12 # informational only
+      max-results: 100
+      visa-exempt: true
+      config:
+        queries: "Applied AI Engineer,software engineer,ai software engineer"
 
 globalmove:
   keepalive-schedule: "0 0 * * * ?"
