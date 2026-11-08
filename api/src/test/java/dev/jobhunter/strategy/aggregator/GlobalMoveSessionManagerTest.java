@@ -159,4 +159,104 @@ class GlobalMoveSessionManagerTest {
 
         wireMockServer.verify(0, getRequestedFor(urlPathEqualTo("/jobs/counts")));
     }
+
+    @Test
+    @DisplayName("realistic Inertia login page (escaped component) marks session dead on ping")
+    void ping_realisticInertiaLoginPage_marksDead() {
+        String loginPage = "<!DOCTYPE html><html lang=\"en\"><head><title>Global Move</title></head><body>"
+                + "<div id=\"app\" data-page=\"{&quot;component&quot;:&quot;auth\\/login&quot;}\"></div>"
+                + "<script data-page=\"app\" type=\"application/json\">"
+                + "{\"component\":\"auth\\/login\",\"props\":{},\"url\":\"\\/login\",\"version\":\"1\"}"
+                + "</script></body></html>";
+        wireMockServer.stubFor(get(urlPathEqualTo("/jobs/counts"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Set-Cookie", SESSION_COOKIE + "=anonymous; Path=/; HttpOnly")
+                        .withBody(loginPage)));
+        GlobalMoveSessionManager manager = newManager("dead-cookie", "xsrf");
+
+        manager.ping();
+
+        assertThat(manager.isValid()).isFalse();
+        assertThatThrownBy(manager::getSessionCookie)
+                .isInstanceOf(GlobalMoveSessionException.class)
+                .hasMessageContaining("dead");
+    }
+
+    @Test
+    @DisplayName("Inertia payload with escaped auth\\/login component is a login page")
+    void looksLikeLoginPage_inertiaEscapedComponent_isLoginPage() {
+        String body = "<html><body><script data-page=\"app\" type=\"application/json\">"
+                + "{\"component\":\"auth\\/login\",\"props\":{},\"url\":\"\\/login\"}"
+                + "</script></body></html>";
+
+        assertThat(GlobalMoveSessionManager.looksLikeLoginPage(body)).isTrue();
+    }
+
+    @Test
+    @DisplayName("Inertia payload component containing 'login' is detected via JSON parsing")
+    void looksLikeLoginPage_inertiaComponentContainingLogin_isLoginPage() {
+        String body = "<html><body><script data-page=\"app\" type=\"application/json\">"
+                + "{\"component\":\"sessions\\/login\",\"props\":{}}"
+                + "</script></body></html>";
+
+        assertThat(GlobalMoveSessionManager.looksLikeLoginPage(body)).isTrue();
+    }
+
+    @Test
+    @DisplayName("Inertia payload with non-login component is not a login page")
+    void looksLikeLoginPage_inertiaDashboardComponent_isNotLoginPage() {
+        String body = "<html><body><script data-page=\"app\" type=\"application/json\">"
+                + "{\"component\":\"jobs\\/index\",\"props\":{\"jobs\":{}}}"
+                + "</script></body></html>";
+
+        assertThat(GlobalMoveSessionManager.looksLikeLoginPage(body)).isFalse();
+    }
+
+    @Test
+    @DisplayName("literal unescaped auth/login (e.g. in href) is detected")
+    void looksLikeLoginPage_literalAuthLogin_isLoginPage() {
+        String body = "<html><body><a href=\"/auth/login\">Sign in</a></body></html>";
+
+        assertThat(GlobalMoveSessionManager.looksLikeLoginPage(body)).isTrue();
+    }
+
+    @Test
+    @DisplayName("HTML without data-page script but with literal marker is detected")
+    void looksLikeLoginPage_htmlWithMarkerNoDataPage_isLoginPage() {
+        String body = "<html><head><title>Subscriber sign-in</title></head><body></body></html>";
+
+        assertThat(GlobalMoveSessionManager.looksLikeLoginPage(body)).isTrue();
+    }
+
+    @Test
+    @DisplayName("valid counts JSON body is not a login page")
+    void looksLikeLoginPage_countsJson_isNotLoginPage() {
+        assertThat(GlobalMoveSessionManager.looksLikeLoginPage("{\"active\":10}")).isFalse();
+    }
+
+    @Test
+    @DisplayName("blank body is not a login page")
+    void looksLikeLoginPage_blank_isNotLoginPage() {
+        assertThat(GlobalMoveSessionManager.looksLikeLoginPage(null)).isFalse();
+        assertThat(GlobalMoveSessionManager.looksLikeLoginPage("")).isFalse();
+        assertThat(GlobalMoveSessionManager.looksLikeLoginPage("   ")).isFalse();
+    }
+
+    @Test
+    @DisplayName("malformed Inertia JSON falls back to raw markers, so no marker means not a login page")
+    void looksLikeLoginPage_malformedInertiaJson_withoutMarker_isNotLoginPage() {
+        String body = "<html><body><script data-page=\"app\" type=\"application/json\">"
+                + "{not-json"
+                + "</script></body></html>";
+
+        assertThat(GlobalMoveSessionManager.looksLikeLoginPage(body)).isFalse();
+    }
+
+    @Test
+    @DisplayName("malformed Inertia JSON with escaped marker is still detected")
+    void looksLikeLoginPage_malformedInertiaJson_withEscapedMarker_isLoginPage() {
+        String body = "<html><body><script data-page=\"app\">{broken \"component\":\"auth\\/login\"}</script></body></html>";
+
+        assertThat(GlobalMoveSessionManager.looksLikeLoginPage(body)).isTrue();
+    }
 }

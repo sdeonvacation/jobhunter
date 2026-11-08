@@ -1,6 +1,10 @@
 package dev.jobhunter.strategy.aggregator;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Element;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
@@ -39,10 +43,16 @@ public class GlobalMoveSessionManager {
     private static final Duration PING_TIMEOUT = Duration.ofSeconds(30);
 
     // Login-page discriminators. The shared WebClient follows redirects, so a
-    // dead session yields a 200 sign-in page rather than a 302.
+    // dead session yields a 200 sign-in page rather than a 302. The Inertia
+    // payload JSON-escapes the component path ("auth\/login"), so both the
+    // escaped and unescaped forms are matched.
     private static final List<String> LOGIN_PAGE_MARKERS = List.of(
             "subscriber sign-in",
-            "auth/login");
+            "auth/login",
+            "auth\\/login");
+
+    /** Reads the Inertia payload; {@code ObjectMapper} is thread-safe for reads. */
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     public enum State {
         UNCONFIGURED,
@@ -182,7 +192,7 @@ public class GlobalMoveSessionManager {
                 .thenReturn(new PingOutcome(status, rotatedValue, ""));
     }
 
-    private static boolean looksLikeLoginPage(String body) {
+    static boolean looksLikeLoginPage(String body) {
         if (isBlank(body)) {
             return false;
         }
@@ -192,7 +202,34 @@ public class GlobalMoveSessionManager {
                 return true;
             }
         }
-        return false;
+        if (!lower.contains("data-page")) {
+            return false;
+        }
+        String component = inertiaComponent(body);
+        return component != null && component.toLowerCase(Locale.ROOT).contains("login");
+    }
+
+    /**
+     * Extracts the Inertia {@code component} field from
+     * {@code <script data-page="app">}, mirroring the strategy's parser.
+     * Returns {@code null} when the payload is absent or unparseable, in which
+     * case the caller falls back to the raw literal markers.
+     */
+    private static String inertiaComponent(String body) {
+        try {
+            Element script = Jsoup.parse(body).selectFirst("script[data-page=app]");
+            if (script == null) {
+                return null;
+            }
+            String json = script.data();
+            if (isBlank(json)) {
+                json = script.html();
+            }
+            JsonNode root = OBJECT_MAPPER.readTree(json);
+            return root.path("component").asText("");
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static String normalizeBaseUrl(String baseUrl) {
