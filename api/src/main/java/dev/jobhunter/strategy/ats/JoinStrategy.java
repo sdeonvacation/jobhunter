@@ -145,7 +145,13 @@ public class JoinStrategy extends AbstractAtsStrategy {
         if (root == null) {
             return null;
         }
-        return root.path("props").path("pageProps").path("initialState").path("jobs");
+        JsonNode pageProps = root.path("props").path("pageProps");
+        JsonNode legacy = pageProps.path("initialState").path("jobs");
+        if (!legacy.isMissingNode() && !legacy.isNull()) {
+            return legacy;
+        }
+        // Join.com redesign: jobs moved from initialState to pageData
+        return pageProps.path("pageData").path("jobs");
     }
 
     private void collectJobs(JsonNode items, String slug, List<RawAggregatorJob> jobs, Set<String> seenExternalIds) {

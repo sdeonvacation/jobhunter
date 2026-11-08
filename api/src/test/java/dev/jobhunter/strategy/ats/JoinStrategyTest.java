@@ -295,6 +295,33 @@ class JoinStrategyTest {
     }
 
     @Test
+    void extract_pageDataLayout_returnsJobs() {
+        String items = """
+                [
+                  {"id": 7, "idParam": "7-new-layout", "title": "New Layout Role",
+                   "city": {"cityName": "Berlin"}, "country": {"iso3166": "DE"},
+                   "createdAt": "2024-05-01T00:00:00Z"}
+                ]
+                """;
+        String nextData = """
+                {"props":{"pageProps":{"pageData":{"jobs":{"items":%s,"pagination":{"page":1,"pageCount":1,"pageSize":5,"perPage":5,"total":1}}}}},"page":"/companies/[slug]","query":{},"buildId":"test"}
+                """.formatted(items);
+        stubCompanyPage("newlayout", nextData);
+
+        var endpoint = CareerEndpoint.builder()
+                .atsType(AtsType.JOIN)
+                .atsSlug("newlayout")
+                .build();
+
+        var result = extractor.fetch(FetchContext.forEndpoint(endpoint));
+        assertThat(result.status()).isEqualTo(ExtractionStatus.SUCCESS);
+        assertThat(result.jobs()).hasSize(1);
+        assertThat(result.jobs().get(0).externalId()).isEqualTo("7");
+        assertThat(result.jobs().get(0).title()).isEqualTo("New Layout Role");
+        assertThat(result.jobs().get(0).location()).isEqualTo("Berlin, DE");
+    }
+
+    @Test
     void extract_404_returnsError() {
         stubFor(get(urlPathMatching("/companies/.*"))
                 .willReturn(aResponse().withStatus(404)));
