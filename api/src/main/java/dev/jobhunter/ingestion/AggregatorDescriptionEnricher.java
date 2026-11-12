@@ -152,11 +152,16 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
                 log.warn("Aggregator enrichment interrupted after {}/{} jobs", enrichedCount, batch.size());
                 break;
             } catch (WebClientResponseException e) {
-                if (e.getStatusCode().is4xxClientError()) {
+                if (e.getStatusCode().is4xxClientError() && !isTransientStatus(e.getStatusCode().value())) {
                     job.setActive(false);
                     job.setFilterReason("url-dead-" + e.getStatusCode().value());
                     jobPostingRepository.save(job);
                     log.info("Deactivated dead-URL job [{}] (HTTP {}): {}", job.getExternalId(), e.getStatusCode().value(), job.getApplyUrl());
+                } else if (e.getStatusCode().is4xxClientError()) {
+                    // 429/408 are transient (rate limit / timeout), not a dead URL — skip this
+                    // round; the job stays active and is retried on the next enrichment pass.
+                    log.warn("Transient HTTP {} enriching job [{}] from {}, will retry: {}",
+                            e.getStatusCode().value(), job.getExternalId(), job.getApplyUrl(), e.getMessage());
                 } else {
                     log.warn("Failed to enrich aggregator job [{}] from {}: {}",
                             job.getExternalId(), job.getApplyUrl(), e.getMessage());
@@ -170,6 +175,14 @@ public class AggregatorDescriptionEnricher implements PostIngestionEnricher {
         }
 
         log.info("Enriched aggregator job descriptions: {}/{}", enrichedCount, batch.size());
+    }
+
+    /**
+     * 429 (rate limited) and 408 (request timeout) are transient — the URL is not dead,
+     * so the job must not be tombstoned. Retry on the next enrichment pass instead.
+     */
+    static boolean isTransientStatus(int statusCode) {
+        return statusCode == 429 || statusCode == 408;
     }
 
     @Transactional

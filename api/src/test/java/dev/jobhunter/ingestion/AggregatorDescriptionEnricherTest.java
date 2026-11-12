@@ -288,6 +288,67 @@ class AggregatorDescriptionEnricherTest {
     }
 
     @Test
+    void enrichDescriptions_http429_doesNotDeactivateJob() {
+        stubFor(get("/jobs/rate-limited").willReturn(aResponse().withStatus(429).withBody("Slow down")));
+
+        JobPosting job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.DIRECT)
+                .externalId("personio-429")
+                .title("Dev")
+                .applyUrl(baseUrl + "/jobs/rate-limited")
+                .description(null)
+                .languageFilter(FilterDecision.KEEP)
+                .isActive(true)
+                .build();
+
+        when(jobPostingRepository.findAggregatorJobsNeedingDescription(any(), anyInt()))
+                .thenReturn(List.of(job));
+
+        enricher.enrichDescriptions();
+
+        // Transient rate-limit: job stays active, no tombstone, nothing persisted.
+        assertThat(job.isActive()).isTrue();
+        assertThat(job.getFilterReason()).isNull();
+        verify(jobPostingRepository, never()).save(any(JobPosting.class));
+    }
+
+    @Test
+    void enrichDescriptions_http404_stillDeactivatesJob() {
+        stubFor(get("/jobs/gone").willReturn(notFound()));
+
+        JobPosting job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.DIRECT)
+                .externalId("personio-404")
+                .title("Dev")
+                .applyUrl(baseUrl + "/jobs/gone")
+                .description(null)
+                .languageFilter(FilterDecision.KEEP)
+                .isActive(true)
+                .build();
+
+        when(jobPostingRepository.findAggregatorJobsNeedingDescription(any(), anyInt()))
+                .thenReturn(List.of(job));
+        when(jobPostingRepository.save(any(JobPosting.class))).thenAnswer(i -> i.getArgument(0));
+
+        enricher.enrichDescriptions();
+
+        assertThat(job.isActive()).isFalse();
+        assertThat(job.getFilterReason()).isEqualTo("url-dead-404");
+        verify(jobPostingRepository).save(any(JobPosting.class));
+    }
+
+    @Test
+    void isTransientStatus_flags429And408Only() {
+        assertThat(AggregatorDescriptionEnricher.isTransientStatus(429)).isTrue();
+        assertThat(AggregatorDescriptionEnricher.isTransientStatus(408)).isTrue();
+        assertThat(AggregatorDescriptionEnricher.isTransientStatus(404)).isFalse();
+        assertThat(AggregatorDescriptionEnricher.isTransientStatus(403)).isFalse();
+        assertThat(AggregatorDescriptionEnricher.isTransientStatus(400)).isFalse();
+    }
+
+    @Test
     void enrichDescriptions_extractedTextShorterThanCurrent_skipsUpdate() {
         String html = "<html><body><p>Short</p></body></html>";
         stubFor(get("/jobs/short").willReturn(ok(html).withHeader("Content-Type", "text/html")));
