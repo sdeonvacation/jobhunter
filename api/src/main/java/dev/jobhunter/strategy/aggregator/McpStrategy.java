@@ -200,11 +200,36 @@ public class McpStrategy implements FetchStrategy {
         );
         JsonNode result = httpMcpClient.callTool("search_jobs", params);
         long elapsedMs = System.currentTimeMillis() - callStart;
-        List<RawAggregatorJob> jobs = parseSearchResponse(result);
+        List<RawAggregatorJob> jobs = applyPairLocationFallback(
+                parseSearchResponse(result), pair.location());
         if (jobs.isEmpty() && elapsedMs < INSTANT_EMPTY_THRESHOLD_MS) {
             return PairOutcome.instantEmpty(elapsedMs);
         }
         return PairOutcome.success(jobs);
+    }
+
+    /**
+     * When text/reference alignment yields no location, fall back to the search
+     * pair's location (e.g. "Germany"). Better a coarse search-intent location
+     * than null, which LocationFilterImpl rejects as "location: blank".
+     */
+    static List<RawAggregatorJob> applyPairLocationFallback(
+            List<RawAggregatorJob> jobs, String searchLocation) {
+        if (jobs.isEmpty() || searchLocation == null || searchLocation.isBlank()) {
+            return jobs;
+        }
+        List<RawAggregatorJob> out = new ArrayList<>(jobs.size());
+        for (RawAggregatorJob job : jobs) {
+            if (job.location() == null || job.location().isBlank()) {
+                out.add(new RawAggregatorJob(
+                        job.externalId(), job.title(), job.companyName(), searchLocation,
+                        job.description(), job.applyUrl(), job.postedDate(),
+                        job.salaryMin(), job.salaryMax(), job.salaryCurrency(), job.rawJson()));
+            } else {
+                out.add(job);
+            }
+        }
+        return out;
     }
 
     private static int configInt(Map<String, Object> config, String key, int defaultValue) {
@@ -255,13 +280,30 @@ public class McpStrategy implements FetchStrategy {
 
         String searchText = sc.path("sections").path("search_results").asText("");
         JsonNode references = sc.path("references").path("search_results");
+        JsonNode jobIds = sc.path("job_ids");
 
-        // Primary path: use references for reliable ID-title alignment
+        List<ParsedLinkedInJob> textParsed = searchText.isBlank()
+                ? List.of()
+                : parseJobLines(searchText.split("\n"));
+
+        // Primary path: zip job_ids with text cards in page order. job_ids[i] is the
+        // i-th card, and references frequently omit `text` (24/25 in live payloads),
+        // which made title-based alignment drop or fail to enrich most jobs.
+        if (jobIds.isArray() && !textParsed.isEmpty() && jobIds.size() == textParsed.size()) {
+            for (int i = 0; i < jobIds.size(); i++) {
+                ParsedLinkedInJob pj = textParsed.get(i);
+                String jobId = jobIds.get(i).asText();
+                jobs.add(new RawAggregatorJob(
+                        jobId, pj.title(), pj.company(), pj.location(),
+                        null, "https://www.linkedin.com/jobs/view/" + jobId + "/",
+                        pj.postedDate(), null, null, null, null
+                ));
+            }
+            return jobs;
+        }
+
+        // Secondary: references for ID-title alignment (handles count-mismatched text)
         if (references.isArray() && references.size() > 0) {
-            List<ParsedLinkedInJob> textParsed = searchText.isBlank()
-                    ? List.of()
-                    : parseJobLines(searchText.split("\n"));
-
             List<ReferenceJob> refJobs = parseReferences(references);
             jobs = alignReferencesWithText(refJobs, textParsed);
 
@@ -271,23 +313,19 @@ public class McpStrategy implements FetchStrategy {
         }
 
         // Fallback: old positional alignment (job_ids array)
-        JsonNode jobIds = sc.path("job_ids");
         if (searchText.isBlank() || !jobIds.isArray()) {
             return jobs;
         }
 
-        String[] lines = searchText.split("\n");
-        List<ParsedLinkedInJob> parsed = parseJobLines(lines);
-
         // Only use positional fallback if counts match exactly
-        if (parsed.size() != jobIds.size()) {
+        if (textParsed.size() != jobIds.size()) {
             log.warn("LinkedIn parser: text entries ({}) != job_ids ({}), skipping unreliable batch",
-                    parsed.size(), jobIds.size());
+                    textParsed.size(), jobIds.size());
             return jobs;
         }
 
-        for (int i = 0; i < parsed.size(); i++) {
-            ParsedLinkedInJob pj = parsed.get(i);
+        for (int i = 0; i < textParsed.size(); i++) {
+            ParsedLinkedInJob pj = textParsed.get(i);
             String jobId = jobIds.get(i).asText();
             String linkedinUrl = "https://www.linkedin.com/jobs/view/" + jobId + "/";
             jobs.add(new RawAggregatorJob(
@@ -390,42 +428,102 @@ public class McpStrategy implements FetchStrategy {
     }
 
     /**
-     * Parse LinkedIn's text-based search results format: title, company, location(workType) lines.
-     * Also scans the 1-3 lines following the location line for a relative time string ("X days ago").
+     * Parse LinkedIn's text-based search results format: title, company, location lines.
+     * Blank lines between fields are skipped when walking back for company/title.
+     * Also scans the lines following the location line for a relative time string.
      */
     List<ParsedLinkedInJob> parseJobLines(String[] lines) {
         List<ParsedLinkedInJob> parsedJobs = new ArrayList<>();
 
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i].trim();
-            if (isLocationLine(line) && i >= 2) {
-                String company = lines[i - 1].trim();
-                int titleIdx = i - 2;
-                while (titleIdx >= 0 && lines[titleIdx].trim().endsWith("with verification")) {
-                    titleIdx--;
+            if (line.isEmpty() || !isLocationLine(line)) {
+                continue;
+            }
+
+            int companyIdx = previousNonBlank(lines, i - 1);
+            if (companyIdx < 0) {
+                continue;
+            }
+            String company = lines[companyIdx].trim();
+
+            int titleIdx = previousNonBlank(lines, companyIdx - 1);
+            while (titleIdx >= 0 && lines[titleIdx].trim().endsWith("with verification")) {
+                titleIdx = previousNonBlank(lines, titleIdx - 1);
+            }
+            String title = titleIdx >= 0 ? lines[titleIdx].trim() : "";
+
+            if (!title.isEmpty() && !isRejectedCompany(company) && !isSearchChrome(title)) {
+                // Scan next 1-10 lines for relative time ("2 days ago", "1 week ago").
+                // LinkedIn inserts "Promoted", "Easy Apply", "Reposted", and other badge
+                // lines between the location line and the date line; reposts can push the
+                // date to i+7 or beyond, so the window must be wider than 6.
+                LocalDate postedDate = null;
+                for (int j = i + 1; j <= Math.min(i + 10, lines.length - 1); j++) {
+                    postedDate = parseRelativeTime(lines[j].trim());
+                    if (postedDate != null) break;
                 }
-                String title = titleIdx >= 0 ? lines[titleIdx].trim() : "";
 
-                if (!company.isEmpty() && !title.isEmpty()
-                        && !company.contains("results") && !company.startsWith("Set alert")
-                        && !company.startsWith("Jump to") && !company.endsWith("with verification")) {
-
-                    // Scan next 1-10 lines for relative time ("2 days ago", "1 week ago").
-                    // LinkedIn inserts "Promoted", "Easy Apply", "Reposted", and other badge
-                    // lines between the location line and the date line; reposts can push the
-                    // date to i+7 or beyond, so the window must be wider than 6.
-                    LocalDate postedDate = null;
-                    for (int j = i + 1; j <= Math.min(i + 10, lines.length - 1); j++) {
-                        postedDate = parseRelativeTime(lines[j].trim());
-                        if (postedDate != null) break;
-                    }
-
-                    parsedJobs.add(new ParsedLinkedInJob(title, company, line, postedDate));
-                }
+                parsedJobs.add(new ParsedLinkedInJob(title, company, line, postedDate));
             }
         }
 
         return parsedJobs;
+    }
+
+    private static int previousNonBlank(String[] lines, int from) {
+        for (int j = from; j >= 0; j--) {
+            if (!lines[j].trim().isEmpty()) {
+                return j;
+            }
+        }
+        return -1;
+    }
+
+    /** Company line must not be search chrome, a prior location, or a misaligned job title. */
+    private static boolean isRejectedCompany(String company) {
+        if (company == null || company.isEmpty()) {
+            return true;
+        }
+        if (company.contains("results") || company.startsWith("Set alert")
+                || company.startsWith("Jump to") || company.startsWith("How ")
+                || company.equals("How") || company.endsWith("with verification")) {
+            return true;
+        }
+        String c = company.toLowerCase();
+        if (c.equals("promoted") || c.equals("easy apply") || c.startsWith("be an early")
+                || c.contains("alumni") || c.startsWith("posted ") || c.equals("posted")
+                || c.startsWith("reposted") || c.equals("·") || c.equals("next")
+                || c.equals("previous") || c.startsWith("actively recruiting")) {
+            return true;
+        }
+        // Walk-back landed on a location line (e.g. "Munich (Hybrid)") — structure is off-by-one.
+        if (hasWorkTypeSuffix(company)) {
+            return true;
+        }
+        // Walk-back landed on a bare job title ("Engineer B") rather than an employer.
+        return isBareJobTitle(company);
+    }
+
+    private static boolean hasWorkTypeSuffix(String line) {
+        return line.contains("(Hybrid)") || line.contains("(Remote)")
+                || line.contains("(On-site)") || line.contains("(On-Site)")
+                || line.contains("(Onsite)");
+    }
+
+    /** Title-like phrase with no employer markers = probably the previous job's title. */
+    private static boolean isBareJobTitle(String line) {
+        if (!TITLE_LIKE.matcher(line).find()) {
+            return false;
+        }
+        String lower = line.toLowerCase();
+        if (lower.contains("gmbh") || lower.contains("corp") || lower.contains("ltd")
+                || lower.contains("inc") || lower.endsWith(" ag") || lower.endsWith(" se")
+                || lower.contains("group") || lower.contains("solutions")
+                || lower.contains("technologies") || lower.contains("systems")) {
+            return false;
+        }
+        return true;
     }
 
     private LocalDate parseRelativeTime(String text) {
@@ -444,10 +542,58 @@ public class McpStrategy implements FetchStrategy {
         };
     }
 
+    /**
+     * Location lines: work-type suffix form, or a bare place name after the company
+     * line (LinkedIn often renders just "Berlin" / "Germany" with no suffix).
+     * Title-like lines and search chrome are rejected so a following job title is
+     * never mistaken for a location.
+     */
     private boolean isLocationLine(String line) {
-        return line.contains("(Hybrid)") || line.contains("(Remote)")
-                || line.contains("(On-site)") || line.contains("(On-Site)")
-                || line.contains("(Onsite)");
+        if (line == null || line.isBlank()) {
+            return false;
+        }
+        if (hasWorkTypeSuffix(line)) {
+            return true;
+        }
+        if (isSearchChrome(line) || isTitleLike(line) || line.length() > 48) {
+            return false;
+        }
+        String core = line.replaceAll("[.\\s]+$", "");
+        if (core.endsWith("GmbH") || core.endsWith("AG") || core.endsWith("SE")
+                || core.endsWith("Ltd") || core.endsWith("Inc")) {
+            return false;
+        }
+        return PLACE_NAME.matcher(line).matches();
+    }
+
+    private static final Pattern PLACE_NAME =
+            Pattern.compile("^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9\\s.,'’&/()-]*$");
+
+    private static final Pattern TITLE_LIKE = Pattern.compile(
+            "\\b(engineer|developer|manager|director|architect|scientist|intern|lead|senior|"
+                    + "junior|analyst|specialist|consultant|officer|entwickler|student|worker)\\b",
+            Pattern.CASE_INSENSITIVE);
+
+    private static boolean isSearchChrome(String line) {
+        String l = line.toLowerCase();
+        return l.contains("results") || l.contains("alumni") || l.startsWith("posted")
+                || l.startsWith("reposted") || l.startsWith("set alert")
+                || l.startsWith("jump to") || l.startsWith("how ")
+                || l.equals("promoted") || l.equals("easy apply") || l.startsWith("be an early")
+                || l.equals("full-time") || l.equals("part-time")
+                || l.equals("contract") || l.equals("internship") || l.equals("·")
+                || l.endsWith("with verification") || l.equals("apply now")
+                || l.equals("next") || l.equals("previous") || l.contains("work here")
+                || l.contains("actively recruiting");
+    }
+
+    private static boolean isTitleLike(String line) {
+        if (TITLE_LIKE.matcher(line).find()) {
+            return true;
+        }
+        String l = line.toLowerCase();
+        return l.contains("(m/") || l.contains("(f/") || l.contains("(w/")
+                || l.contains("genders");
     }
 
     record ParsedLinkedInJob(String title, String company, String location, LocalDate postedDate) {}

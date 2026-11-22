@@ -250,6 +250,41 @@ class McpStrategyTest {
             verify(httpMcpClient).callTool(eq("search_jobs"), argThat(params ->
                     2 == ((Number) params.get("max_pages")).intValue()));
         }
+
+        @Test
+        @DisplayName("Should fall back to search-pair location when text alignment has none")
+        void shouldFallbackLocationToSearchPair() {
+            // Reference title does not match text → location stays null from parse
+            String text = "Backend Engineer\nAcme\nBerlin (Hybrid)\n";
+            List<String[]> refs = List.<String[]>of(new String[]{"111", "Title Not In Text At All"});
+            when(rateLimiter.acquire(ToolCategory.SEARCH)).thenReturn(true);
+            when(httpMcpClient.callTool(eq("search_jobs"), any()))
+                    .thenReturn(buildSearchResponseWithRefs(text, refs));
+
+            FetchContext context = FetchContext.forSearch(
+                    List.of("java"), List.of("Germany"), 200, 10, Map.of("pairs-per-run", 1));
+
+            FetchResult result = strategy.fetch(context);
+
+            assertThat(result.jobs()).hasSize(1);
+            assertThat(result.jobs().get(0).location()).isEqualTo("Germany");
+        }
+
+        @Test
+        @DisplayName("Should keep parsed location and not overwrite with search pair")
+        void shouldKeepParsedLocationOverFallback() {
+            String searchText = "Backend Engineer\nAcme Corp\nBerlin (Hybrid)\n";
+            when(rateLimiter.acquire(ToolCategory.SEARCH)).thenReturn(true);
+            when(httpMcpClient.callTool(eq("search_jobs"), any()))
+                    .thenReturn(buildSearchResponse(searchText, List.of("111")));
+
+            FetchContext context = FetchContext.forSearch(
+                    List.of("java"), List.of("Germany"), 200, 10, Map.of("pairs-per-run", 1));
+
+            FetchResult result = strategy.fetch(context);
+
+            assertThat(result.jobs().get(0).location()).isEqualTo("Berlin (Hybrid)");
+        }
     }
 
     @Nested
@@ -337,6 +372,37 @@ class McpStrategyTest {
             List<RawAggregatorJob> jobs = strategy.parseSearchResponse(response);
 
             assertThat(jobs).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Should zip job_ids with text cards when references omit text")
+        void shouldZipJobIdsWhenReferencesLackText() {
+            // Live payload shape: refs have url but no text; duplicate titles break title alignment
+            String text = "Full Stack Engineer\nXML International\nBudapest, Hungary (On-site)\n\n"
+                    + "Full Stack Engineer\nAZ9 Group\nBudapest, Hungary (Hybrid)\n";
+            ObjectNode root = mapper.createObjectNode();
+            ObjectNode sc = root.putObject("structuredContent");
+            sc.putObject("sections").put("search_results", text);
+            ArrayNode ids = sc.putArray("job_ids");
+            ids.add("4492738054");
+            ids.add("4458162429");
+            ObjectNode references = sc.putObject("references");
+            ArrayNode searchResults = references.putArray("search_results");
+            for (String id : new String[]{"4492738054", "4458162429"}) {
+                ObjectNode ref = mapper.createObjectNode();
+                ref.put("kind", "job");
+                ref.put("url", "/jobs/view/" + id + "/");
+                searchResults.add(ref); // no text field — live default
+            }
+
+            List<RawAggregatorJob> jobs = strategy.parseSearchResponse(root);
+
+            assertThat(jobs).hasSize(2);
+            assertThat(jobs.get(0).externalId()).isEqualTo("4492738054");
+            assertThat(jobs.get(0).companyName()).isEqualTo("XML International");
+            assertThat(jobs.get(0).location()).isEqualTo("Budapest, Hungary (On-site)");
+            assertThat(jobs.get(1).externalId()).isEqualTo("4458162429");
+            assertThat(jobs.get(1).companyName()).isEqualTo("AZ9 Group");
         }
     }
 
@@ -554,9 +620,58 @@ class McpStrategyTest {
         }
 
         @Test
-        @DisplayName("Should ignore lines without work type indicator")
-        void shouldIgnoreLinesWithoutWorkType() {
+        @DisplayName("Should parse bare place name without work-type indicator")
+        void shouldParseBarePlaceWithoutWorkType() {
             String[] lines = {"Some Title", "Some Company", "Berlin, Germany"};
+            var result = strategy.parseJobLines(lines);
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).location()).isEqualTo("Berlin, Germany");
+        }
+
+        @Test
+        @DisplayName("Should parse bare city when blank lines separate fields")
+        void shouldParseBareCityWithBlankLines() {
+            String[] lines = {
+                    "Backend Engineer", "",
+                    "Stromnetz Berlin GmbH", "",
+                    "Berlin"
+            };
+            var result = strategy.parseJobLines(lines);
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).title()).isEqualTo("Backend Engineer");
+            assertThat(result.get(0).company()).isEqualTo("Stromnetz Berlin GmbH");
+            assertThat(result.get(0).location()).isEqualTo("Berlin");
+        }
+
+        @Test
+        @DisplayName("Should parse suffix location when blank lines separate fields")
+        void shouldParseSuffixLocationWithBlankLines() {
+            String[] lines = {
+                    "Selected, Softwareentwickler (m/w/d) (Verified job)",
+                    "Softwareentwickler (m/w/d) ",
+                    "",
+                    "KVBW Kommunaler Versorgungsverband Baden-Württemberg",
+                    "",
+                    "Karlsruhe (On-site)"
+            };
+            var result = strategy.parseJobLines(lines);
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).company()).isEqualTo("KVBW Kommunaler Versorgungsverband Baden-Württemberg");
+            assertThat(result.get(0).location()).isEqualTo("Karlsruhe (On-site)");
+        }
+
+        @Test
+        @DisplayName("Should not treat a following job title as a location")
+        void shouldNotTreatTitleAsLocation() {
+            String[] lines = {"Acme Corp", "Java Developer"};
+            var result = strategy.parseJobLines(lines);
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Should not treat search header chrome as a job location")
+        void shouldNotTreatHeaderChromeAsLocation() {
+            String[] lines = {"99+ results", "", "Germany"};
             var result = strategy.parseJobLines(lines);
             assertThat(result).isEmpty();
         }
