@@ -66,18 +66,20 @@ public class LinkedInDescriptionEnricher extends DescriptionBackfiller implement
             return List.of();
         }
 
-        List<JobPosting> jobsWithoutDescription = jobPostingRepository
-                .findBySourceAndLanguageFilterAndDescriptionIsNull(JobSource.LINKEDIN, FilterDecision.KEEP);
+        // Null-description rows AND rows stuck with the LinkedIn apply-URL boilerplate
+        // meta description, so existing boilerplate rows get re-enriched with real JDs.
+        List<JobPosting> candidates = jobPostingRepository
+                .findBySourceAndLanguageFilterAndDescriptionNullOrBoilerplate(JobSource.LINKEDIN, FilterDecision.KEEP);
 
-        if (jobsWithoutDescription.isEmpty()) {
+        if (candidates.isEmpty()) {
             return List.of();
         }
 
         int batchSize = enrichment.batchSize();
         int delayBetweenMs = enrichment.delayBetweenMs();
-        List<JobPosting> batch = jobsWithoutDescription.size() > batchSize
-                ? jobsWithoutDescription.subList(0, batchSize)
-                : jobsWithoutDescription;
+        List<JobPosting> batch = candidates.size() > batchSize
+                ? candidates.subList(0, batchSize)
+                : candidates;
 
         List<JobPosting> updated = new ArrayList<>();
 

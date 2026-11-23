@@ -61,7 +61,7 @@ public class ApplyUrlDescriptionBackfiller extends DescriptionBackfiller {
 
         if (jobs.isEmpty()) return List.of();
 
-        List<JobSource> SKIP_SOURCES = List.of(JobSource.SMARTRECRUITERS, JobSource.WORKDAY, JobSource.WORKDAY_PROTECTED);
+        List<JobSource> SKIP_SOURCES = List.of(JobSource.LINKEDIN, JobSource.SMARTRECRUITERS, JobSource.WORKDAY, JobSource.WORKDAY_PROTECTED);
         List<JobPosting> eligibleJobs = jobs.stream()
                 .filter(j -> !SKIP_SOURCES.contains(j.getSource()))
                 .toList();

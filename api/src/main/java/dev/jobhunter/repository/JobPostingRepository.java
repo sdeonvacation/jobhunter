@@ -72,6 +72,15 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
     @Query("SELECT j FROM JobPosting j LEFT JOIN FETCH j.endpoint WHERE j.source = :source AND j.languageFilter = :filter AND j.description IS NULL AND j.isActive = true")
     List<JobPosting> findBySourceAndLanguageFilterAndDescriptionIsNull(@Param("source") JobSource source, @Param("filter") FilterDecision filter);
 
+    /**
+     * LinkedIn enrichment candidates: rows with no description OR with the LinkedIn apply-URL
+     * boilerplate meta description ("...similar jobs on LinkedIn.") written by
+     * ApplyUrlDescriptionBackfiller before LinkedIn was skipped. LOWER(...) because plain
+     * JPQL LIKE is case-sensitive on Postgres.
+     */
+    @Query("SELECT j FROM JobPosting j LEFT JOIN FETCH j.endpoint WHERE j.source = :source AND j.languageFilter = :filter AND j.isActive = true AND (j.description IS NULL OR LOWER(j.description) LIKE '%similar jobs on linkedin%')")
+    List<JobPosting> findBySourceAndLanguageFilterAndDescriptionNullOrBoilerplate(@Param("source") JobSource source, @Param("filter") FilterDecision filter);
+
     @Query("SELECT j FROM JobPosting j WHERE j.isActive = true AND j.languageFilter = :filter AND j.description IS NULL AND j.applyUrl IS NOT NULL ORDER BY j.createdAt DESC")
     List<JobPosting> findActiveKeepJobsWithApplyUrlButNoDescription(@Param("filter") FilterDecision filter, Pageable pageable);
 

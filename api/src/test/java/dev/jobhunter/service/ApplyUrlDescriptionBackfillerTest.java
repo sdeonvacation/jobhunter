@@ -17,6 +17,7 @@ import org.springframework.data.domain.PageRequest;
 import java.util.List;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -100,6 +101,30 @@ class ApplyUrlDescriptionBackfillerTest {
         backfiller.backfill();
 
         verifyNoInteractions(descriptionFilterChain, matchScoringService);
+    }
+
+    @Test
+    void backfill_linkedinJobs_allSkipped_noFetchNoSave() {
+        // LinkedIn pages expose only the boilerplate meta description, so fetching the
+        // apply URL would poison the row — LinkedIn must be skipped entirely.
+        var job = JobPosting.builder()
+                .id(UUID.randomUUID())
+                .source(JobSource.LINKEDIN)
+                .applyUrl("https://www.linkedin.com/jobs/view/4252026496")
+                .description(null)
+                .build();
+
+        when(jobPostingRepository.findActiveKeepJobsWithApplyUrlButNoDescription(
+                eq(FilterDecision.KEEP), any(PageRequest.class)))
+                .thenReturn(List.of(job));
+
+        backfiller.backfill();
+
+        // smartRecruitersStrategy.isSmartRecruitersPostingUrl is the first call inside
+        // fetchDescriptionFromUrl — no interaction proves the fetch path was never entered.
+        verifyNoInteractions(descriptionFilterChain, matchScoringService, smartRecruitersStrategy);
+        verify(jobPostingRepository, never()).save(any());
+        assertNull(job.getDescription());
     }
 
     @Test
