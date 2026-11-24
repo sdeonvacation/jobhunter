@@ -239,8 +239,11 @@ public class WorkdayStrategy extends AbstractAtsStrategy {
             String applyUrl = externalPath != null ? baseUrl + "/" + site + externalPath : null;
             LocalDate postedDate = parsePostedOn(postedOnRaw);
 
+            // external_id column is varchar(255); Workday externalPath (title slug + req id) can exceed it
+            String externalId = truncate(externalPath, 255);
+
             return new RawAggregatorJob(
-                    externalPath, title, null, location, descBuilder.toString(), applyUrl,
+                    externalId, title, null, location, descBuilder.toString(), applyUrl,
                     postedDate, null, null, null, rawJson
             );
         } catch (Exception e) {

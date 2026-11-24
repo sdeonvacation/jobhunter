@@ -31,6 +31,8 @@ public class WebClientConfig {
         return builder
                 .clientConnector(new JdkClientHttpConnector(jdkClient))
                 .exchangeStrategies(strategies)
+                // Some WAFs (e.g. ZEISS Workday) drop connections that lack a browser User-Agent
+                .defaultHeader("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
                 .filter(new RetryableWebClientFilter())
                 .build();
     }
