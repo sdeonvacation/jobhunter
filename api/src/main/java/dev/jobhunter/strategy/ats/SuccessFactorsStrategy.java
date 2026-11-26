@@ -53,6 +53,14 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
     private static final Pattern CLASSIC_BOARD_PATTERN = Pattern.compile("career\\d*\\.successfactors\\.(eu|com)", Pattern.CASE_INSENSITIVE);
     private static final Pattern COMPANY_PARAM_PATTERN = Pattern.compile("[?&]company=([^&#]*)", Pattern.CASE_INSENSITIVE);
     private static final String CLASSIC_XML_LOCALE = "en_GB";
+
+    // SuccessFactors Career Site Builder v2 (e.g. internal-careers.allianz.com) renders a
+    // "Jobs found (1141)" label and a tile list carrying aria-rowcount; there is no
+    // "Results x - y of z" total text on those pages.
+    private static final Pattern CSB_JOBS_FOUND_PATTERN =
+            Pattern.compile("Jobs found\\s*\\((\\d[\\d,]*)\\)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern CSB_ROWCOUNT_PATTERN =
+            Pattern.compile("id=\"job-tile-list\"[^>]*aria-rowcount=\"(\\d+)\"");
     private static final Pattern TITLE_HYPHEN_CITY_PATTERN =
             Pattern.compile("-\\s*([A-ZÀ-Ü][a-zà-ü]+(?:\\s+[A-ZÀ-Ü][a-zà-ü]+)*)");
     // A numeric postcode directly after a hyphen segment is a strong location hint, e.g. "Velizy (78)".
@@ -598,6 +606,24 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
                 return 0;
             }
         }
+        // CSB v2 result label: 'Jobs found (1141)'
+        Matcher jobsFoundMatcher = CSB_JOBS_FOUND_PATTERN.matcher(html);
+        if (jobsFoundMatcher.find()) {
+            try {
+                return Integer.parseInt(jobsFoundMatcher.group(1).replace(",", ""));
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+        // CSB v2 tile list row count, used when the label is absent
+        Matcher rowCountMatcher = CSB_ROWCOUNT_PATTERN.matcher(html);
+        if (rowCountMatcher.find()) {
+            try {
+                return Integer.parseInt(rowCountMatcher.group(1));
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
         return 0;
     }
 
@@ -679,6 +705,11 @@ public class SuccessFactorsStrategy extends AbstractAtsStrategy {
 
                     String fullUrl = toAbsoluteUrl(href, baseUrl);
                     String location = extractLocationFromUrl(href);
+                    if (location != null && !LOCATION_FIRST_WORDS.contains(location.toLowerCase(Locale.ROOT))) {
+                        // CSB v2 slugs often start with the job title, not the city; leave the
+                        // location null so the detail page's streetAddress supplies it.
+                        location = null;
+                    }
                     listings.add(new JobListing(externalId, title, truncate(location, 500), fullUrl));
                 } catch (Exception e) {
                     log.debug("SuccessFactors: failed to parse listing link: {}", e.getMessage());

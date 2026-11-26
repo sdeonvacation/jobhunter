@@ -110,6 +110,19 @@ class SuccessFactorsStrategyTest {
     }
 
     @Test
+    void parseTotalCount_extractsCsbJobsFoundLabel() {
+        String html = "<label id=\"searchresultslabel\">Jobs found (1,141)</label>";
+        assertEquals(1141, extractor.parseTotalCount(html));
+    }
+
+    @Test
+    void parseTotalCount_extractsCsbAriaRowcount() {
+        String html = "<ul id=\"job-tile-list\" class=\"container job-list\" "
+                + "aria-rowcount=\"1116\" data-per-page=\"25\">";
+        assertEquals(1116, extractor.parseTotalCount(html));
+    }
+
+    @Test
     void parseListings_extractsJobsFromTable() {
         String html = """
                 <html><body>
@@ -159,6 +172,32 @@ class SuccessFactorsStrategyTest {
         List<SuccessFactorsStrategy.JobListing> listings = extractor.parseListings(html, "https://jobs.sap.com");
         assertEquals(1, listings.size());
         assertEquals("https://jobs.sap.com/job/Berlin-Dev-10557/999/", listings.get(0).url());
+    }
+
+    @Test
+    void parseListings_extractsCsbJobTiles() {
+        String html = """
+                <ul id="job-tile-list" aria-rowcount="2">
+                  <li class="job-tile job-id-1461042433" data-url="/job/Munich-AI-Engineer-80333/1461042433/">
+                    <a class="jobTitle-link" href="/job/Munich-AI-Engineer-80333/1461042433/">AI Engineer</a>
+                  </li>
+                  <li class="job-tile job-id-1446652133" data-url="/job/Assistant-Data-Architect-3399/1446652133/">
+                    <a class="jobTitle-link" href="/job/Assistant-Data-Architect-3399/1446652133/">Assistant Data Architect</a>
+                  </li>
+                </ul>
+                """;
+
+        List<SuccessFactorsStrategy.JobListing> listings =
+                extractor.parseListings(html, "https://internal-careers.allianz.com");
+
+        assertEquals(2, listings.size());
+        assertEquals("1461042433", listings.get(0).externalId());
+        assertEquals("AI Engineer", listings.get(0).title());
+        assertEquals("Munich", listings.get(0).location());
+        assertEquals("https://internal-careers.allianz.com/job/Munich-AI-Engineer-80333/1461042433/",
+                listings.get(0).url());
+        // Title-first slug: no city in the URL, so the detail page's streetAddress supplies it.
+        assertNull(listings.get(1).location());
     }
 
     @Test
